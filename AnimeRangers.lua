@@ -48,17 +48,28 @@ local function safeGetChild(parent, childName, waitTime)
     return child
 end
 
--- Utility function để lấy đường dẫn đầy đủ một cách an toàn
-local function safeGetPath(startPoint, path, waitTime)
-    waitTime = waitTime or 1
-    local current = startPoint
-    
-    for _, name in ipairs(path) do
-        if not current then return nil end
-        current = safeGetChild(current, name, waitTime)
+-- Hàm để kiểm tra đường dẫn một cách an toàn với timeout
+function safeGetPath(parent, childName, timeoutSeconds)
+    if not parent then
+        return nil
     end
     
-    return current
+    local timeout = timeoutSeconds or 0.5
+    local startTime = os.time()
+    
+    while os.time() - startTime < timeout do
+        local success, result = pcall(function()
+            return parent:FindFirstChild(childName)
+        end)
+        
+        if success and result then
+            return result
+        end
+        
+        task.wait(0.1)
+    end
+    
+    return nil
 end
 
 -- Hệ thống lưu trữ cấu hình
@@ -179,20 +190,32 @@ local function isPlayerInMap(mapName)
     return distance < 500
 end
 
--- Kiểm tra trạng thái lobby/phòng chờ
-local function isPlayerInLobby()
-    local status, result = pcall(function()
-        -- Kiểm tra phòng chờ bằng cách tìm một phần tử UI đặc trưng của lobby
-        local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-        return playerGui:FindFirstChild("LobbyGui") ~= nil
+-- Hàm kiểm tra xem người chơi đang ở lobby hay không
+function isPlayerInLobby()
+    local success, result = pcall(function()
+        local LobbyGui = safeGetPath(game:GetService("Players").LocalPlayer.PlayerGui, "LobbyGui")
+        if LobbyGui and LobbyGui.Enabled then
+            return true
+        end
+        return false
     end)
     
-    if not status then
-        warn("Lỗi khi kiểm tra trạng thái lobby: " .. tostring(result))
+    if not success then
+        warn("Error checking if player is in lobby: " .. tostring(result))
         return false
     end
     
     return result
+end
+
+-- Hàm kiểm tra xem người chơi đang ở map hay không
+function isPlayerInGame()
+    local success, result = pcall(function()
+        local battleGui = safeGetPath(game:GetService("Players").LocalPlayer.PlayerGui, "BattleGui", 2)
+        return battleGui and battleGui.Enabled
+    end)
+    
+    return success and result
 end
 
 -- Biến lưu trạng thái Story
@@ -611,7 +634,7 @@ StorySection:AddButton({
                 Duration = 2
             })
             return
-        }
+        end
         
         if joinMap() then
             Fluent:Notify({

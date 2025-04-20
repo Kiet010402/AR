@@ -22,6 +22,45 @@ if not Fluent then
     return
 end
 
+-- Utility function để kiểm tra và lấy service/object một cách an toàn
+local function safeGetService(serviceName)
+    local service = nil
+    pcall(function()
+        service = game:GetService(serviceName)
+    end)
+    return service
+end
+
+-- Utility function để kiểm tra và lấy child một cách an toàn
+local function safeGetChild(parent, childName, waitTime)
+    if not parent then return nil end
+    
+    local child = nil
+    waitTime = waitTime or 1
+    
+    local success = pcall(function()
+        child = parent:FindFirstChild(childName)
+        if not child and waitTime > 0 then
+            child = parent:WaitForChild(childName, waitTime)
+        end
+    end)
+    
+    return child
+end
+
+-- Utility function để lấy đường dẫn đầy đủ một cách an toàn
+local function safeGetPath(startPoint, path, waitTime)
+    waitTime = waitTime or 1
+    local current = startPoint
+    
+    for _, name in ipairs(path) do
+        if not current then return nil end
+        current = safeGetChild(current, name, waitTime)
+    end
+    
+    return current
+end
+
 -- Hệ thống lưu trữ cấu hình
 local ConfigSystem = {}
 ConfigSystem.FileName = "HTHubARConfig_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
@@ -106,13 +145,13 @@ local Window = Fluent:CreateWindow({
 -- Tạo tab Info
 local InfoTab = Window:AddTab({
     Title = "Info",
-    Icon = "rbxassetid://10723424401"
+    Icon = "rbxassetid://7733964719"
 })
 
 -- Tạo tab Shop
 local ShopTab = Window:AddTab({
     Title = "Shop",
-    Icon = "rbxassetid://7734058599"
+    Icon = "rbxassetid://7734056747"
 })
 
 -- Tạo tab Settings
@@ -216,14 +255,27 @@ local SummonSection = ShopTab:AddSection("Summon")
 
 -- Hàm thực hiện summon
 local function performSummon()
-    local args = {
-        [1] = selectedSummonAmount,
-        [2] = selectedSummonBanner,
-        [3] = {}
-    }
+    -- An toàn kiểm tra Remote có tồn tại không
+    local success, err = pcall(function()
+        local Remote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Gambling", "UnitsGacha"}, 2)
+        
+        if Remote then
+            local args = {
+                [1] = selectedSummonAmount,
+                [2] = selectedSummonBanner,
+                [3] = {}
+            }
+            
+            Remote:FireServer(unpack(args))
+            print("Đã summon: " .. selectedSummonAmount .. " - " .. selectedSummonBanner)
+        else
+            warn("Không tìm thấy Remote UnitsGacha")
+        end
+    end)
     
-    game:GetService("ReplicatedStorage").Remote.Server.Gambling.UnitsGacha:FireServer(unpack(args))
-    print("Đã summon: " .. selectedSummonAmount .. " - " .. selectedSummonBanner)
+    if not success then
+        warn("Lỗi khi summon: " .. tostring(err))
+    end
 end
 
 -- Dropdown để chọn số lượng summon
@@ -318,17 +370,49 @@ local QuestSection = ShopTab:AddSection("Quest")
 -- Hàm để nhận tất cả nhiệm vụ
 local function claimAllQuests()
     local success, err = pcall(function()
-        local dailyQuestFolder = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data"):WaitForChild(playerName):WaitForChild("DailyQuest")
+        -- Kiểm tra an toàn đường dẫn PlayerData
+        local ReplicatedStorage = safeGetService("ReplicatedStorage")
+        if not ReplicatedStorage then
+            warn("Không tìm thấy ReplicatedStorage")
+            return
+        end
+        
+        local PlayerData = safeGetChild(ReplicatedStorage, "Player_Data", 2)
+        if not PlayerData then
+            warn("Không tìm thấy Player_Data")
+            return
+        end
+        
+        local PlayerFolder = safeGetChild(PlayerData, playerName, 2)
+        if not PlayerFolder then
+            warn("Không tìm thấy dữ liệu người chơi: " .. playerName)
+            return
+        end
+        
+        local DailyQuest = safeGetChild(PlayerFolder, "DailyQuest", 2)
+        if not DailyQuest then
+            warn("Không tìm thấy DailyQuest")
+            return
+        end
+        
+        -- Lấy đường dẫn đến QuestEvent
+        local QuestEvent = safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gameplay", "QuestEvent"}, 2)
+        if not QuestEvent then
+            warn("Không tìm thấy QuestEvent")
+            return
+        end
         
         -- Tìm tất cả nhiệm vụ có thể nhận
-        for _, quest in pairs(dailyQuestFolder:GetChildren()) do
-            local args = {
-                [1] = "ClaimAll",
-                [2] = quest
-            }
-            
-            game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gameplay"):WaitForChild("QuestEvent"):FireServer(unpack(args))
-            wait(0.2) -- Chờ một chút giữa các lần claim để tránh lag
+        for _, quest in pairs(DailyQuest:GetChildren()) do
+            if quest then
+                local args = {
+                    [1] = "ClaimAll",
+                    [2] = quest
+                }
+                
+                QuestEvent:FireServer(unpack(args))
+                wait(0.2) -- Chờ một chút giữa các lần claim để tránh lag
+            end
         end
     end)
     
@@ -432,7 +516,6 @@ SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 
 -- Thay đổi cách lưu cấu hình để sử dụng tên người chơi
-local playerName = game:GetService("Players").LocalPlayer.Name
 InterfaceManager:SetFolder("HTHubAR")
 SaveManager:SetFolder("HTHubAR/" .. playerName)
 

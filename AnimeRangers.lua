@@ -32,7 +32,10 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Shop/Summon
     SummonAmount = "x1",
     SummonBanner = "Standard",
-    AutoSummon = false
+    AutoSummon = false,
+    
+    -- Cài đặt Quest
+    AutoClaimQuest = false
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -81,6 +84,13 @@ local selectedSummonAmount = ConfigSystem.CurrentConfig.SummonAmount or "x1"
 local selectedSummonBanner = ConfigSystem.CurrentConfig.SummonBanner or "Standard"
 local autoSummonEnabled = ConfigSystem.CurrentConfig.AutoSummon or false
 local autoSummonLoop = nil
+
+-- Biến lưu trạng thái Quest
+local autoClaimQuestEnabled = ConfigSystem.CurrentConfig.AutoClaimQuest or false
+local autoClaimQuestLoop = nil
+
+-- Thông tin người chơi
+local playerName = game:GetService("Players").LocalPlayer.Name
 
 -- Tạo Window
 local Window = Fluent:CreateWindow({
@@ -298,6 +308,77 @@ SummonSection:AddToggle("AutoSummonToggle", {
                 autoSummonLoop:Disconnect()
                 autoSummonLoop = nil
             end
+        end
+    end
+})
+
+-- Thêm section Quest trong tab Shop
+local QuestSection = ShopTab:AddSection("Quest")
+
+-- Hàm để nhận tất cả nhiệm vụ
+local function claimAllQuests()
+    local success, err = pcall(function()
+        local dailyQuestFolder = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data"):WaitForChild(playerName):WaitForChild("DailyQuest")
+        
+        -- Tìm tất cả nhiệm vụ có thể nhận
+        for _, quest in pairs(dailyQuestFolder:GetChildren()) do
+            local args = {
+                [1] = "ClaimAll",
+                [2] = quest
+            }
+            
+            game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gameplay"):WaitForChild("QuestEvent"):FireServer(unpack(args))
+            wait(0.2) -- Chờ một chút giữa các lần claim để tránh lag
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi claim quest: " .. tostring(err))
+    end
+end
+
+-- Nút Claim All Quest (manual)
+QuestSection:AddButton({
+    Title = "Claim All Quests",
+    Callback = function()
+        claimAllQuests()
+        
+        Fluent:Notify({
+            Title = "Quests",
+            Content = "Đã claim tất cả nhiệm vụ",
+            Duration = 2
+        })
+    end
+})
+
+-- Toggle Auto Claim All Quest
+QuestSection:AddToggle("AutoClaimQuestToggle", {
+    Title = "Auto Claim All Quests",
+    Default = ConfigSystem.CurrentConfig.AutoClaimQuest or false,
+    Callback = function(Value)
+        autoClaimQuestEnabled = Value
+        ConfigSystem.CurrentConfig.AutoClaimQuest = Value
+        ConfigSystem.SaveConfig()
+        
+        if autoClaimQuestEnabled then
+            Fluent:Notify({
+                Title = "Auto Claim Quests",
+                Content = "Auto Claim Quests đã được bật",
+                Duration = 3
+            })
+            
+            -- Tạo vòng lặp Auto Claim Quests
+            spawn(function()
+                while autoClaimQuestEnabled and wait(30) do -- Claim mỗi 30 giây
+                    claimAllQuests()
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Claim Quests",
+                Content = "Auto Claim Quests đã được tắt",
+                Duration = 3
+            })
         end
     end
 })

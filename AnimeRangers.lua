@@ -1,172 +1,97 @@
 -- Anime Rangers X Script
--- Xác định UserInputService đúng cách
-local UserInputService = game:GetService("UserInputService")
+-- Sử dụng Orion UI Library thay vì Fluent UI
+
+-- Lấy các service cần thiết
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage") 
-local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
-
--- Tải thư viện Fluent UI
-local success, err = pcall(function()
-    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-end)
-
-if not success then
-    warn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
-    -- Thử tải từ URL dự phòng
-    pcall(function()
-        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
-        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-    end)
-end
-
-if not Fluent then
-    error("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
-    return
-end
-
--- Khởi tạo Fluent UI
-local Window = Fluent:CreateWindow({
-    Title = "Anime Rangers X",
-    SubTitle = "by Script Master",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
-
--- Xử lý nút Thu gọn một cách an toàn
-pcall(function()
-    if Window and Window.Root then
-        local TopBar = Window.Root:FindFirstChild("TopBar")
-        if TopBar then
-            local MinimizeBtn = TopBar:FindFirstChild("Minimize")
-            if MinimizeBtn then
-                MinimizeBtn.MouseButton1Click:Connect(function()
-                    if Window.Minimize then
-                        Window:Minimize()
-                    end
-                end)
-            end
-        end
-    end
-end)
-
--- Cấu hình các sự kiện của Window
-if Window.Minimized then
-    Window.Minimized:Connect(function()
-        Fluent:Notify({
-            Title = "UI",
-            Content = "Giao diện đã được thu nhỏ",
-            Duration = 2
-        })
-    end)
-end
-
-if Window.Restored then
-    Window.Restored:Connect(function()
-        Fluent:Notify({
-            Title = "UI",
-            Content = "Giao diện đã được mở lại",
-            Duration = 2
-        })
-    end)
-end
-
--- Tạo các tab
-local InfoTab = Window:AddTab({ Title = "Info", Icon = "rbxassetid://10723424505" })
-
--- Lưu và tải cấu hình
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
-
--- Setup cửa sổ
-SaveManager:IgnoreThemeSettings()
-SaveManager:SetIgnoreIndexes({})
-InterfaceManager:SetFolder("AnimeRangersX")
-SaveManager:SetFolder("AnimeRangersX/configs")
-
--- Hệ thống auto save config theo tên người chơi
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer
 
--- Đợi đến khi người chơi sẵn sàng
-if not player then
-    player = Players.PlayerAdded:Wait()
+-- Tạo thư mục cho lưu cấu hình
+local function createFolder(path)
+    if not isfolder(path) then
+        makefolder(path)
+    end
 end
 
+-- Hàm lưu cấu hình
+local function saveConfig(configName, data)
+    createFolder("AnimeRangersX")
+    createFolder("AnimeRangersX/configs")
+    writefile("AnimeRangersX/configs/" .. configName .. ".json", HttpService:JSONEncode(data))
+end
+
+-- Hàm tải cấu hình
+local function loadConfig(configName)
+    local path = "AnimeRangersX/configs/" .. configName .. ".json"
+    if isfile(path) then
+        return HttpService:JSONDecode(readfile(path))
+    end
+    return nil
+end
+
+-- Cấu hình dựa trên tên người chơi
 local playerName = player.Name
 local configName = "Player_" .. playerName
+local settings = loadConfig(configName) or {
+    autoFarm = false,
+    autoAttack = false,
+    walkSpeed = 16
+}
 
--- Tự động lưu cấu hình khi đóng
-if Window.Closed then
-    Window.Closed:Connect(function()
-        SaveManager:Save(configName)
-        Fluent:Notify({
-            Title = "Auto Save",
-            Content = "Đã lưu cấu hình cho " .. playerName,
-            Duration = 3
-        })
-    end)
-end
+-- Tải Orion UI Library
+local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
 
--- Tự động tải cấu hình khi mở
-task.spawn(function()
-    wait(1)
-    -- Thử tải cấu hình của người chơi
-    local success = pcall(function()
-        if SaveManager:Load(configName) then
-            Fluent:Notify({
-                Title = "Auto Load",
-                Content = "Đã tải cấu hình cho " .. playerName,
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Auto Load",
-                Content = "Không tìm thấy cấu hình, tạo mới cho " .. playerName,
-                Duration = 3
-            })
-            SaveManager:Save(configName)
-        end
-    end)
-    
-    if not success then
-        warn("Lỗi khi tải cấu hình")
-    end
-end)
+-- Tạo cửa sổ UI
+local Window = OrionLib:MakeWindow({
+    Name = "Anime Rangers X", 
+    HidePremium = false, 
+    SaveConfig = false, 
+    ConfigFolder = "AnimeRangersX"
+})
 
--- Tự động lưu định kỳ (mỗi 5 giây)
+-- Tab Info
+local InfoTab = Window:MakeTab({
+    Name = "Info",
+    Icon = "rbxassetid://4483345998",
+    PremiumOnly = false
+})
+
+InfoTab:AddLabel("Anime Rangers X Script")
+InfoTab:AddLabel("Phiên bản: 1.0.0")
+InfoTab:AddLabel("Tác giả: Script Master")
+InfoTab:AddParagraph("Hướng dẫn", "Sử dụng các tab để điều chỉnh cài đặt script")
+
+-- Tự động lưu cấu hình
 task.spawn(function()
     while true do
         wait(5) -- 5 giây
-        pcall(function()
-            SaveManager:Save(configName)
-            Fluent:Notify({
-                Title = "Auto Save",
-                Content = "Đã tự động lưu cấu hình cho " .. playerName,
-                Duration = 2
-            })
-        end)
+        saveConfig(configName, settings)
+        OrionLib:MakeNotification({
+            Name = "Auto Save",
+            Content = "Đã tự động lưu cấu hình cho " .. playerName,
+            Image = "rbxassetid://4483345998",
+            Time = 2
+        })
     end
 end)
 
-if Window and Window.SelectTab then
-    Window:SelectTab(1)
-end
+-- Thông báo khi tải script
+OrionLib:MakeNotification({
+    Name = "Script Loaded",
+    Content = "AnimeRangersX script đã được tải thành công!",
+    Image = "rbxassetid://4483345998",
+    Time = 5
+})
 
 -- Code hệ thống game - đặt trong pcall để bắt lỗi
 pcall(function()
     -- Đảm bảo ReplicatedStorage sẵn sàng
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     if not ReplicatedStorage then
         warn("ReplicatedStorage chưa sẵn sàng, đang đợi...")
         ReplicatedStorage = game:WaitForService("ReplicatedStorage")
     end
-    
-    -- KHÔNG cố gắng truy cập UIS.Store (nguồn gốc của lỗi)
     
     -- Các biến và constants
     local DAMAGE_MULTIPLIER = 1.5
@@ -224,7 +149,7 @@ pcall(function()
         
         local speed = Instance.new("NumberValue")
         speed.Name = "Speed"
-        speed.Value = 16
+        speed.Value = settings.walkSpeed or 16
         speed.Parent = stats
         
         -- Set tốc độ di chuyển
@@ -334,11 +259,5 @@ pcall(function()
     end
 end)
 
--- Thông báo cuối cùng
-pcall(function()
-    Fluent:Notify({
-        Title = "Script Loaded",
-        Content = "AnimeRangersX script đã được tải thành công!",
-        Duration = 5
-    })
-end)
+-- Khởi tạo UI
+OrionLib:Init()

@@ -74,7 +74,13 @@ ConfigSystem.DefaultConfig = {
     AutoSummon = false,
     
     -- Cài đặt Quest
-    AutoClaimQuest = false
+    AutoClaimQuest = false,
+    
+    -- Cài đặt Story
+    SelectedMap = "OnePiece",
+    SelectedChapter = "Chapter1",
+    FriendOnly = false,
+    AutoJoinMap = false
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -128,6 +134,13 @@ local autoSummonLoop = nil
 local autoClaimQuestEnabled = ConfigSystem.CurrentConfig.AutoClaimQuest or false
 local autoClaimQuestLoop = nil
 
+-- Biến lưu trạng thái Story
+local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
+local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
+local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
+local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
+local autoJoinMapLoop = nil
+
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
@@ -146,6 +159,12 @@ local Window = Fluent:CreateWindow({
 local InfoTab = Window:AddTab({
     Title = "Info",
     Icon = "rbxassetid://7733964719"
+})
+
+-- Tạo tab Play
+local PlayTab = Window:AddTab({
+    Title = "Play",
+    Icon = "rbxassetid://7743878070"
 })
 
 -- Tạo tab Shop
@@ -248,6 +267,246 @@ InfoSection:AddParagraph({
 InfoSection:AddParagraph({
     Title = "Người phát triển",
     Content = "Script được phát triển bởi HT Hub"
+})
+
+-- Thêm section Story trong tab Play
+local StorySection = PlayTab:AddSection("Story")
+
+-- Hàm để thay đổi map
+local function changeWorld(world)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-World",
+                [2] = {
+                    ["World"] = world
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi map: " .. world)
+        else
+            warn("Không tìm thấy Event để đổi map")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi map: " .. tostring(err))
+    end
+end
+
+-- Hàm để thay đổi chapter
+local function changeChapter(map, chapter)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Chapter",
+                [2] = {
+                    ["Chapter"] = map .. "_" .. chapter
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi chapter: " .. map .. "_" .. chapter)
+        else
+            warn("Không tìm thấy Event để đổi chapter")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi chapter: " .. tostring(err))
+    end
+end
+
+-- Hàm để toggle Friend Only
+local function toggleFriendOnly()
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-FriendOnly"
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã toggle Friend Only")
+        else
+            warn("Không tìm thấy Event để toggle Friend Only")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi toggle Friend Only: " .. tostring(err))
+    end
+end
+
+-- Hàm để tự động tham gia map
+local function joinMap()
+    local success, err = pcall(function()
+        -- Lấy Event
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if not Event then
+            warn("Không tìm thấy Event để join map")
+            return
+        end
+        
+        -- 1. Create
+        Event:FireServer("Create")
+        wait(0.5)
+        
+        -- 2. Friend Only (nếu được bật)
+        if friendOnly then
+            Event:FireServer("Change-FriendOnly")
+            wait(0.5)
+        end
+        
+        -- 3. Chọn Map và Chapter
+        -- 3.1 Đổi Map
+        local args1 = {
+            [1] = "Change-World",
+            [2] = {
+                ["World"] = selectedMap
+            }
+        }
+        Event:FireServer(unpack(args1))
+        wait(0.5)
+        
+        -- 3.2 Đổi Chapter
+        local args2 = {
+            [1] = "Change-Chapter",
+            [2] = {
+                ["Chapter"] = selectedMap .. "_" .. selectedChapter
+            }
+        }
+        Event:FireServer(unpack(args2))
+        wait(0.5)
+        
+        -- 4. Submit
+        Event:FireServer("Submit")
+        wait(1)
+        
+        -- 5. Start
+        Event:FireServer("Start")
+        
+        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter)
+    end)
+    
+    if not success then
+        warn("Lỗi khi join map: " .. tostring(err))
+    end
+end
+
+-- Dropdown để chọn Map
+StorySection:AddDropdown("MapDropdown", {
+    Title = "Choose Map",
+    Values = {"OnePiece", "Namek", "VoochaVillage", "Shibuya", "Underground", "SpiritSociety"},
+    Multi = false,
+    Default = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece",
+    Callback = function(Value)
+        selectedMap = Value
+        ConfigSystem.CurrentConfig.SelectedMap = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi map khi người dùng chọn
+        changeWorld(Value)
+        print("Đã chọn map: " .. Value)
+    end
+})
+
+-- Dropdown để chọn Chapter
+StorySection:AddDropdown("ChapterDropdown", {
+    Title = "Choose Chapter",
+    Values = {"Chapter1", "Chapter2", "Chapter3", "Chapter4", "Chapter5", "Chapter6", "Chapter7", "Chapter8", "Chapter9", "Chapter10"},
+    Multi = false,
+    Default = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1",
+    Callback = function(Value)
+        selectedChapter = Value
+        ConfigSystem.CurrentConfig.SelectedChapter = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi chapter khi người dùng chọn
+        changeChapter(selectedMap, Value)
+        print("Đã chọn chapter: " .. Value)
+    end
+})
+
+-- Toggle Friend Only
+StorySection:AddToggle("FriendOnlyToggle", {
+    Title = "Friend Only",
+    Default = ConfigSystem.CurrentConfig.FriendOnly or false,
+    Callback = function(Value)
+        friendOnly = Value
+        ConfigSystem.CurrentConfig.FriendOnly = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Toggle Friend Only khi người dùng thay đổi
+        toggleFriendOnly()
+        
+        if Value then
+            Fluent:Notify({
+                Title = "Friend Only",
+                Content = "Đã bật chế độ Friend Only",
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Friend Only",
+                Content = "Đã tắt chế độ Friend Only",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Toggle Auto Join Map
+StorySection:AddToggle("AutoJoinMapToggle", {
+    Title = "Auto Join Map",
+    Default = ConfigSystem.CurrentConfig.AutoJoinMap or false,
+    Callback = function(Value)
+        autoJoinMapEnabled = Value
+        ConfigSystem.CurrentConfig.AutoJoinMap = Value
+        ConfigSystem.SaveConfig()
+        
+        if autoJoinMapEnabled then
+            Fluent:Notify({
+                Title = "Auto Join Map",
+                Content = "Auto Join Map đã được bật",
+                Duration = 3
+            })
+            
+            -- Tạo vòng lặp Auto Join Map
+            spawn(function()
+                while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
+                    joinMap()
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Join Map",
+                Content = "Auto Join Map đã được tắt",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Nút Join Map (manual)
+StorySection:AddButton({
+    Title = "Join Map Now",
+    Callback = function()
+        joinMap()
+        
+        Fluent:Notify({
+            Title = "Join Map",
+            Content = "Đang tham gia map: " .. selectedMap .. "_" .. selectedChapter,
+            Duration = 2
+        })
+    end
 })
 
 -- Thêm section Summon trong tab Shop
@@ -496,7 +755,7 @@ end
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({InfoTab, ShopTab, SettingsTab}) do
+    for _, tab in pairs({InfoTab, PlayTab, ShopTab, SettingsTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then

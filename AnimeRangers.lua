@@ -22,6 +22,11 @@ if not Fluent then
     return
 end
 
+-- PlaceID của Lobby chính
+local MAIN_LOBBY_PLACEID = 72829404259339
+local currentPlaceId = game.PlaceId
+local isInMainLobby = (currentPlaceId == MAIN_LOBBY_PLACEID)
+
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)
     local service = nil
@@ -154,7 +159,7 @@ local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
 local selectedDisplayMap = reverseMapNameMapping[selectedMap] or "Voocha Village"
 local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
-local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
+local autoJoinMapEnabled = false  -- Mặc định là false, sẽ được cập nhật dựa vào vị trí hiện tại
 local autoJoinMapLoop = nil
 
 -- Thông tin người chơi
@@ -285,80 +290,13 @@ InfoSection:AddParagraph({
     Content = "Script được phát triển bởi HT Hub"
 })
 
+InfoSection:AddParagraph({
+    Title = "Vị trí hiện tại",
+    Content = isInMainLobby and "Bạn đang ở Lobby chính" or "Bạn đang ở trong Map Game"
+})
+
 -- Thêm section Story trong tab Play
 local StorySection = PlayTab:AddSection("Story")
-
--- Hàm kiểm tra xem người chơi đang ở map và chapter nào
-local function getCurrentMapAndChapter()
-    local success, result = pcall(function()
-        local workspace = game:GetService("Workspace")
-        
-        -- Kiểm tra xem có đang trong game không
-        local isInGame = false
-        local currentMap = nil
-        local currentChapter = nil
-        
-        -- Tìm thông tin map và chapter từ các thành phần trong workspace
-        local gameData = safeGetChild(workspace, "GameData")
-        if gameData then
-            local mapInfo = safeGetChild(gameData, "MapInfo")
-            if mapInfo then
-                local mapValue = safeGetChild(mapInfo, "Map")
-                local chapterValue = safeGetChild(mapInfo, "Chapter") 
-                
-                if mapValue and mapValue:IsA("StringValue") then
-                    currentMap = mapValue.Value
-                    isInGame = true
-                end
-                
-                if chapterValue and chapterValue:IsA("StringValue") then
-                    currentChapter = chapterValue.Value
-                end
-            end
-        end
-        
-        -- Nếu không tìm thấy thông tin trực tiếp, thử phương pháp khác
-        if not isInGame then
-            for _, map in pairs(workspace:GetChildren()) do
-                if map:IsA("Model") and map:FindFirstChild("MapComponents") then
-                    -- Thử xác định map từ tên model hoặc thuộc tính khác
-                    for mapName, _ in pairs(mapNameMapping) do
-                        if map.Name:find(mapName) then
-                            currentMap = mapName
-                            isInGame = true
-                            break
-                        end
-                    end
-                end
-            end
-        end
-        
-        -- Thử đoán chapter từ các đặc điểm khác
-        if not currentChapter and isInGame then
-            -- Logic phức tạp hơn để đoán chapter dựa vào các yếu tố khác
-            -- (giả định chapter đơn giản là từ tên chapter)
-            for _, obj in pairs(workspace:GetDescendants()) do
-                if obj:IsA("StringValue") and obj.Name == "Chapter" then
-                    currentChapter = obj.Value
-                    break
-                end
-            end
-        end
-        
-        return {
-            isInGame = isInGame,
-            currentMap = currentMap,
-            currentChapter = currentChapter
-        }
-    end)
-    
-    if not success then
-        warn("Lỗi khi kiểm tra map hiện tại: " .. tostring(result))
-        return {isInGame = false, currentMap = nil, currentChapter = nil}
-    else
-        return result
-    end
-end
 
 -- Hàm để thay đổi map
 local function changeWorld(worldDisplay)
@@ -435,46 +373,12 @@ local function toggleFriendOnly()
     end
 end
 
--- Hàm kiểm tra xem đã ở đúng map và chapter chưa
-local function isInCorrectMapAndChapter()
-    local currentState = getCurrentMapAndChapter()
-    
-    if not currentState.isInGame then
-        print("Không đang trong game, cần join map")
-        return false
-    end
-    
-    -- Chuyển đổi tên map hiển thị thành tên thật để so sánh
-    local currentMapReal = nil
-    if currentState.currentMap then
-        if mapNameMapping[currentState.currentMap] then
-            currentMapReal = mapNameMapping[currentState.currentMap]
-        else
-            -- Nếu đã là tên thật rồi
-            currentMapReal = currentState.currentMap
-        end
-    end
-    
-    -- Kiểm tra xem có đang ở đúng map và chapter không
-    local targetChapterFull = selectedMap .. "_" .. selectedChapter
-    local isCorrectMap = currentMapReal == selectedMap
-    local isCorrectChapter = currentState.currentChapter == targetChapterFull or currentState.currentChapter == selectedChapter
-    
-    if isCorrectMap and isCorrectChapter then
-        print("Đã ở đúng map và chapter: " .. selectedDisplayMap .. " - " .. selectedChapter)
-        return true
-    else
-        print("Chưa ở đúng map và chapter. Hiện tại: " .. (currentState.currentMap or "Unknown") .. " - " .. (currentState.currentChapter or "Unknown"))
-        return false
-    end
-end
-
 -- Hàm để tự động tham gia map
 local function joinMap()
-    -- Kiểm tra xem đã ở đúng map và chapter chưa
-    if isInCorrectMapAndChapter() then
-        print("Đã ở đúng map và chapter, không cần join lại")
-        return
+    -- Kiểm tra xem có đang ở lobby chính không
+    if not isInMainLobby then
+        warn("Không thể join map: Bạn không ở Lobby chính")
+        return false
     end
     
     local success, err = pcall(function()
@@ -529,7 +433,10 @@ local function joinMap()
     
     if not success then
         warn("Lỗi khi join map: " .. tostring(err))
+        return false
     end
+    
+    return true
 end
 
 -- Dropdown để chọn Map
@@ -545,8 +452,12 @@ StorySection:AddDropdown("MapDropdown", {
         ConfigSystem.SaveConfig()
         
         -- Thay đổi map khi người dùng chọn
-        changeWorld(Value)
-        print("Đã chọn map: " .. Value .. " (thực tế: " .. selectedMap .. ")")
+        if isInMainLobby then
+            changeWorld(Value)
+            print("Đã chọn map: " .. Value .. " (thực tế: " .. selectedMap .. ")")
+        else
+            print("Đã lưu lựa chọn map: " .. Value .. " (thực tế: " .. selectedMap .. ")")
+        end
     end
 })
 
@@ -562,8 +473,12 @@ StorySection:AddDropdown("ChapterDropdown", {
         ConfigSystem.SaveConfig()
         
         -- Thay đổi chapter khi người dùng chọn
-        changeChapter(selectedMap, Value)
-        print("Đã chọn chapter: " .. Value)
+        if isInMainLobby then
+            changeChapter(selectedMap, Value)
+            print("Đã chọn chapter: " .. Value)
+        else
+            print("Đã lưu lựa chọn chapter: " .. Value)
+        end
     end
 })
 
@@ -577,7 +492,9 @@ StorySection:AddToggle("FriendOnlyToggle", {
         ConfigSystem.SaveConfig()
         
         -- Toggle Friend Only khi người dùng thay đổi
-        toggleFriendOnly()
+        if isInMainLobby then
+            toggleFriendOnly()
+        end
         
         if Value then
             Fluent:Notify({
@@ -595,63 +512,75 @@ StorySection:AddToggle("FriendOnlyToggle", {
     end
 })
 
--- Toggle Auto Join Map
-StorySection:AddToggle("AutoJoinMapToggle", {
-    Title = "Auto Join Map",
-    Default = ConfigSystem.CurrentConfig.AutoJoinMap or false,
-    Callback = function(Value)
-        autoJoinMapEnabled = Value
-        ConfigSystem.CurrentConfig.AutoJoinMap = Value
-        ConfigSystem.SaveConfig()
-        
-        if autoJoinMapEnabled then
-            Fluent:Notify({
-                Title = "Auto Join Map",
-                Content = "Auto Join Map đã được bật",
-                Duration = 3
-            })
+-- Toggle Auto Join Map (chỉ hiển thị khi ở lobby chính)
+local autoJoinMapToggle
+if isInMainLobby then
+    autoJoinMapToggle = StorySection:AddToggle("AutoJoinMapToggle", {
+        Title = "Auto Join Map",
+        Default = ConfigSystem.CurrentConfig.AutoJoinMap or false,
+        Callback = function(Value)
+            autoJoinMapEnabled = Value
+            ConfigSystem.CurrentConfig.AutoJoinMap = Value
+            ConfigSystem.SaveConfig()
             
-            -- Tạo vòng lặp Auto Join Map
-            spawn(function()
-                while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
-                    if not isInCorrectMapAndChapter() then
+            if autoJoinMapEnabled then
+                Fluent:Notify({
+                    Title = "Auto Join Map",
+                    Content = "Auto Join Map đã được bật",
+                    Duration = 3
+                })
+                
+                -- Tạo vòng lặp Auto Join Map
+                spawn(function()
+                    while autoJoinMapEnabled and wait(10) and isInMainLobby do -- Thử join map mỗi 10 giây
                         joinMap()
-                    else
-                        print("Đã ở đúng map và chapter, không cần join lại")
                     end
-                end
-            end)
-        else
-            Fluent:Notify({
-                Title = "Auto Join Map",
-                Content = "Auto Join Map đã được tắt",
-                Duration = 3
-            })
+                end)
+            else
+                Fluent:Notify({
+                    Title = "Auto Join Map",
+                    Content = "Auto Join Map đã được tắt",
+                    Duration = 3
+                })
+            end
         end
-    end
-})
+    })
+else
+    -- Nếu không ở lobby chính, thêm thông báo
+    StorySection:AddParagraph({
+        Title = "Auto Join Map",
+        Content = "Bạn cần ở Lobby chính để sử dụng tính năng này.\nPlaceID hiện tại: " .. tostring(currentPlaceId) .. "\nPlaceID Lobby: " .. tostring(MAIN_LOBBY_PLACEID)
+    })
+end
 
--- Nút Join Map (manual)
-StorySection:AddButton({
-    Title = "Join Map Now",
-    Callback = function()
-        if not isInCorrectMapAndChapter() then
-            joinMap()
+-- Nút Join Map (manual) - chỉ hiển thị khi ở lobby chính
+if isInMainLobby then
+    StorySection:AddButton({
+        Title = "Join Map Now",
+        Callback = function()
+            local success = joinMap()
             
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
-                Duration = 2
-            })
-        else
-            Fluent:Notify({
-                Title = "Đã trong Map",
-                Content = "Bạn đã ở trong map: " .. selectedDisplayMap .. " - " .. selectedChapter,
-                Duration = 2
-            })
+            if success then
+                Fluent:Notify({
+                    Title = "Join Map",
+                    Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
+                    Duration = 2
+                })
+            else
+                Fluent:Notify({
+                    Title = "Join Map Error",
+                    Content = "Không thể tham gia map. Xem console để biết thêm chi tiết.",
+                    Duration = 2
+                })
+            end
         end
-    end
-})
+    })
+else
+    StorySection:AddParagraph({
+        Title = "Join Map",
+        Content = "Bạn cần ở Lobby chính để sử dụng tính năng này."
+    })
+end
 
 -- Thêm section Summon trong tab Shop
 local SummonSection = ShopTab:AddSection("Summon")
@@ -938,20 +867,6 @@ AutoSaveConfig()
 
 -- Thiết lập events
 setupSaveEvents()
-
--- Kiểm tra map hiện tại khi khởi động script
-spawn(function()
-    wait(3) -- Đợi một chút để workspace load đầy đủ
-    local currentState = getCurrentMapAndChapter()
-    if currentState.isInGame then
-        local mapName = currentState.currentMap
-        local chapterName = currentState.currentChapter
-        
-        print("Đang ở map: " .. (mapName or "Unknown") .. ", chapter: " .. (chapterName or "Unknown"))
-    else
-        print("Không đang trong game nào.")
-    end
-end)
 
 -- Thông báo khi script đã tải xong
 Fluent:Notify({

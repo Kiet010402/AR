@@ -1,4 +1,10 @@
 -- Anime Rangers X Script
+-- Xác định UserInputService đúng cách
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage") 
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
+
 -- Tải thư viện Fluent UI
 local success, err = pcall(function()
     Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -32,29 +38,43 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
--- Cấu hình nút thu gọn (-)
-local MinimizeBtn = Window.Root.Main.TopBar.Minimize
-MinimizeBtn.MouseButton1Click:Connect(function()
-    Window:Minimize()
+-- Xử lý nút Thu gọn một cách an toàn
+pcall(function()
+    if Window and Window.Root then
+        local TopBar = Window.Root:FindFirstChild("TopBar")
+        if TopBar then
+            local MinimizeBtn = TopBar:FindFirstChild("Minimize")
+            if MinimizeBtn then
+                MinimizeBtn.MouseButton1Click:Connect(function()
+                    if Window.Minimize then
+                        Window:Minimize()
+                    end
+                end)
+            end
+        end
+    end
 end)
 
--- Cấu hình chế độ thu gọn hiển thị logo
-Window.Minimized:Connect(function()
-    Fluent:Notify({
-        Title = "UI",
-        Content = "Giao diện đã được thu nhỏ",
-        Duration = 2
-    })
-end)
+-- Cấu hình các sự kiện của Window
+if Window.Minimized then
+    Window.Minimized:Connect(function()
+        Fluent:Notify({
+            Title = "UI",
+            Content = "Giao diện đã được thu nhỏ",
+            Duration = 2
+        })
+    end)
+end
 
--- Cấu hình khi mở lại cửa sổ
-Window.Restored:Connect(function()
-    Fluent:Notify({
-        Title = "UI",
-        Content = "Giao diện đã được mở lại",
-        Duration = 2
-    })
-end)
+if Window.Restored then
+    Window.Restored:Connect(function()
+        Fluent:Notify({
+            Title = "UI",
+            Content = "Giao diện đã được mở lại",
+            Duration = 2
+        })
+    end)
+end
 
 -- Tạo các tab
 local InfoTab = Window:AddTab({ Title = "Info", Icon = "rbxassetid://10723424505" })
@@ -70,7 +90,6 @@ InterfaceManager:SetFolder("AnimeRangersX")
 SaveManager:SetFolder("AnimeRangersX/configs")
 
 -- Hệ thống auto save config theo tên người chơi
-local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
 -- Đợi đến khi người chơi sẵn sàng
@@ -82,32 +101,40 @@ local playerName = player.Name
 local configName = "Player_" .. playerName
 
 -- Tự động lưu cấu hình khi đóng
-Window.Closed:Connect(function()
-    SaveManager:Save(configName)
-    Fluent:Notify({
-        Title = "Auto Save",
-        Content = "Đã lưu cấu hình cho " .. playerName,
-        Duration = 3
-    })
-end)
+if Window.Closed then
+    Window.Closed:Connect(function()
+        SaveManager:Save(configName)
+        Fluent:Notify({
+            Title = "Auto Save",
+            Content = "Đã lưu cấu hình cho " .. playerName,
+            Duration = 3
+        })
+    end)
+end
 
 -- Tự động tải cấu hình khi mở
 task.spawn(function()
     wait(1)
     -- Thử tải cấu hình của người chơi
-    if SaveManager:Load(configName) then
-        Fluent:Notify({
-            Title = "Auto Load",
-            Content = "Đã tải cấu hình cho " .. playerName,
-            Duration = 3
-        })
-    else
-        Fluent:Notify({
-            Title = "Auto Load",
-            Content = "Không tìm thấy cấu hình, tạo mới cho " .. playerName,
-            Duration = 3
-        })
-        SaveManager:Save(configName)
+    local success = pcall(function()
+        if SaveManager:Load(configName) then
+            Fluent:Notify({
+                Title = "Auto Load",
+                Content = "Đã tải cấu hình cho " .. playerName,
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Auto Load",
+                Content = "Không tìm thấy cấu hình, tạo mới cho " .. playerName,
+                Duration = 3
+            })
+            SaveManager:Save(configName)
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi tải cấu hình")
     end
 end)
 
@@ -115,30 +142,32 @@ end)
 task.spawn(function()
     while true do
         wait(5) -- 5 giây
-        SaveManager:Save(configName)
-        Fluent:Notify({
-            Title = "Auto Save",
-            Content = "Đã tự động lưu cấu hình cho " .. playerName,
-            Duration = 2
-        })
+        pcall(function()
+            SaveManager:Save(configName)
+            Fluent:Notify({
+                Title = "Auto Save",
+                Content = "Đã tự động lưu cấu hình cho " .. playerName,
+                Duration = 2
+            })
+        end)
     end
 end)
 
-Window:SelectTab(1)
+if Window and Window.SelectTab then
+    Window:SelectTab(1)
+end
 
 -- Code hệ thống game - đặt trong pcall để bắt lỗi
 pcall(function()
-    -- Đảm bảo các services sẵn sàng
-    local Players = game:GetService("Players")
+    -- Đảm bảo ReplicatedStorage sẵn sàng
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local UserInputService = game:GetService("UserInputService")
-
-    -- Đợi đến khi ReplicatedStorage sẵn sàng
     if not ReplicatedStorage then
         warn("ReplicatedStorage chưa sẵn sàng, đang đợi...")
         ReplicatedStorage = game:WaitForService("ReplicatedStorage")
     end
-
+    
+    -- KHÔNG cố gắng truy cập UIS.Store (nguồn gốc của lỗi)
+    
     -- Các biến và constants
     local DAMAGE_MULTIPLIER = 1.5
     local COOLDOWN_BASIC_ATTACK = 0.8
@@ -305,8 +334,11 @@ pcall(function()
     end
 end)
 
-Fluent:Notify({
-    Title = "Script Loaded",
-    Content = "AnimeRangersX script đã được tải thành công!",
-    Duration = 5
-})
+-- Thông báo cuối cùng
+pcall(function()
+    Fluent:Notify({
+        Title = "Script Loaded",
+        Content = "AnimeRangersX script đã được tải thành công!",
+        Duration = 5
+    })
+end)

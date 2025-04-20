@@ -288,6 +288,78 @@ InfoSection:AddParagraph({
 -- Thêm section Story trong tab Play
 local StorySection = PlayTab:AddSection("Story")
 
+-- Hàm kiểm tra xem người chơi đang ở map và chapter nào
+local function getCurrentMapAndChapter()
+    local success, result = pcall(function()
+        local workspace = game:GetService("Workspace")
+        
+        -- Kiểm tra xem có đang trong game không
+        local isInGame = false
+        local currentMap = nil
+        local currentChapter = nil
+        
+        -- Tìm thông tin map và chapter từ các thành phần trong workspace
+        local gameData = safeGetChild(workspace, "GameData")
+        if gameData then
+            local mapInfo = safeGetChild(gameData, "MapInfo")
+            if mapInfo then
+                local mapValue = safeGetChild(mapInfo, "Map")
+                local chapterValue = safeGetChild(mapInfo, "Chapter") 
+                
+                if mapValue and mapValue:IsA("StringValue") then
+                    currentMap = mapValue.Value
+                    isInGame = true
+                end
+                
+                if chapterValue and chapterValue:IsA("StringValue") then
+                    currentChapter = chapterValue.Value
+                end
+            end
+        end
+        
+        -- Nếu không tìm thấy thông tin trực tiếp, thử phương pháp khác
+        if not isInGame then
+            for _, map in pairs(workspace:GetChildren()) do
+                if map:IsA("Model") and map:FindFirstChild("MapComponents") then
+                    -- Thử xác định map từ tên model hoặc thuộc tính khác
+                    for mapName, _ in pairs(mapNameMapping) do
+                        if map.Name:find(mapName) then
+                            currentMap = mapName
+                            isInGame = true
+                            break
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Thử đoán chapter từ các đặc điểm khác
+        if not currentChapter and isInGame then
+            -- Logic phức tạp hơn để đoán chapter dựa vào các yếu tố khác
+            -- (giả định chapter đơn giản là từ tên chapter)
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if obj:IsA("StringValue") and obj.Name == "Chapter" then
+                    currentChapter = obj.Value
+                    break
+                end
+            end
+        end
+        
+        return {
+            isInGame = isInGame,
+            currentMap = currentMap,
+            currentChapter = currentChapter
+        }
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra map hiện tại: " .. tostring(result))
+        return {isInGame = false, currentMap = nil, currentChapter = nil}
+    else
+        return result
+    end
+end
+
 -- Hàm để thay đổi map
 local function changeWorld(worldDisplay)
     local success, err = pcall(function()
@@ -363,8 +435,48 @@ local function toggleFriendOnly()
     end
 end
 
+-- Hàm kiểm tra xem đã ở đúng map và chapter chưa
+local function isInCorrectMapAndChapter()
+    local currentState = getCurrentMapAndChapter()
+    
+    if not currentState.isInGame then
+        print("Không đang trong game, cần join map")
+        return false
+    end
+    
+    -- Chuyển đổi tên map hiển thị thành tên thật để so sánh
+    local currentMapReal = nil
+    if currentState.currentMap then
+        if mapNameMapping[currentState.currentMap] then
+            currentMapReal = mapNameMapping[currentState.currentMap]
+        else
+            -- Nếu đã là tên thật rồi
+            currentMapReal = currentState.currentMap
+        end
+    end
+    
+    -- Kiểm tra xem có đang ở đúng map và chapter không
+    local targetChapterFull = selectedMap .. "_" .. selectedChapter
+    local isCorrectMap = currentMapReal == selectedMap
+    local isCorrectChapter = currentState.currentChapter == targetChapterFull or currentState.currentChapter == selectedChapter
+    
+    if isCorrectMap and isCorrectChapter then
+        print("Đã ở đúng map và chapter: " .. selectedDisplayMap .. " - " .. selectedChapter)
+        return true
+    else
+        print("Chưa ở đúng map và chapter. Hiện tại: " .. (currentState.currentMap or "Unknown") .. " - " .. (currentState.currentChapter or "Unknown"))
+        return false
+    end
+end
+
 -- Hàm để tự động tham gia map
 local function joinMap()
+    -- Kiểm tra xem đã ở đúng map và chapter chưa
+    if isInCorrectMapAndChapter() then
+        print("Đã ở đúng map và chapter, không cần join lại")
+        return
+    end
+    
     local success, err = pcall(function()
         -- Lấy Event
         local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
@@ -502,7 +614,11 @@ StorySection:AddToggle("AutoJoinMapToggle", {
             -- Tạo vòng lặp Auto Join Map
             spawn(function()
                 while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
-                    joinMap()
+                    if not isInCorrectMapAndChapter() then
+                        joinMap()
+                    else
+                        print("Đã ở đúng map và chapter, không cần join lại")
+                    end
                 end
             end)
         else
@@ -519,13 +635,21 @@ StorySection:AddToggle("AutoJoinMapToggle", {
 StorySection:AddButton({
     Title = "Join Map Now",
     Callback = function()
-        joinMap()
-        
-        Fluent:Notify({
-            Title = "Join Map",
-            Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
-            Duration = 2
-        })
+        if not isInCorrectMapAndChapter() then
+            joinMap()
+            
+            Fluent:Notify({
+                Title = "Join Map",
+                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Đã trong Map",
+                Content = "Bạn đã ở trong map: " .. selectedDisplayMap .. " - " .. selectedChapter,
+                Duration = 2
+            })
+        end
     end
 })
 
@@ -814,6 +938,20 @@ AutoSaveConfig()
 
 -- Thiết lập events
 setupSaveEvents()
+
+-- Kiểm tra map hiện tại khi khởi động script
+spawn(function()
+    wait(3) -- Đợi một chút để workspace load đầy đủ
+    local currentState = getCurrentMapAndChapter()
+    if currentState.isInGame then
+        local mapName = currentState.currentMap
+        local chapterName = currentState.currentChapter
+        
+        print("Đang ở map: " .. (mapName or "Unknown") .. ", chapter: " .. (chapterName or "Unknown"))
+    else
+        print("Không đang trong game nào.")
+    end
+end)
 
 -- Thông báo khi script đã tải xong
 Fluent:Notify({

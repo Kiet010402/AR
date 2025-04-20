@@ -1,5 +1,5 @@
 -- Anime Rangers X Script
--- Sử dụng Orion UI Library thay vì Fluent UI
+-- Sử dụng UI Library từ AirHub
 
 -- Lấy các service cần thiết
 local Players = game:GetService("Players")
@@ -32,7 +32,7 @@ local function loadConfig(configName)
 end
 
 -- Cấu hình dựa trên tên người chơi
-local playerName = player.Name
+local playerName = player and player.Name or "Player"
 local configName = "Player_" .. playerName
 local settings = loadConfig(configName) or {
     autoFarm = false,
@@ -40,50 +40,170 @@ local settings = loadConfig(configName) or {
     walkSpeed = 16
 }
 
--- Tải Orion UI Library
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
+-- Tải UI Library từ AirHub
+local Library = loadstring(game:GetObjects("rbxassetid://7657867786")[1].Source)()
 
 -- Tạo cửa sổ UI
-local Window = OrionLib:MakeWindow({
-    Name = "Anime Rangers X", 
-    HidePremium = false, 
-    SaveConfig = false, 
-    ConfigFolder = "AnimeRangersX"
+local MainFrame = Library:CreateWindow({
+    Name = "Anime Rangers X",
+    Themeable = {
+        Image = "7059346386",
+        Info = "Made by Script Master\nAnime Rangers X",
+        Credit = false
+    },
+    Background = "",
+    Theme = [[{"__Designer.Colors.topGradient":"3F0C64","__Designer.Colors.section":"C259FB","__Designer.Colors.hoveredOptionBottom":"4819B4","__Designer.Background.ImageAssetID":"rbxassetid://4427304036","__Designer.Colors.selectedOption":"4E149C","__Designer.Colors.unselectedOption":"482271","__Designer.Files.WorkspaceFile":"AnimeRangersX","__Designer.Colors.unhoveredOptionTop":"310269","__Designer.Colors.outerBorder":"391D57","__Designer.Background.ImageColor":"69009C","__Designer.Colors.tabText":"B9B9B9","__Designer.Colors.elementBorder":"160B24","__Designer.Background.ImageTransparency":100,"__Designer.Colors.background":"1E1237","__Designer.Colors.innerBorder":"531E79","__Designer.Colors.bottomGradient":"361A60","__Designer.Colors.sectionBackground":"21002C","__Designer.Colors.hoveredOptionTop":"6B10F9","__Designer.Colors.otherElementText":"7B44A8","__Designer.Colors.main":"AB26FF","__Designer.Colors.elementText":"9F7DB5","__Designer.Colors.unhoveredOptionBottom":"3E0088","__Designer.Background.UseBackgroundImage":false}]]
 })
 
--- Tab Info
-local InfoTab = Window:MakeTab({
-    Name = "Info",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
+-- Tạo các tab
+local InfoTab = MainFrame:CreateTab({
+    Name = "Info"
 })
 
-InfoTab:AddLabel("Anime Rangers X Script")
-InfoTab:AddLabel("Phiên bản: 1.0.0")
-InfoTab:AddLabel("Tác giả: Script Master")
-InfoTab:AddParagraph("Hướng dẫn", "Sử dụng các tab để điều chỉnh cài đặt script")
+local FarmTab = MainFrame:CreateTab({
+    Name = "Farm"
+})
 
--- Tự động lưu cấu hình
-task.spawn(function()
-    while true do
-        wait(5) -- 5 giây
-        saveConfig(configName, settings)
-        OrionLib:MakeNotification({
-            Name = "Auto Save",
-            Content = "Đã tự động lưu cấu hình cho " .. playerName,
-            Image = "rbxassetid://4483345998",
-            Time = 2
-        })
+local SettingsTab = MainFrame:CreateTab({
+    Name = "Settings"
+})
+
+local FunctionsTab = MainFrame:CreateTab({
+    Name = "Functions"
+})
+
+-- Sections
+local InfoSection = InfoTab:CreateSection({
+    Name = "Information"
+})
+
+local FarmSection = FarmTab:CreateSection({
+    Name = "Auto Farm"
+})
+
+local CharacterSection = SettingsTab:CreateSection({
+    Name = "Character"
+})
+
+local GameSection = SettingsTab:CreateSection({
+    Name = "Game Settings",
+    Side = "Right"
+})
+
+local FunctionsSection = FunctionsTab:CreateSection({
+    Name = "Functions"
+})
+
+-- Info Section
+InfoSection:AddLabel({
+    Text = "Anime Rangers X Script"
+})
+
+InfoSection:AddLabel({
+    Text = "Version: 1.0.0"
+})
+
+InfoSection:AddLabel({
+    Text = "Made by Script Master"
+})
+
+-- Farm Section
+FarmSection:AddToggle({
+    Name = "Auto Farm",
+    Value = settings.autoFarm,
+    Callback = function(New, Old)
+        settings.autoFarm = New
     end
-end)
+}).Default = settings.autoFarm
 
--- Thông báo khi tải script
-OrionLib:MakeNotification({
-    Name = "Script Loaded",
-    Content = "AnimeRangersX script đã được tải thành công!",
-    Image = "rbxassetid://4483345998",
-    Time = 5
+FarmSection:AddToggle({
+    Name = "Auto Attack",
+    Value = settings.autoAttack,
+    Callback = function(New, Old)
+        settings.autoAttack = New
+    end
+}).Default = settings.autoAttack
+
+-- Character Section
+CharacterSection:AddToggle({
+    Name = "WalkSpeed Enabled",
+    Value = settings.walkSpeedEnabled or false,
+    Callback = function(New, Old)
+        settings.walkSpeedEnabled = New
+        
+        if New and player and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = settings.walkSpeed or 16
+        end
+    end
+}).Default = settings.walkSpeedEnabled or false
+
+CharacterSection:AddSlider({
+    Name = "WalkSpeed",
+    Value = settings.walkSpeed or 16,
+    Callback = function(New, Old)
+        settings.walkSpeed = New
+        
+        if settings.walkSpeedEnabled and player and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = New
+        end
+    end,
+    Min = 16,
+    Max = 100
+}).Default = settings.walkSpeed or 16
+
+-- Game Settings Section
+GameSection:AddToggle({
+    Name = "Auto Save Config",
+    Value = settings.autoSaveConfig or true,
+    Callback = function(New, Old)
+        settings.autoSaveConfig = New
+    end
+}).Default = settings.autoSaveConfig or true
+
+-- Functions Section
+FunctionsSection:AddButton({
+    Name = "Save Configuration",
+    Callback = function()
+        saveConfig(configName, settings)
+        print("Configuration saved for " .. playerName)
+    end
 })
+
+FunctionsSection:AddButton({
+    Name = "Reset All Settings",
+    Callback = function()
+        settings = {
+            autoFarm = false,
+            autoAttack = false,
+            walkSpeed = 16,
+            walkSpeedEnabled = false,
+            autoSaveConfig = true
+        }
+        
+        if player and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = 16
+        end
+        
+        saveConfig(configName, settings)
+        Library.ResetAll()
+    end
+})
+
+FunctionsSection:AddButton({
+    Name = "Exit",
+    Callback = Library.Unload
+})
+
+-- Auto Save
+if settings.autoSaveConfig then
+    task.spawn(function()
+        while wait(5) do
+            if settings.autoSaveConfig then
+                saveConfig(configName, settings)
+            end
+        end
+    end)
+end
 
 -- Code hệ thống game - đặt trong pcall để bắt lỗi
 pcall(function()
@@ -153,7 +273,11 @@ pcall(function()
         speed.Parent = stats
         
         -- Set tốc độ di chuyển
-        humanoid.WalkSpeed = speed.Value
+        if settings.walkSpeedEnabled then
+            humanoid.WalkSpeed = settings.walkSpeed or 16
+        else
+            humanoid.WalkSpeed = 16
+        end
         
         -- Xử lý khi nhân vật chết
         humanoid.Died:Connect(function()
@@ -259,5 +383,25 @@ pcall(function()
     end
 end)
 
--- Khởi tạo UI
-OrionLib:Init()
+-- Auto Farm Function
+task.spawn(function()
+    while wait(1) do
+        if settings.autoFarm then
+            -- Implement auto farm logic here
+            print("Auto farming...")
+        end
+    end
+end)
+
+-- Auto Attack Function
+task.spawn(function()
+    while wait(0.5) do
+        if settings.autoAttack then
+            -- Implement auto attack logic here
+            print("Auto attacking...")
+        end
+    end
+end)
+
+-- Thông báo khi script đã tải xong
+print("Anime Rangers X Script has been loaded!")

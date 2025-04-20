@@ -134,8 +134,24 @@ local autoSummonLoop = nil
 local autoClaimQuestEnabled = ConfigSystem.CurrentConfig.AutoClaimQuest or false
 local autoClaimQuestLoop = nil
 
+-- Mapping giữa tên hiển thị và tên thật của map
+local mapNameMapping = {
+    ["Voocha Village"] = "OnePiece",
+    ["Green Planet"] = "Namek",
+    ["Demon Forest"] = "DemonSlayer",
+    ["Leaf Village"] = "Naruto",
+    ["Z City"] = "OPM"
+}
+
+-- Mapping ngược lại để hiển thị tên cho người dùng
+local reverseMapNameMapping = {}
+for display, real in pairs(mapNameMapping) do
+    reverseMapNameMapping[real] = display
+end
+
 -- Biến lưu trạng thái Story
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
+local selectedDisplayMap = reverseMapNameMapping[selectedMap] or "Voocha Village"
 local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
@@ -273,20 +289,23 @@ InfoSection:AddParagraph({
 local StorySection = PlayTab:AddSection("Story")
 
 -- Hàm để thay đổi map
-local function changeWorld(world)
+local function changeWorld(worldDisplay)
     local success, err = pcall(function()
         local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
         
         if Event then
+            -- Chuyển đổi từ tên hiển thị sang tên thật
+            local worldReal = mapNameMapping[worldDisplay] or "OnePiece"
+            
             local args = {
                 [1] = "Change-World",
                 [2] = {
-                    ["World"] = world
+                    ["World"] = worldReal
                 }
             }
             
             Event:FireServer(unpack(args))
-            print("Đã đổi map: " .. world)
+            print("Đã đổi map: " .. worldDisplay .. " (thực tế: " .. worldReal .. ")")
         else
             warn("Không tìm thấy Event để đổi map")
         end
@@ -404,17 +423,18 @@ end
 -- Dropdown để chọn Map
 StorySection:AddDropdown("MapDropdown", {
     Title = "Choose Map",
-    Values = {"OnePiece", "Namek", "VoochaVillage", "Shibuya", "Underground", "SpiritSociety"},
+    Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
     Multi = false,
-    Default = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece",
+    Default = selectedDisplayMap,
     Callback = function(Value)
-        selectedMap = Value
-        ConfigSystem.CurrentConfig.SelectedMap = Value
+        selectedDisplayMap = Value
+        selectedMap = mapNameMapping[Value] or "OnePiece"
+        ConfigSystem.CurrentConfig.SelectedMap = selectedMap
         ConfigSystem.SaveConfig()
         
         -- Thay đổi map khi người dùng chọn
         changeWorld(Value)
-        print("Đã chọn map: " .. Value)
+        print("Đã chọn map: " .. Value .. " (thực tế: " .. selectedMap .. ")")
     end
 })
 
@@ -503,7 +523,7 @@ StorySection:AddButton({
         
         Fluent:Notify({
             Title = "Join Map",
-            Content = "Đang tham gia map: " .. selectedMap .. "_" .. selectedChapter,
+            Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
             Duration = 2
         })
     end

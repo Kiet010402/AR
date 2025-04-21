@@ -1,114 +1,26 @@
 -- Anime Rangers X Script
 
--- Global error handler
-local oldError = error
-local function customError(message, level)
-    warn("ERROR: " .. tostring(message))
-    return oldError(message, level)
-end
-error = customError
-
--- Catching unhandled errors
-spawn(function()
-    while wait(1) do
-        pcall(function()
-            -- Keep checking for known error patterns and fix them
-            if not ReplicatedStorage:FindFirstChild("UIS") or 
-               (ReplicatedStorage:FindFirstChild("UIS") and not ReplicatedStorage.UIS:FindFirstChild("Store")) then
-                -- Recreate the UIS store structure
-                local UIS = ReplicatedStorage:FindFirstChild("UIS") or Instance.new("Folder")
-                UIS.Name = "UIS"
-                UIS.Parent = ReplicatedStorage
-                
-                local Store = Instance.new("Folder")
-                Store.Name = "Store"
-                Store.Parent = UIS
-                
-                print("Fixed missing UIS.Store")
-            end
-        end)
-    end
+-- Tải thư viện Fluent từ Arise
+local success, err = pcall(function()
+    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
 
--- Đảm bảo các services quan trọng được khởi tạo trước
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-
--- Tạo UIS store nếu chưa tồn tại để tránh lỗi
-if not ReplicatedStorage:FindFirstChild("UIS") then
-    local UIS = Instance.new("Folder")
-    UIS.Name = "UIS"
-    UIS.Parent = ReplicatedStorage
-    
-    local Store = Instance.new("Folder")
-    Store.Name = "Store"
-    Store.Parent = UIS
-    
-    print("Đã tạo UIS.Store cho ReplicatedStorage")
-end
-
--- Tải thư viện Fluent từ Arise với cơ chế bảo vệ tốt hơn
-local Fluent, SaveManager, InterfaceManager
-local loadSuccess = false
-
--- Hàm tải an toàn
-local function safeLoad(url)
-    local success, result = pcall(function()
-        return loadstring(game:HttpGet(url))()
+if not success then
+    warn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
+    -- Thử tải từ URL dự phòng
+    pcall(function()
+        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
+        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
     end)
-    
-    if success then
-        return result
-    else
-        warn("Không thể tải từ URL: " .. url .. "\nLỗi: " .. tostring(result))
-        return nil
-    end
 end
 
--- Thử URL chính
-Fluent = safeLoad("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua")
-if Fluent then
-    SaveManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua")
-    InterfaceManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua")
-    loadSuccess = true
-end
-
--- Thử URL dự phòng nếu không thành công
-if not loadSuccess then
-    Fluent = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua")
-    if Fluent then
-        SaveManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua")
-        InterfaceManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua")
-        loadSuccess = true
-    end
-end
-
--- Kiểm tra và hiển thị thông báo
-if not loadSuccess then
+if not Fluent then
     error("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
     return
 end
-
--- Patch slider rounding issue - thêm hàm monkey patch để sửa lỗi slider
-if Fluent and Fluent.Components and Fluent.Components.Slider then
-    -- Backup function gốc
-    local originalSliderNew = Fluent.Components.Slider.New
-    
-    -- Thay thế bằng phiên bản có Rounding mặc định
-    Fluent.Components.Slider.New = function(...)
-        local args = {...}
-        if args[2] and type(args[2]) == "table" and args[2].Rounding == nil then
-            args[2].Rounding = 0
-        end
-        return originalSliderNew(unpack(args))
-    end
-    
-    print("Đã patch lỗi Slider rounding")
-end
-
--- Wait để đảm bảo mọi thứ đã được khởi tạo
-wait(3)
 
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)
@@ -121,10 +33,7 @@ end
 
 -- Utility function để kiểm tra và lấy child một cách an toàn
 local function safeGetChild(parent, childName, waitTime)
-    if not parent then 
-        warn("Lỗi safeGetChild: parent is nil")
-        return nil 
-    end
+    if not parent then return nil end
     
     local child = nil
     waitTime = waitTime or 1
@@ -136,10 +45,6 @@ local function safeGetChild(parent, childName, waitTime)
         end
     end)
     
-    if not success then
-        warn("Lỗi safeGetChild: không thể tìm " .. childName)
-    end
-    
     return child
 end
 
@@ -148,24 +53,9 @@ local function safeGetPath(startPoint, path, waitTime)
     waitTime = waitTime or 1
     local current = startPoint
     
-    if not current then
-        warn("safeGetPath: startPoint is nil")
-        return nil
-    end
-    
-    for i, name in ipairs(path) do
-        if not current then 
-            warn("safeGetPath: path broken at index " .. i)
-            return nil 
-        end
-        
+    for _, name in ipairs(path) do
+        if not current then return nil end
         current = safeGetChild(current, name, waitTime)
-        
-        if not current and i < #path then
-            -- Only warn if we're not at the last item (sometimes the last item not existing is expected)
-            warn("safeGetPath: Failed to find " .. name .. " at path index " .. i)
-            return nil
-        end
     end
     
     return current
@@ -274,7 +164,6 @@ local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
 local autoJoinMapLoop = nil
-local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
 
 -- Biến lưu trạng thái Ranger Stage
 local selectedRangerMap = ConfigSystem.CurrentConfig.SelectedRangerMap or "OnePiece"
@@ -283,29 +172,24 @@ local selectedAct = ConfigSystem.CurrentConfig.SelectedAct or "RangerStage1"
 local rangerFriendOnly = ConfigSystem.CurrentConfig.RangerFriendOnly or false
 local autoJoinRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinRanger or false
 local autoJoinRangerLoop = nil
+
+-- Biến lưu trạng thái Time Delay
+local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
 local rangerTimeDelay = ConfigSystem.CurrentConfig.RangerTimeDelay or 5
 
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
 -- Tạo Window
-local Window = nil
-pcall(function()
-    Window = Fluent:CreateWindow({
-        Title = "HT Hub | Anime Rangers X",
-        SubTitle = "",
-        TabWidth = 160,
-        Size = UDim2.fromOffset(580, 460),
-        Acrylic = true,
-        Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
-        MinimizeKey = Enum.KeyCode.LeftControl
-    })
-end)
-
-if not Window then
-    error("Không thể tạo cửa sổ UI. Vui lòng kiểm tra lại Fluent library.")
-    return
-end
+local Window = Fluent:CreateWindow({
+    Title = "HT Hub | Anime Rangers X",
+    SubTitle = "",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
 
 -- Tạo tab Info
 local InfoTab = Window:AddTab({
@@ -614,23 +498,6 @@ StorySection:AddDropdown("ChapterDropdown", {
     end
 })
 
--- Thêm sau phần Dropdown để chọn Chapter
-StorySection:AddSlider("StoryDelaySlider", {
-    Title = "Time Delay (seconds)",
-    Description = "Thời gian chờ giữa các lần tự động vào map",
-    Default = ConfigSystem.CurrentConfig.StoryTimeDelay or 5,
-    Min = 1,
-    Max = 60,
-    Suffix = "s",
-    Rounding = 0,
-    Callback = function(Value)
-        storyTimeDelay = Value
-        ConfigSystem.CurrentConfig.StoryTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt thời gian chờ Story: " .. Value .. " giây")
-    end
-})
-
 -- Toggle Friend Only
 StorySection:AddToggle("FriendOnlyToggle", {
     Title = "Friend Only",
@@ -659,7 +526,7 @@ StorySection:AddToggle("FriendOnlyToggle", {
     end
 })
 
--- Sửa lại Toggle Auto Join Map
+-- Toggle Auto Join Map
 StorySection:AddToggle("AutoJoinMapToggle", {
     Title = "Auto Join Map",
     Default = ConfigSystem.CurrentConfig.AutoJoinMap or false,
@@ -679,25 +546,36 @@ StorySection:AddToggle("AutoJoinMapToggle", {
             else
                 Fluent:Notify({
                     Title = "Auto Join Map",
-                    Content = "Auto Join Map đã được bật (Delay: " .. storyTimeDelay .. "s)",
+                    Content = "Auto Join Map đã được bật, sẽ bắt đầu sau " .. storyTimeDelay .. " giây",
                     Duration = 3
                 })
                 
-                -- Thực hiện join map ngay lập tức
-                joinMap()
+                -- Thực hiện join map sau thời gian delay
+                spawn(function()
+                    wait(storyTimeDelay)
+                    if autoJoinMapEnabled and not isPlayerInMap() then
+                        joinMap()
+                    end
+                end)
             end
             
             -- Tạo vòng lặp Auto Join Map
             spawn(function()
-                while autoJoinMapEnabled do 
+                while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
                     -- Chỉ thực hiện join map nếu người chơi không ở trong map
                     if not isPlayerInMap() then
-                        joinMap()
+                        -- Áp dụng time delay
+                        print("Đợi " .. storyTimeDelay .. " giây trước khi join map")
+                        wait(storyTimeDelay)
+                        
+                        -- Kiểm tra lại sau khi delay
+                        if autoJoinMapEnabled and not isPlayerInMap() then
+                            joinMap()
+                        end
                     else
                         -- Người chơi đang ở trong map, không cần join
                         print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
                     end
-                    wait(storyTimeDelay) -- Sử dụng time delay do người dùng cài đặt
                 end
             end)
         else
@@ -1048,15 +926,39 @@ setupSaveEvents()
 if isPlayerInMap() then
     Fluent:Notify({
         Title = "Phát hiện trạng thái",
-        Content = "Bạn đang ở trong map, Auto Join Map sẽ chỉ hoạt động khi bạn rời khỏi map",
+        Content = "Bạn đang ở trong map, Auto Join sẽ chỉ hoạt động khi bạn rời khỏi map",
         Duration = 3
     })
 else
-    -- Nếu Auto Join Map được bật, thực hiện join map ngay
+    -- Nếu Auto Join Map được bật, thực hiện join map sau time delay
     if autoJoinMapEnabled then
+        Fluent:Notify({
+            Title = "Auto Join",
+            Content = "Sẽ tham gia Story Map sau " .. storyTimeDelay .. " giây",
+            Duration = 3
+        })
+        
         spawn(function()
-            wait(3) -- Chờ một chút để game tải xong
-            joinMap()
+            wait(storyTimeDelay) -- Chờ theo time delay đã đặt
+            if autoJoinMapEnabled and not isPlayerInMap() then
+                joinMap()
+            end
+        end)
+    end
+    
+    -- Nếu Auto Join Ranger được bật, thực hiện join ranger sau time delay
+    if autoJoinRangerEnabled then
+        Fluent:Notify({
+            Title = "Auto Join",
+            Content = "Sẽ tham gia Ranger Stage sau " .. rangerTimeDelay .. " giây",
+            Duration = 3
+        })
+        
+        spawn(function()
+            wait(rangerTimeDelay) -- Chờ theo time delay đã đặt
+            if autoJoinRangerEnabled and not isPlayerInMap() then
+                joinRangerStage()
+            end
         end)
     end
 end
@@ -1070,10 +972,148 @@ Fluent:Notify({
 
 print("Anime Rangers X Script has been loaded!")
 
--- Thêm section Ranger Stage trong tab Play dưới section Story
+-- Thêm section Ranger Stage trong tab Play
 local RangerSection = PlayTab:AddSection("Ranger Stage")
 
--- Dropdown để chọn Map cho Ranger Stage
+-- Hàm để thay đổi act
+local function changeAct(map, act)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Chapter",
+                [2] = {
+                    ["Chapter"] = map .. "_" .. act
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi act: " .. map .. "_" .. act)
+        else
+            warn("Không tìm thấy Event để đổi act")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi act: " .. tostring(err))
+    end
+end
+
+-- Hàm để toggle Friend Only cho Ranger
+local function toggleRangerFriendOnly()
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-FriendOnly"
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã toggle Friend Only cho Ranger")
+        else
+            warn("Không tìm thấy Event để toggle Friend Only")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi toggle Friend Only: " .. tostring(err))
+    end
+end
+
+-- Hàm để tự động tham gia Ranger Stage
+local function joinRangerStage()
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Ranger Stage")
+        return false
+    end
+    
+    local success, err = pcall(function()
+        -- Lấy Event
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if not Event then
+            warn("Không tìm thấy Event để join Ranger Stage")
+            return
+        end
+        
+        -- 1. Create
+        Event:FireServer("Create")
+        wait(0.5)
+        
+        -- 2. Change Mode to Ranger Stage
+        local modeArgs = {
+            [1] = "Change-Mode",
+            [2] = {
+                ["Mode"] = "Ranger Stage"
+            }
+        }
+        Event:FireServer(unpack(modeArgs))
+        wait(0.5)
+        
+        -- 3. Friend Only (nếu được bật)
+        if rangerFriendOnly then
+            Event:FireServer("Change-FriendOnly")
+            wait(0.5)
+        end
+        
+        -- 4. Chọn Map và Act
+        -- 4.1 Đổi Map
+        local args1 = {
+            [1] = "Change-World",
+            [2] = {
+                ["World"] = selectedRangerMap
+            }
+        }
+        Event:FireServer(unpack(args1))
+        wait(0.5)
+        
+        -- 4.2 Đổi Act
+        local args2 = {
+            [1] = "Change-Chapter",
+            [2] = {
+                ["Chapter"] = selectedRangerMap .. "_" .. selectedAct
+            }
+        }
+        Event:FireServer(unpack(args2))
+        wait(0.5)
+        
+        -- 5. Submit
+        Event:FireServer("Submit")
+        wait(1)
+        
+        -- 6. Start
+        Event:FireServer("Start")
+        
+        print("Đã join Ranger Stage: " .. selectedRangerMap .. "_" .. selectedAct)
+    end)
+    
+    if not success then
+        warn("Lỗi khi join Ranger Stage: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
+-- Time Delay slider cho Story
+StorySection:AddSlider("StoryTimeDelaySlider", {
+    Title = "Time Delay (giây)",
+    Default = storyTimeDelay,
+    Min = 1,
+    Max = 30,
+    Rounding = 1,
+    Callback = function(Value)
+        storyTimeDelay = Value
+        ConfigSystem.CurrentConfig.StoryTimeDelay = Value
+        ConfigSystem.SaveConfig()
+        print("Đã đặt Story Time Delay: " .. Value .. " giây")
+    end
+})
+
+-- Dropdown để chọn Map cho Ranger
 RangerSection:AddDropdown("RangerMapDropdown", {
     Title = "Choose Map",
     Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
@@ -1087,7 +1127,7 @@ RangerSection:AddDropdown("RangerMapDropdown", {
         
         -- Thay đổi map khi người dùng chọn
         changeWorld(Value)
-        print("Đã chọn ranger map: " .. Value .. " (thực tế: " .. selectedRangerMap .. ")")
+        print("Đã chọn Ranger map: " .. Value .. " (thực tế: " .. selectedRangerMap .. ")")
     end
 })
 
@@ -1102,30 +1142,13 @@ RangerSection:AddDropdown("ActDropdown", {
         ConfigSystem.CurrentConfig.SelectedAct = Value
         ConfigSystem.SaveConfig()
         
-        -- Thay đổi chapter khi người dùng chọn
-        changeChapter(selectedRangerMap, Value)
+        -- Thay đổi act khi người dùng chọn
+        changeAct(selectedRangerMap, Value)
         print("Đã chọn act: " .. Value)
     end
 })
 
--- Slider cho Time Delay Ranger Stage
-RangerSection:AddSlider("RangerDelaySlider", {
-    Title = "Time Delay (seconds)",
-    Description = "Thời gian chờ giữa các lần tự động vào ranger stage",
-    Default = ConfigSystem.CurrentConfig.RangerTimeDelay or 5,
-    Min = 1,
-    Max = 60,
-    Suffix = "s",
-    Rounding = 0,
-    Callback = function(Value)
-        rangerTimeDelay = Value
-        ConfigSystem.CurrentConfig.RangerTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt thời gian chờ Ranger Stage: " .. Value .. " giây")
-    end
-})
-
--- Toggle Friend Only cho Ranger Stage
+-- Toggle Friend Only cho Ranger
 RangerSection:AddToggle("RangerFriendOnlyToggle", {
     Title = "Friend Only",
     Default = ConfigSystem.CurrentConfig.RangerFriendOnly or false,
@@ -1135,7 +1158,7 @@ RangerSection:AddToggle("RangerFriendOnlyToggle", {
         ConfigSystem.SaveConfig()
         
         -- Toggle Friend Only khi người dùng thay đổi
-        toggleFriendOnly()
+        toggleRangerFriendOnly()
         
         if Value then
             Fluent:Notify({
@@ -1153,6 +1176,21 @@ RangerSection:AddToggle("RangerFriendOnlyToggle", {
     end
 })
 
+-- Time Delay slider cho Ranger
+RangerSection:AddSlider("RangerTimeDelaySlider", {
+    Title = "Time Delay (giây)",
+    Default = rangerTimeDelay,
+    Min = 1,
+    Max = 30,
+    Rounding = 1,
+    Callback = function(Value)
+        rangerTimeDelay = Value
+        ConfigSystem.CurrentConfig.RangerTimeDelay = Value
+        ConfigSystem.SaveConfig()
+        print("Đã đặt Ranger Time Delay: " .. Value .. " giây")
+    end
+})
+
 -- Toggle Auto Join Ranger Stage
 RangerSection:AddToggle("AutoJoinRangerToggle", {
     Title = "Auto Join Ranger Stage",
@@ -1167,31 +1205,42 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
             if isPlayerInMap() then
                 Fluent:Notify({
                     Title = "Auto Join Ranger Stage",
-                    Content = "Đang ở trong map, Auto Join Ranger Stage sẽ hoạt động khi bạn rời khỏi map",
+                    Content = "Đang ở trong map, Auto Join Ranger sẽ hoạt động khi bạn rời khỏi map",
                     Duration = 3
                 })
             else
                 Fluent:Notify({
                     Title = "Auto Join Ranger Stage",
-                    Content = "Auto Join Ranger Stage đã được bật (Delay: " .. rangerTimeDelay .. "s)",
+                    Content = "Auto Join Ranger Stage đã được bật, sẽ bắt đầu sau " .. rangerTimeDelay .. " giây",
                     Duration = 3
                 })
                 
-                -- Thực hiện join ranger stage ngay lập tức
-                joinRangerStage()
+                -- Thực hiện join Ranger Stage sau thời gian delay
+                spawn(function()
+                    wait(rangerTimeDelay)
+                    if autoJoinRangerEnabled and not isPlayerInMap() then
+                        joinRangerStage()
+                    end
+                end)
             end
             
             -- Tạo vòng lặp Auto Join Ranger Stage
             spawn(function()
-                while autoJoinRangerEnabled do
+                while autoJoinRangerEnabled and wait(10) do -- Thử join map mỗi 10 giây
                     -- Chỉ thực hiện join map nếu người chơi không ở trong map
                     if not isPlayerInMap() then
-                        joinRangerStage()
+                        -- Áp dụng time delay
+                        print("Đợi " .. rangerTimeDelay .. " giây trước khi join Ranger Stage")
+                        wait(rangerTimeDelay)
+                        
+                        -- Kiểm tra lại sau khi delay
+                        if autoJoinRangerEnabled and not isPlayerInMap() then
+                            joinRangerStage()
+                        end
                     else
                         -- Người chơi đang ở trong map, không cần join
                         print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
                     end
-                    wait(rangerTimeDelay) -- Sử dụng time delay do người dùng cài đặt
                 end
             end)
         else
@@ -1212,7 +1261,7 @@ RangerSection:AddButton({
         if isPlayerInMap() then
             Fluent:Notify({
                 Title = "Join Ranger Stage",
-                Content = "Bạn đang ở trong map, không thể join ranger stage mới",
+                Content = "Bạn đang ở trong map, không thể join Ranger Stage mới",
                 Duration = 2
             })
             return
@@ -1235,103 +1284,3 @@ RangerSection:AddButton({
         end
     end
 })
-
--- Hiển thị trạng thái trong game (tương tự như ở Story)
-RangerSection:AddParagraph({
-    Title = "Trạng thái hiện tại",
-    Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
-})
-
--- Cập nhật trạng thái định kỳ
-spawn(function()
-    while wait(5) do
-        local paragraphStory = StorySection:GetComponent("Trạng thái hiện tại")
-        local paragraphRanger = RangerSection:GetComponent("Trạng thái hiện tại")
-        
-        local status = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
-        
-        if paragraphStory then
-            paragraphStory:SetContent(status)
-        end
-        
-        if paragraphRanger then
-            paragraphRanger:SetContent(status)
-        end
-    end
-end)
-
--- Hàm để tự động tham gia Ranger Stage
-local function joinRangerStage()
-    -- Kiểm tra xem người chơi đã ở trong map chưa
-    if isPlayerInMap() then
-        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join ranger stage")
-        return false
-    end
-    
-    local success, err = pcall(function()
-        -- Lấy Event
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-        
-        if not Event then
-            warn("Không tìm thấy Event để join ranger stage")
-            return
-        end
-        
-        -- 0. Change Mode
-        local args0 = {
-            [1] = "Change-Mode",
-            [2] = {
-                ["Mode"] = "Ranger Stage"
-            }
-        }
-        Event:FireServer(unpack(args0))
-        wait(0.5)
-        
-        -- 1. Create
-        Event:FireServer("Create")
-        wait(0.5)
-        
-        -- 2. Friend Only (nếu được bật)
-        if rangerFriendOnly then
-            Event:FireServer("Change-FriendOnly")
-            wait(0.5)
-        end
-        
-        -- 3. Chọn Map và Act
-        -- 3.1 Đổi Map
-        local args1 = {
-            [1] = "Change-World",
-            [2] = {
-                ["World"] = selectedRangerMap
-            }
-        }
-        Event:FireServer(unpack(args1))
-        wait(0.5)
-        
-        -- 3.2 Đổi Act
-        local args2 = {
-            [1] = "Change-Chapter",
-            [2] = {
-                ["Chapter"] = selectedRangerMap .. "_" .. selectedAct
-            }
-        }
-        Event:FireServer(unpack(args2))
-        wait(0.5)
-        
-        -- 4. Submit
-        Event:FireServer("Submit")
-        wait(1)
-        
-        -- 5. Start
-        Event:FireServer("Start")
-        
-        print("Đã join ranger stage: " .. selectedRangerMap .. "_" .. selectedAct)
-    end)
-    
-    if not success then
-        warn("Lỗi khi join ranger stage: " .. tostring(err))
-        return false
-    end
-    
-    return true
-end

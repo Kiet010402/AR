@@ -79,6 +79,8 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Story
     SelectedMap = "OnePiece",
     SelectedChapter = "Chapter1",
+    SelectedMode = "Story",
+    SelectedRangerStage = "RangerStage1",
     FriendOnly = false,
     AutoJoinMap = false
 }
@@ -153,6 +155,8 @@ end
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
 local selectedDisplayMap = reverseMapNameMapping[selectedMap] or "Voocha Village"
 local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
+local selectedMode = ConfigSystem.CurrentConfig.SelectedMode or "Story"
+local selectedRangerStage = ConfigSystem.CurrentConfig.SelectedRangerStage or "RangerStage1"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
 local autoJoinMapLoop = nil
@@ -331,27 +335,28 @@ local function changeWorld(worldDisplay)
 end
 
 -- Hàm để thay đổi chapter
-local function changeChapter(map, chapter)
-    local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-        
-        if Event then
-            local args = {
-                [1] = "Change-Chapter",
-                [2] = {
-                    ["Chapter"] = map .. "_" .. chapter
-                }
-            }
-            
-            Event:FireServer(unpack(args))
-            print("Đã đổi chapter: " .. map .. "_" .. chapter)
-        else
-            warn("Không tìm thấy Event để đổi chapter")
-        end
-    end)
+local function changeChapter(chapterName)
+    local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
     
-    if not success then
-        warn("Lỗi khi đổi chapter: " .. tostring(err))
+    if Event then
+        local selectedMode = ConfigSystem.CurrentConfig.SelectedMode or "Story"
+        local chapterToUse = chapterName
+        
+        if selectedMode == "Ranger - Stage" then
+            chapterToUse = ConfigSystem.CurrentConfig.SelectedRangerStage or "OnePiece_RangerStage1"
+        end
+        
+        local args = {
+            [1] = "Change-Chapter",
+            [2] = {
+                ["Chapter"] = chapterToUse
+            }
+        }
+        
+        Event:FireServer(unpack(args))
+        print("Đã đổi chapter thành: " .. chapterToUse)
+    else
+        warn("Không tìm thấy Event để đổi chapter")
     end
 end
 
@@ -382,6 +387,11 @@ local function joinMap()
     -- Kiểm tra xem người chơi đã ở trong map chưa
     if isPlayerInMap() then
         print("Đã phát hiện người chơi đang ở trong map, không thực hiện join map")
+        Fluent:Notify({
+            Title = "Join Map",
+            Content = "Bạn đang ở trong map, không thể join map mới",
+            Duration = 2
+        })
         return false
     end
     
@@ -404,8 +414,18 @@ local function joinMap()
             wait(0.5)
         end
         
-        -- 3. Chọn Map và Chapter
-        -- 3.1 Đổi Map
+        -- 3. Chọn Mode
+        local args0 = {
+            [1] = "Change-Mode",
+            [2] = {
+                ["Mode"] = selectedMode == "Ranger - Stage" and "Ranger Stage" or selectedMode
+            }
+        }
+        Event:FireServer(unpack(args0))
+        wait(0.5)
+        
+        -- 4. Chọn Map và Chapter
+        -- 4.1 Đổi Map
         local args1 = {
             [1] = "Change-World",
             [2] = {
@@ -415,33 +435,94 @@ local function joinMap()
         Event:FireServer(unpack(args1))
         wait(0.5)
         
-        -- 3.2 Đổi Chapter
+        -- 4.2 Đổi Chapter
+        local chapterString = ""
+        if selectedMode == "Ranger - Stage" then
+            chapterString = selectedMap .. "_" .. selectedRangerStage
+        else
+            chapterString = selectedMap .. "_" .. selectedChapter
+        end
+        
         local args2 = {
             [1] = "Change-Chapter",
             [2] = {
-                ["Chapter"] = selectedMap .. "_" .. selectedChapter
+                ["Chapter"] = chapterString
             }
         }
         Event:FireServer(unpack(args2))
         wait(0.5)
         
-        -- 4. Submit
+        -- 5. Submit
         Event:FireServer("Submit")
         wait(1)
         
-        -- 5. Start
+        -- 6. Start
         Event:FireServer("Start")
         
-        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter)
+        print("Đã join map: " .. chapterString)
+        
+        -- Hiển thị thông báo thành công
+        local stageText = selectedMode == "Ranger - Stage" and selectedRangerStage or selectedChapter
+        
+        Fluent:Notify({
+            Title = "Join Map",
+            Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedMode .. " (" .. stageText .. ")",
+            Duration = 3
+        })
     end)
     
     if not success then
         warn("Lỗi khi join map: " .. tostring(err))
+        Fluent:Notify({
+            Title = "Join Map",
+            Content = "Không thể tham gia map. Vui lòng thử lại sau.",
+            Duration = 3
+        })
         return false
     end
     
     return true
 end
+
+-- Dropdown để chọn Mode
+StorySection:AddDropdown("ModeDropdown", {
+    Title = "Choose Mode",
+    Values = {"Story", "Ranger - Stage"},
+    Multi = false,
+    Default = ConfigSystem.CurrentConfig.SelectedMode or "Story",
+    Callback = function(Value)
+        selectedMode = Value
+        ConfigSystem.CurrentConfig.SelectedMode = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi mode khi người dùng chọn
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Mode",
+                [2] = {
+                    ["Mode"] = Value == "Ranger - Stage" and "Ranger Stage" or Value
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã chọn mode: " .. Value)
+        else
+            warn("Không tìm thấy Event để đổi mode")
+        end
+        
+        -- Cập nhật hiển thị của dropdown Ranger Stage
+        local rangerStageDropdown = StorySection:GetComponent("RangerStageDropdown")
+        if rangerStageDropdown then
+            if Value == "Ranger - Stage" then
+                rangerStageDropdown:SetVisible(true)
+            else
+                rangerStageDropdown:SetVisible(false)
+            end
+        end
+    end
+})
 
 -- Dropdown để chọn Map
 StorySection:AddDropdown("MapDropdown", {
@@ -473,8 +554,39 @@ StorySection:AddDropdown("ChapterDropdown", {
         ConfigSystem.SaveConfig()
         
         -- Thay đổi chapter khi người dùng chọn
-        changeChapter(selectedMap, Value)
+        changeChapter(selectedMap, Value, selectedMode)
         print("Đã chọn chapter: " .. Value)
+    end
+})
+
+-- Dropdown để chọn Ranger Stage
+StorySection:AddDropdown("RangerStageDropdown", {
+    Title = "Ranger Stage",
+    Values = {"OnePiece_RangerStage1", "OnePiece_RangerStage2", "OnePiece_RangerStage3"},
+    Multi = false,
+    Default = ConfigSystem.CurrentConfig.SelectedRangerStage or "OnePiece_RangerStage1",
+    Visible = ConfigSystem.CurrentConfig.SelectedMode == "Ranger - Stage",
+    Callback = function(Value)
+        selectedRangerStage = Value
+        ConfigSystem.CurrentConfig.SelectedRangerStage = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi chapter khi người dùng chọn ranger stage
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Chapter",
+                [2] = {
+                    ["Chapter"] = Value
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã chọn Ranger Stage: " .. Value)
+        else
+            warn("Không tìm thấy Event để đổi chapter")
+        end
     end
 })
 
@@ -573,9 +685,18 @@ StorySection:AddButton({
         local success = joinMap()
         
         if success then
+            local modeText = selectedMode
+            local stageText = ""
+            
+            if selectedMode == "Ranger - Stage" then
+                stageText = selectedRangerStage
+            else
+                stageText = selectedChapter
+            end
+            
             Fluent:Notify({
                 Title = "Join Map",
-                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
+                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. modeText .. " (" .. stageText .. ")",
                 Duration = 2
             })
         else
@@ -915,3 +1036,28 @@ Fluent:Notify({
 })
 
 print("Anime Rangers X Script has been loaded!")
+
+-- Hàm để thay đổi mode
+local function changeMode(mode)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Mode",
+                [2] = {
+                    ["Mode"] = mode == "Ranger - Stage" and "Ranger Stage" or mode
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi mode: " .. mode)
+        else
+            warn("Không tìm thấy Event để đổi mode")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi mode: " .. tostring(err))
+    end
+end

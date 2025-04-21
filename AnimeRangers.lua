@@ -79,10 +79,16 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Story
     SelectedMap = "OnePiece",
     SelectedChapter = "Chapter1",
-    SelectedMode = "Story",
-    SelectedRangerStage = "RangerStage1",
     FriendOnly = false,
-    AutoJoinMap = false
+    AutoJoinMap = false,
+    StoryTimeDelay = 5,
+    
+    -- Cài đặt Ranger Stage
+    SelectedRangerMap = "OnePiece",
+    SelectedAct = "RangerStage1",
+    RangerFriendOnly = false,
+    AutoJoinRanger = false,
+    RangerTimeDelay = 5
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -155,11 +161,19 @@ end
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
 local selectedDisplayMap = reverseMapNameMapping[selectedMap] or "Voocha Village"
 local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
-local selectedMode = ConfigSystem.CurrentConfig.SelectedMode or "Story"
-local selectedRangerStage = ConfigSystem.CurrentConfig.SelectedRangerStage or "RangerStage1"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
 local autoJoinMapLoop = nil
+local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
+
+-- Biến lưu trạng thái Ranger Stage
+local selectedRangerMap = ConfigSystem.CurrentConfig.SelectedRangerMap or "OnePiece"
+local selectedRangerDisplayMap = reverseMapNameMapping[selectedRangerMap] or "Voocha Village"
+local selectedAct = ConfigSystem.CurrentConfig.SelectedAct or "RangerStage1"
+local rangerFriendOnly = ConfigSystem.CurrentConfig.RangerFriendOnly or false
+local autoJoinRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinRanger or false
+local autoJoinRangerLoop = nil
+local rangerTimeDelay = ConfigSystem.CurrentConfig.RangerTimeDelay or 5
 
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -335,28 +349,27 @@ local function changeWorld(worldDisplay)
 end
 
 -- Hàm để thay đổi chapter
-local function changeChapter(chapterName)
-    local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-    
-    if Event then
-        local selectedMode = ConfigSystem.CurrentConfig.SelectedMode or "Story"
-        local chapterToUse = chapterName
+local function changeChapter(map, chapter)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
         
-        if selectedMode == "Ranger - Stage" then
-            chapterToUse = ConfigSystem.CurrentConfig.SelectedRangerStage or "OnePiece_RangerStage1"
-        end
-        
-        local args = {
-            [1] = "Change-Chapter",
-            [2] = {
-                ["Chapter"] = chapterToUse
+        if Event then
+            local args = {
+                [1] = "Change-Chapter",
+                [2] = {
+                    ["Chapter"] = map .. "_" .. chapter
+                }
             }
-        }
-        
-        Event:FireServer(unpack(args))
-        print("Đã đổi chapter thành: " .. chapterToUse)
-    else
-        warn("Không tìm thấy Event để đổi chapter")
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi chapter: " .. map .. "_" .. chapter)
+        else
+            warn("Không tìm thấy Event để đổi chapter")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi chapter: " .. tostring(err))
     end
 end
 
@@ -387,11 +400,6 @@ local function joinMap()
     -- Kiểm tra xem người chơi đã ở trong map chưa
     if isPlayerInMap() then
         print("Đã phát hiện người chơi đang ở trong map, không thực hiện join map")
-        Fluent:Notify({
-            Title = "Join Map",
-            Content = "Bạn đang ở trong map, không thể join map mới",
-            Duration = 2
-        })
         return false
     end
     
@@ -414,18 +422,8 @@ local function joinMap()
             wait(0.5)
         end
         
-        -- 3. Chọn Mode
-        local args0 = {
-            [1] = "Change-Mode",
-            [2] = {
-                ["Mode"] = selectedMode == "Ranger - Stage" and "Ranger Stage" or selectedMode
-            }
-        }
-        Event:FireServer(unpack(args0))
-        wait(0.5)
-        
-        -- 4. Chọn Map và Chapter
-        -- 4.1 Đổi Map
+        -- 3. Chọn Map và Chapter
+        -- 3.1 Đổi Map
         local args1 = {
             [1] = "Change-World",
             [2] = {
@@ -435,94 +433,33 @@ local function joinMap()
         Event:FireServer(unpack(args1))
         wait(0.5)
         
-        -- 4.2 Đổi Chapter
-        local chapterString = ""
-        if selectedMode == "Ranger - Stage" then
-            chapterString = selectedMap .. "_" .. selectedRangerStage
-        else
-            chapterString = selectedMap .. "_" .. selectedChapter
-        end
-        
+        -- 3.2 Đổi Chapter
         local args2 = {
             [1] = "Change-Chapter",
             [2] = {
-                ["Chapter"] = chapterString
+                ["Chapter"] = selectedMap .. "_" .. selectedChapter
             }
         }
         Event:FireServer(unpack(args2))
         wait(0.5)
         
-        -- 5. Submit
+        -- 4. Submit
         Event:FireServer("Submit")
         wait(1)
         
-        -- 6. Start
+        -- 5. Start
         Event:FireServer("Start")
         
-        print("Đã join map: " .. chapterString)
-        
-        -- Hiển thị thông báo thành công
-        local stageText = selectedMode == "Ranger - Stage" and selectedRangerStage or selectedChapter
-        
-        Fluent:Notify({
-            Title = "Join Map",
-            Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedMode .. " (" .. stageText .. ")",
-            Duration = 3
-        })
+        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter)
     end)
     
     if not success then
         warn("Lỗi khi join map: " .. tostring(err))
-        Fluent:Notify({
-            Title = "Join Map",
-            Content = "Không thể tham gia map. Vui lòng thử lại sau.",
-            Duration = 3
-        })
         return false
     end
     
     return true
 end
-
--- Dropdown để chọn Mode
-StorySection:AddDropdown("ModeDropdown", {
-    Title = "Choose Mode",
-    Values = {"Story", "Ranger - Stage"},
-    Multi = false,
-    Default = ConfigSystem.CurrentConfig.SelectedMode or "Story",
-    Callback = function(Value)
-        selectedMode = Value
-        ConfigSystem.CurrentConfig.SelectedMode = Value
-        ConfigSystem.SaveConfig()
-        
-        -- Thay đổi mode khi người dùng chọn
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-        
-        if Event then
-            local args = {
-                [1] = "Change-Mode",
-                [2] = {
-                    ["Mode"] = Value == "Ranger - Stage" and "Ranger Stage" or Value
-                }
-            }
-            
-            Event:FireServer(unpack(args))
-            print("Đã chọn mode: " .. Value)
-        else
-            warn("Không tìm thấy Event để đổi mode")
-        end
-        
-        -- Cập nhật hiển thị của dropdown Ranger Stage
-        local rangerStageDropdown = StorySection:GetComponent("RangerStageDropdown")
-        if rangerStageDropdown then
-            if Value == "Ranger - Stage" then
-                rangerStageDropdown:SetVisible(true)
-            else
-                rangerStageDropdown:SetVisible(false)
-            end
-        end
-    end
-})
 
 -- Dropdown để chọn Map
 StorySection:AddDropdown("MapDropdown", {
@@ -554,39 +491,24 @@ StorySection:AddDropdown("ChapterDropdown", {
         ConfigSystem.SaveConfig()
         
         -- Thay đổi chapter khi người dùng chọn
-        changeChapter(selectedMap, Value, selectedMode)
+        changeChapter(selectedMap, Value)
         print("Đã chọn chapter: " .. Value)
     end
 })
 
--- Dropdown để chọn Ranger Stage
-StorySection:AddDropdown("RangerStageDropdown", {
-    Title = "Ranger Stage",
-    Values = {"OnePiece_RangerStage1", "OnePiece_RangerStage2", "OnePiece_RangerStage3"},
-    Multi = false,
-    Default = ConfigSystem.CurrentConfig.SelectedRangerStage or "OnePiece_RangerStage1",
-    Visible = ConfigSystem.CurrentConfig.SelectedMode == "Ranger - Stage",
+-- Thêm sau phần Dropdown để chọn Chapter
+StorySection:AddSlider("StoryDelaySlider", {
+    Title = "Time Delay (seconds)",
+    Description = "Thời gian chờ giữa các lần tự động vào map",
+    Default = ConfigSystem.CurrentConfig.StoryTimeDelay or 5,
+    Min = 1,
+    Max = 60,
+    Suffix = "s",
     Callback = function(Value)
-        selectedRangerStage = Value
-        ConfigSystem.CurrentConfig.SelectedRangerStage = Value
+        storyTimeDelay = Value
+        ConfigSystem.CurrentConfig.StoryTimeDelay = Value
         ConfigSystem.SaveConfig()
-        
-        -- Thay đổi chapter khi người dùng chọn ranger stage
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-        
-        if Event then
-            local args = {
-                [1] = "Change-Chapter",
-                [2] = {
-                    ["Chapter"] = Value
-                }
-            }
-            
-            Event:FireServer(unpack(args))
-            print("Đã chọn Ranger Stage: " .. Value)
-        else
-            warn("Không tìm thấy Event để đổi chapter")
-        end
+        print("Đã đặt thời gian chờ Story: " .. Value .. " giây")
     end
 })
 
@@ -618,7 +540,7 @@ StorySection:AddToggle("FriendOnlyToggle", {
     end
 })
 
--- Toggle Auto Join Map
+-- Sửa lại Toggle Auto Join Map
 StorySection:AddToggle("AutoJoinMapToggle", {
     Title = "Auto Join Map",
     Default = ConfigSystem.CurrentConfig.AutoJoinMap or false,
@@ -638,7 +560,7 @@ StorySection:AddToggle("AutoJoinMapToggle", {
             else
                 Fluent:Notify({
                     Title = "Auto Join Map",
-                    Content = "Auto Join Map đã được bật",
+                    Content = "Auto Join Map đã được bật (Delay: " .. storyTimeDelay .. "s)",
                     Duration = 3
                 })
                 
@@ -648,7 +570,7 @@ StorySection:AddToggle("AutoJoinMapToggle", {
             
             -- Tạo vòng lặp Auto Join Map
             spawn(function()
-                while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
+                while autoJoinMapEnabled do 
                     -- Chỉ thực hiện join map nếu người chơi không ở trong map
                     if not isPlayerInMap() then
                         joinMap()
@@ -656,6 +578,7 @@ StorySection:AddToggle("AutoJoinMapToggle", {
                         -- Người chơi đang ở trong map, không cần join
                         print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
                     end
+                    wait(storyTimeDelay) -- Sử dụng time delay do người dùng cài đặt
                 end
             end)
         else
@@ -685,18 +608,9 @@ StorySection:AddButton({
         local success = joinMap()
         
         if success then
-            local modeText = selectedMode
-            local stageText = ""
-            
-            if selectedMode == "Ranger - Stage" then
-                stageText = selectedRangerStage
-            else
-                stageText = selectedChapter
-            end
-            
             Fluent:Notify({
                 Title = "Join Map",
-                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. modeText .. " (" .. stageText .. ")",
+                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
                 Duration = 2
             })
         else
@@ -1037,27 +951,267 @@ Fluent:Notify({
 
 print("Anime Rangers X Script has been loaded!")
 
--- Hàm để thay đổi mode
-local function changeMode(mode)
+-- Thêm section Ranger Stage trong tab Play dưới section Story
+local RangerSection = PlayTab:AddSection("Ranger Stage")
+
+-- Dropdown để chọn Map cho Ranger Stage
+RangerSection:AddDropdown("RangerMapDropdown", {
+    Title = "Choose Map",
+    Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
+    Multi = false,
+    Default = selectedRangerDisplayMap,
+    Callback = function(Value)
+        selectedRangerDisplayMap = Value
+        selectedRangerMap = mapNameMapping[Value] or "OnePiece"
+        ConfigSystem.CurrentConfig.SelectedRangerMap = selectedRangerMap
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi map khi người dùng chọn
+        changeWorld(Value)
+        print("Đã chọn ranger map: " .. Value .. " (thực tế: " .. selectedRangerMap .. ")")
+    end
+})
+
+-- Dropdown để chọn Act
+RangerSection:AddDropdown("ActDropdown", {
+    Title = "Choose Act",
+    Values = {"RangerStage1", "RangerStage2", "RangerStage3"},
+    Multi = false,
+    Default = ConfigSystem.CurrentConfig.SelectedAct or "RangerStage1",
+    Callback = function(Value)
+        selectedAct = Value
+        ConfigSystem.CurrentConfig.SelectedAct = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi chapter khi người dùng chọn
+        changeChapter(selectedRangerMap, Value)
+        print("Đã chọn act: " .. Value)
+    end
+})
+
+-- Slider cho Time Delay Ranger Stage
+RangerSection:AddSlider("RangerDelaySlider", {
+    Title = "Time Delay (seconds)",
+    Description = "Thời gian chờ giữa các lần tự động vào ranger stage",
+    Default = ConfigSystem.CurrentConfig.RangerTimeDelay or 5,
+    Min = 1,
+    Max = 60,
+    Suffix = "s",
+    Callback = function(Value)
+        rangerTimeDelay = Value
+        ConfigSystem.CurrentConfig.RangerTimeDelay = Value
+        ConfigSystem.SaveConfig()
+        print("Đã đặt thời gian chờ Ranger Stage: " .. Value .. " giây")
+    end
+})
+
+-- Toggle Friend Only cho Ranger Stage
+RangerSection:AddToggle("RangerFriendOnlyToggle", {
+    Title = "Friend Only",
+    Default = ConfigSystem.CurrentConfig.RangerFriendOnly or false,
+    Callback = function(Value)
+        rangerFriendOnly = Value
+        ConfigSystem.CurrentConfig.RangerFriendOnly = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Toggle Friend Only khi người dùng thay đổi
+        toggleFriendOnly()
+        
+        if Value then
+            Fluent:Notify({
+                Title = "Ranger Friend Only",
+                Content = "Đã bật chế độ Friend Only cho Ranger Stage",
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Ranger Friend Only",
+                Content = "Đã tắt chế độ Friend Only cho Ranger Stage",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Toggle Auto Join Ranger Stage
+RangerSection:AddToggle("AutoJoinRangerToggle", {
+    Title = "Auto Join Ranger Stage",
+    Default = ConfigSystem.CurrentConfig.AutoJoinRanger or false,
+    Callback = function(Value)
+        autoJoinRangerEnabled = Value
+        ConfigSystem.CurrentConfig.AutoJoinRanger = Value
+        ConfigSystem.SaveConfig()
+        
+        if autoJoinRangerEnabled then
+            -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
+            if isPlayerInMap() then
+                Fluent:Notify({
+                    Title = "Auto Join Ranger Stage",
+                    Content = "Đang ở trong map, Auto Join Ranger Stage sẽ hoạt động khi bạn rời khỏi map",
+                    Duration = 3
+                })
+            else
+                Fluent:Notify({
+                    Title = "Auto Join Ranger Stage",
+                    Content = "Auto Join Ranger Stage đã được bật (Delay: " .. rangerTimeDelay .. "s)",
+                    Duration = 3
+                })
+                
+                -- Thực hiện join ranger stage ngay lập tức
+                joinRangerStage()
+            end
+            
+            -- Tạo vòng lặp Auto Join Ranger Stage
+            spawn(function()
+                while autoJoinRangerEnabled do
+                    -- Chỉ thực hiện join map nếu người chơi không ở trong map
+                    if not isPlayerInMap() then
+                        joinRangerStage()
+                    else
+                        -- Người chơi đang ở trong map, không cần join
+                        print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
+                    end
+                    wait(rangerTimeDelay) -- Sử dụng time delay do người dùng cài đặt
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Join Ranger Stage",
+                Content = "Auto Join Ranger Stage đã được tắt",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Nút Join Ranger Stage (manual)
+RangerSection:AddButton({
+    Title = "Join Ranger Stage Now",
+    Callback = function()
+        -- Kiểm tra nếu người chơi đã ở trong map
+        if isPlayerInMap() then
+            Fluent:Notify({
+                Title = "Join Ranger Stage",
+                Content = "Bạn đang ở trong map, không thể join ranger stage mới",
+                Duration = 2
+            })
+            return
+        end
+        
+        local success = joinRangerStage()
+        
+        if success then
+            Fluent:Notify({
+                Title = "Join Ranger Stage",
+                Content = "Đang tham gia Ranger Stage: " .. selectedRangerDisplayMap .. " - " .. selectedAct,
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Join Ranger Stage",
+                Content = "Không thể tham gia Ranger Stage. Vui lòng thử lại sau.",
+                Duration = 2
+            })
+        end
+    end
+})
+
+-- Hiển thị trạng thái trong game (tương tự như ở Story)
+RangerSection:AddParagraph({
+    Title = "Trạng thái hiện tại",
+    Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+})
+
+-- Cập nhật trạng thái định kỳ
+spawn(function()
+    while wait(5) do
+        local paragraphStory = StorySection:GetComponent("Trạng thái hiện tại")
+        local paragraphRanger = RangerSection:GetComponent("Trạng thái hiện tại")
+        
+        local status = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+        
+        if paragraphStory then
+            paragraphStory:SetContent(status)
+        end
+        
+        if paragraphRanger then
+            paragraphRanger:SetContent(status)
+        end
+    end
+end)
+
+-- Hàm để tự động tham gia Ranger Stage
+local function joinRangerStage()
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join ranger stage")
+        return false
+    end
+    
     local success, err = pcall(function()
+        -- Lấy Event
         local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
         
-        if Event then
-            local args = {
-                [1] = "Change-Mode",
-                [2] = {
-                    ["Mode"] = mode == "Ranger - Stage" and "Ranger Stage" or mode
-                }
-            }
-            
-            Event:FireServer(unpack(args))
-            print("Đã đổi mode: " .. mode)
-        else
-            warn("Không tìm thấy Event để đổi mode")
+        if not Event then
+            warn("Không tìm thấy Event để join ranger stage")
+            return
         end
+        
+        -- 0. Change Mode
+        local args0 = {
+            [1] = "Change-Mode",
+            [2] = {
+                ["Mode"] = "Ranger Stage"
+            }
+        }
+        Event:FireServer(unpack(args0))
+        wait(0.5)
+        
+        -- 1. Create
+        Event:FireServer("Create")
+        wait(0.5)
+        
+        -- 2. Friend Only (nếu được bật)
+        if rangerFriendOnly then
+            Event:FireServer("Change-FriendOnly")
+            wait(0.5)
+        end
+        
+        -- 3. Chọn Map và Act
+        -- 3.1 Đổi Map
+        local args1 = {
+            [1] = "Change-World",
+            [2] = {
+                ["World"] = selectedRangerMap
+            }
+        }
+        Event:FireServer(unpack(args1))
+        wait(0.5)
+        
+        -- 3.2 Đổi Act
+        local args2 = {
+            [1] = "Change-Chapter",
+            [2] = {
+                ["Chapter"] = selectedRangerMap .. "_" .. selectedAct
+            }
+        }
+        Event:FireServer(unpack(args2))
+        wait(0.5)
+        
+        -- 4. Submit
+        Event:FireServer("Submit")
+        wait(1)
+        
+        -- 5. Start
+        Event:FireServer("Start")
+        
+        print("Đã join ranger stage: " .. selectedRangerMap .. "_" .. selectedAct)
     end)
     
     if not success then
-        warn("Lỗi khi đổi mode: " .. tostring(err))
+        warn("Lỗi khi join ranger stage: " .. tostring(err))
+        return false
     end
+    
+    return true
 end

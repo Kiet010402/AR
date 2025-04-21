@@ -22,6 +22,9 @@ if not Fluent then
     return
 end
 
+-- Wait to ensure UI components are ready
+wait(2)
+
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)
     local service = nil
@@ -33,7 +36,10 @@ end
 
 -- Utility function để kiểm tra và lấy child một cách an toàn
 local function safeGetChild(parent, childName, waitTime)
-    if not parent then return nil end
+    if not parent then 
+        warn("Lỗi safeGetChild: parent is nil")
+        return nil 
+    end
     
     local child = nil
     waitTime = waitTime or 1
@@ -45,6 +51,10 @@ local function safeGetChild(parent, childName, waitTime)
         end
     end)
     
+    if not success then
+        warn("Lỗi safeGetChild: không thể tìm " .. childName)
+    end
+    
     return child
 end
 
@@ -53,9 +63,24 @@ local function safeGetPath(startPoint, path, waitTime)
     waitTime = waitTime or 1
     local current = startPoint
     
-    for _, name in ipairs(path) do
-        if not current then return nil end
+    if not current then
+        warn("safeGetPath: startPoint is nil")
+        return nil
+    end
+    
+    for i, name in ipairs(path) do
+        if not current then 
+            warn("safeGetPath: path broken at index " .. i)
+            return nil 
+        end
+        
         current = safeGetChild(current, name, waitTime)
+        
+        if not current and i < #path then
+            -- Only warn if we're not at the last item (sometimes the last item not existing is expected)
+            warn("safeGetPath: Failed to find " .. name .. " at path index " .. i)
+            return nil
+        end
     end
     
     return current
@@ -504,6 +529,7 @@ StorySection:AddSlider("StoryDelaySlider", {
     Min = 1,
     Max = 60,
     Suffix = "s",
+    Rounding = 0,
     Callback = function(Value)
         storyTimeDelay = Value
         ConfigSystem.CurrentConfig.StoryTimeDelay = Value
@@ -997,6 +1023,7 @@ RangerSection:AddSlider("RangerDelaySlider", {
     Min = 1,
     Max = 60,
     Suffix = "s",
+    Rounding = 0,
     Callback = function(Value)
         rangerTimeDelay = Value
         ConfigSystem.CurrentConfig.RangerTimeDelay = Value

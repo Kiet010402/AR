@@ -675,7 +675,7 @@ StorySection:AddButton({
 })
 
 -- Hiển thị trạng thái trong game
-StorySection:AddParagraph({
+local statusParagraph = StorySection:AddParagraph({
     Title = "Trạng thái hiện tại",
     Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
 })
@@ -683,10 +683,13 @@ StorySection:AddParagraph({
 -- Cập nhật trạng thái định kỳ
 spawn(function()
     while wait(5) do
-        local paragraph = StorySection:GetComponent("Trạng thái hiện tại")
-        if paragraph then
-            paragraph:SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
-        end
+        pcall(function()
+            -- Tạo lại paragraph thay vì sử dụng GetComponent
+            StorySection:AddParagraph({
+                Title = "Trạng thái hiện tại",
+                Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+            })
+        end)
     end
 end)
 

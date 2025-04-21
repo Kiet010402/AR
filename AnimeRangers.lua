@@ -690,8 +690,8 @@ local statusLabel = StorySection:AddParagraph({
 local statusUpdateTimer = nil
 statusUpdateTimer = spawn(function()
     while wait(5) do
-        if StorySection and StorySection:GetComponent("Trạng thái") then
-            StorySection:GetComponent("Trạng thái"):SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
+        if statusLabel then
+            statusLabel:SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
         end
     end
 end)

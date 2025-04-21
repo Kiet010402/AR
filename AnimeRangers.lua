@@ -1,6 +1,19 @@
 -- Anime Rangers X Script
 
+-- Đảm bảo game đã tải xong trước khi thực thi script
+repeat task.wait(0.5) until game:IsLoaded()
+
+-- Đợi thêm 2 giây để đảm bảo các dịch vụ đã sẵn sàng
+task.wait(2)
+
+-- Hàm báo lỗi an toàn
+local function safeWarn(...)
+    pcall(function() warn(...) end)
+end
+
 -- Tải thư viện Fluent từ Arise
+local Fluent, SaveManager, InterfaceManager
+
 local success, err = pcall(function()
     Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
     SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
@@ -8,7 +21,7 @@ local success, err = pcall(function()
 end)
 
 if not success then
-    warn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
+    safeWarn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
     -- Thử tải từ URL dự phòng
     pcall(function()
         Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
@@ -18,11 +31,11 @@ if not success then
 end
 
 if not Fluent then
-    error("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
+    safeWarn("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
     return
 end
 
--- Utility function để kiểm tra và lấy service/object một cách an toàn
+-- Utility function để kiểm tra và lấy service/object một cách an toàn, với thời gian chờ dài hơn
 local function safeGetService(serviceName)
     local service = nil
     pcall(function()
@@ -31,15 +44,19 @@ local function safeGetService(serviceName)
     return service
 end
 
--- Utility function để kiểm tra và lấy child một cách an toàn
+-- Utility function để kiểm tra và lấy child một cách an toàn, với thời gian chờ dài hơn
 local function safeGetChild(parent, childName, waitTime)
     if not parent then return nil end
+    if type(parent) ~= "userdata" then return nil end
     
     local child = nil
-    waitTime = waitTime or 1
+    waitTime = waitTime or 3 -- Tăng thời gian chờ mặc định lên 3 giây
     
     local success = pcall(function()
+        -- Thử FindFirstChild trước
         child = parent:FindFirstChild(childName)
+        
+        -- Nếu không tìm thấy và có thời gian chờ, thử WaitForChild
         if not child and waitTime > 0 then
             child = parent:WaitForChild(childName, waitTime)
         end
@@ -50,20 +67,40 @@ end
 
 -- Utility function để lấy đường dẫn đầy đủ một cách an toàn
 local function safeGetPath(startPoint, path, waitTime)
-    waitTime = waitTime or 1
+    if not startPoint then return nil end
+    
+    waitTime = waitTime or 3 -- Tăng thời gian chờ mặc định
     local current = startPoint
     
     for _, name in ipairs(path) do
-        if not current then return nil end
+        if not current then 
+            safeWarn("Không tìm thấy path: " .. table.concat(path, " > ") .. " tại: " .. name)
+            return nil 
+        end
+        
+        -- Chờ lâu hơn cho các thành phần quan trọng
         current = safeGetChild(current, name, waitTime)
     end
     
     return current
 end
 
+-- Hàm tìm kiếm services cần thiết
+local ReplicatedStorage = safeGetService("ReplicatedStorage")
+local Players = safeGetService("Players")
+local LocalPlayer = Players and Players.LocalPlayer
+local UserInputService = safeGetService("UserInputService")
+local HttpService = safeGetService("HttpService")
+
+-- Đảm bảo các services cơ bản đã được tải
+if not ReplicatedStorage or not Players or not LocalPlayer or not UserInputService or not HttpService then
+    safeWarn("Không thể tải các dịch vụ cần thiết. Vui lòng thử lại sau.")
+    return
+end
+
 -- Hệ thống lưu trữ cấu hình
 local ConfigSystem = {}
-ConfigSystem.FileName = "HTHubARConfig_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
+ConfigSystem.FileName = "HTHubARConfig_" .. LocalPlayer.Name .. ".json"
 ConfigSystem.DefaultConfig = {
     -- Các cài đặt mặc định
     UITheme = "Dark",
@@ -87,13 +124,13 @@ ConfigSystem.CurrentConfig = {}
 -- Hàm để lưu cấu hình
 ConfigSystem.SaveConfig = function()
     local success, err = pcall(function()
-        writefile(ConfigSystem.FileName, game:GetService("HttpService"):JSONEncode(ConfigSystem.CurrentConfig))
+        writefile(ConfigSystem.FileName, HttpService:JSONEncode(ConfigSystem.CurrentConfig))
     end)
     
     if success then
         print("Đã lưu cấu hình thành công!")
     else
-        warn("Lưu cấu hình thất bại:", err)
+        safeWarn("Lưu cấu hình thất bại:", err)
     end
 end
 
@@ -107,7 +144,7 @@ ConfigSystem.LoadConfig = function()
     end)
     
     if success and content then
-        local data = game:GetService("HttpService"):JSONDecode(content)
+        local data = HttpService:JSONDecode(content)
         ConfigSystem.CurrentConfig = data
         return true
     else
@@ -182,7 +219,7 @@ local mapSpawnCoordinates = {
 }
 
 -- Thông tin người chơi
-local playerName = game:GetService("Players").LocalPlayer.Name
+local playerName = LocalPlayer.Name
 
 -- Tạo Window
 local Window = Fluent:CreateWindow({
@@ -221,51 +258,60 @@ local SettingsTab = Window:AddTab({
 
 -- Tạo logo UI để mở lại khi đã thu nhỏ
 local function CreateLogoUI()
-    local UI = Instance.new("ScreenGui")
-    local Button = Instance.new("ImageButton")
-    local UICorner = Instance.new("UICorner")
-    
-    -- Kiểm tra môi trường
-    if syn and syn.protect_gui then
-        syn.protect_gui(UI)
-        UI.Parent = game:GetService("CoreGui")
-    elseif gethui then
-        UI.Parent = gethui()
-    else
-        UI.Parent = game:GetService("CoreGui")
-    end
-    
-    UI.Name = "AnimeRangersLogo"
-    UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    UI.ResetOnSpawn = false
-    
-    Button.Name = "LogoButton"
-    Button.Parent = UI
-    Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    Button.BackgroundTransparency = 0.2
-    Button.Position = UDim2.new(0.9, -25, 0.1, 0)
-    Button.Size = UDim2.new(0, 50, 0, 50)
-    Button.Image = "rbxassetid://10723424401"
-    Button.ImageTransparency = 0.1
-    Button.Active = true
-    Button.Draggable = true
-    
-    UICorner.CornerRadius = UDim.new(1, 0)
-    UICorner.Parent = Button
-    
-    -- Ẩn logo ban đầu
-    UI.Enabled = false
-    
-    -- Khi click vào logo
-    Button.MouseButton1Click:Connect(function()
-        UI.Enabled = false
-        isMinimized = false
+    local success, UI = pcall(function()
+        local UI = Instance.new("ScreenGui")
+        local Button = Instance.new("ImageButton")
+        local UICorner = Instance.new("UICorner")
         
-        -- Hiển thị lại UI chính
-        if Window and Window.Minimize then
-            Window.Minimize()
+        -- Kiểm tra môi trường
+        if syn and syn.protect_gui then
+            syn.protect_gui(UI)
+            UI.Parent = game:GetService("CoreGui")
+        elseif gethui then
+            UI.Parent = gethui()
+        else
+            UI.Parent = game:GetService("CoreGui")
         end
+        
+        UI.Name = "AnimeRangersLogo"
+        UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        UI.ResetOnSpawn = false
+        
+        Button.Name = "LogoButton"
+        Button.Parent = UI
+        Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        Button.BackgroundTransparency = 0.2
+        Button.Position = UDim2.new(0.9, -25, 0.1, 0)
+        Button.Size = UDim2.new(0, 50, 0, 50)
+        Button.Image = "rbxassetid://10723424401"
+        Button.ImageTransparency = 0.1
+        Button.Active = true
+        Button.Draggable = true
+        
+        UICorner.CornerRadius = UDim.new(1, 0)
+        UICorner.Parent = Button
+        
+        -- Ẩn logo ban đầu
+        UI.Enabled = false
+        
+        -- Khi click vào logo
+        Button.MouseButton1Click:Connect(function()
+            UI.Enabled = false
+            isMinimized = false
+            
+            -- Hiển thị lại UI chính
+            if Window and Window.Minimize then
+                Window.Minimize()
+            end
+        end)
+        
+        return UI
     end)
+    
+    if not success then
+        safeWarn("Lỗi khi tạo logo UI: " .. tostring(UI))
+        return nil
+    end
     
     return UI
 end
@@ -289,19 +335,21 @@ Window.Minimize = function()
     oldMinimize()
 end
 
--- Bắt sự kiện phím để kích hoạt minimize
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
-        Window.Minimize()
-    end
-end)
+-- Bắt sự kiện phím để kích hoạt minimize một cách an toàn
+if UserInputService then
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
+            Window.Minimize()
+        end
+    end)
+end
 
 -- Thêm section thông tin trong tab Info
 local InfoSection = InfoTab:AddSection("Thông tin")
 
 InfoSection:AddParagraph({
     Title = "Anime Rangers X",
-    Content = "Phiên bản: 1.0.0\nTrạng thái: Hoạt động"
+    Content = "Phiên bản: 1.0.1\nTrạng thái: Hoạt động"
 })
 
 InfoSection:AddParagraph({
@@ -314,12 +362,12 @@ local StorySection = PlayTab:AddSection("Story")
 
 -- Hàm để kiểm tra xem người chơi có đang ở trong map đã chọn không
 local function isPlayerInSelectedMap()
-    local player = game:GetService("Players").LocalPlayer
-    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
-        return false
-    end
+    local player = LocalPlayer
+    if not player or not player.Character then return false end
     
-    local hrp = player.Character.HumanoidRootPart
+    local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return false end
+    
     local playerPos = hrp.Position
     
     -- Tìm thông tin tọa độ cho map đã chọn
@@ -334,7 +382,7 @@ end
 -- Hàm để thay đổi map
 local function changeWorld(worldDisplay)
     local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        local Event = safeGetPath(ReplicatedStorage, {"Remote", "Server", "PlayRoom", "Event"}, 4)
         
         if Event then
             -- Chuyển đổi từ tên hiển thị sang tên thật
@@ -350,19 +398,19 @@ local function changeWorld(worldDisplay)
             Event:FireServer(unpack(args))
             print("Đã đổi map: " .. worldDisplay .. " (thực tế: " .. worldReal .. ")")
         else
-            warn("Không tìm thấy Event để đổi map")
+            safeWarn("Không tìm thấy Event để đổi map")
         end
     end)
     
     if not success then
-        warn("Lỗi khi đổi map: " .. tostring(err))
+        safeWarn("Lỗi khi đổi map: " .. tostring(err))
     end
 end
 
 -- Hàm để thay đổi chapter
 local function changeChapter(map, chapter)
     local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        local Event = safeGetPath(ReplicatedStorage, {"Remote", "Server", "PlayRoom", "Event"}, 4)
         
         if Event then
             local args = {
@@ -375,19 +423,19 @@ local function changeChapter(map, chapter)
             Event:FireServer(unpack(args))
             print("Đã đổi chapter: " .. map .. "_" .. chapter)
         else
-            warn("Không tìm thấy Event để đổi chapter")
+            safeWarn("Không tìm thấy Event để đổi chapter")
         end
     end)
     
     if not success then
-        warn("Lỗi khi đổi chapter: " .. tostring(err))
+        safeWarn("Lỗi khi đổi chapter: " .. tostring(err))
     end
 end
 
 -- Hàm để toggle Friend Only
 local function toggleFriendOnly()
     local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        local Event = safeGetPath(ReplicatedStorage, {"Remote", "Server", "PlayRoom", "Event"}, 4)
         
         if Event then
             local args = {
@@ -397,12 +445,12 @@ local function toggleFriendOnly()
             Event:FireServer(unpack(args))
             print("Đã toggle Friend Only")
         else
-            warn("Không tìm thấy Event để toggle Friend Only")
+            safeWarn("Không tìm thấy Event để toggle Friend Only")
         end
     end)
     
     if not success then
-        warn("Lỗi khi toggle Friend Only: " .. tostring(err))
+        safeWarn("Lỗi khi toggle Friend Only: " .. tostring(err))
     end
 end
 
@@ -416,21 +464,21 @@ local function joinMap()
     
     local success, err = pcall(function()
         -- Lấy Event
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        local Event = safeGetPath(ReplicatedStorage, {"Remote", "Server", "PlayRoom", "Event"}, 4)
         
         if not Event then
-            warn("Không tìm thấy Event để join map")
+            safeWarn("Không tìm thấy Event để join map")
             return
         end
         
         -- 1. Create
         Event:FireServer("Create")
-        wait(0.5)
+        task.wait(0.5)
         
         -- 2. Friend Only (nếu được bật)
         if friendOnly then
             Event:FireServer("Change-FriendOnly")
-            wait(0.5)
+            task.wait(0.5)
         end
         
         -- 3. Chọn Map và Chapter
@@ -442,7 +490,7 @@ local function joinMap()
             }
         }
         Event:FireServer(unpack(args1))
-        wait(0.5)
+        task.wait(0.5)
         
         -- 3.2 Đổi Chapter
         local args2 = {
@@ -452,11 +500,11 @@ local function joinMap()
             }
         }
         Event:FireServer(unpack(args2))
-        wait(0.5)
+        task.wait(0.5)
         
         -- 4. Submit
         Event:FireServer("Submit")
-        wait(1)
+        task.wait(1)
         
         -- 5. Start
         Event:FireServer("Start")
@@ -465,7 +513,7 @@ local function joinMap()
     end)
     
     if not success then
-        warn("Lỗi khi join map: " .. tostring(err))
+        safeWarn("Lỗi khi join map: " .. tostring(err))
     end
 end
 
@@ -473,7 +521,7 @@ end
 StorySection:AddButton({
     Title = "Show Current Position",
     Callback = function()
-        local player = game:GetService("Players").LocalPlayer
+        local player = LocalPlayer
         if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local pos = player.Character.HumanoidRootPart.Position
             print("Tọa độ hiện tại: X=" .. pos.X .. ", Y=" .. pos.Y .. ", Z=" .. pos.Z)
@@ -584,7 +632,7 @@ StorySection:AddToggle("AutoJoinMapToggle", {
                 
                 -- Tạo vòng lặp Auto Join Map
                 spawn(function()
-                    while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
+                    while autoJoinMapEnabled and task.wait(10) do -- Thử join map mỗi 10 giây
                         if not isPlayerInSelectedMap() then
                             joinMap()
                         else
@@ -615,7 +663,7 @@ StorySection:AddButton({
                 Duration = 3
             })
             return
-        }
+        end
         
         joinMap()
         
@@ -634,7 +682,7 @@ local SummonSection = ShopTab:AddSection("Summon")
 local function performSummon()
     -- An toàn kiểm tra Remote có tồn tại không
     local success, err = pcall(function()
-        local Remote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Gambling", "UnitsGacha"}, 2)
+        local Remote = safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gambling", "UnitsGacha"}, 4)
         
         if Remote then
             local args = {
@@ -646,12 +694,12 @@ local function performSummon()
             Remote:FireServer(unpack(args))
             print("Đã summon: " .. selectedSummonAmount .. " - " .. selectedSummonBanner)
         else
-            warn("Không tìm thấy Remote UnitsGacha")
+            safeWarn("Không tìm thấy Remote UnitsGacha")
         end
     end)
     
     if not success then
-        warn("Lỗi khi summon: " .. tostring(err))
+        safeWarn("Lỗi khi summon: " .. tostring(err))
     end
 end
 
@@ -715,13 +763,13 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Tạo vòng lặp Auto Summon
             if autoSummonLoop then
-                autoSummonLoop:Disconnect()
+                pcall(function() autoSummonLoop:Disconnect() end)
                 autoSummonLoop = nil
             end
             
             -- Sử dụng spawn thay vì coroutine
             spawn(function()
-                while autoSummonEnabled and wait(2) do -- Summon mỗi 2 giây
+                while autoSummonEnabled and task.wait(2) do -- Summon mỗi 2 giây
                     performSummon()
                 end
             end)
@@ -734,7 +782,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
             })
             
             if autoSummonLoop then
-                autoSummonLoop:Disconnect()
+                pcall(function() autoSummonLoop:Disconnect() end)
                 autoSummonLoop = nil
             end
         end
@@ -748,34 +796,33 @@ local QuestSection = ShopTab:AddSection("Quest")
 local function claimAllQuests()
     local success, err = pcall(function()
         -- Kiểm tra an toàn đường dẫn PlayerData
-        local ReplicatedStorage = safeGetService("ReplicatedStorage")
         if not ReplicatedStorage then
-            warn("Không tìm thấy ReplicatedStorage")
+            safeWarn("Không tìm thấy ReplicatedStorage")
             return
         end
         
-        local PlayerData = safeGetChild(ReplicatedStorage, "Player_Data", 2)
+        local PlayerData = safeGetChild(ReplicatedStorage, "Player_Data", 4)
         if not PlayerData then
-            warn("Không tìm thấy Player_Data")
+            safeWarn("Không tìm thấy Player_Data")
             return
         end
         
-        local PlayerFolder = safeGetChild(PlayerData, playerName, 2)
+        local PlayerFolder = safeGetChild(PlayerData, playerName, 4)
         if not PlayerFolder then
-            warn("Không tìm thấy dữ liệu người chơi: " .. playerName)
+            safeWarn("Không tìm thấy dữ liệu người chơi: " .. playerName)
             return
         end
         
-        local DailyQuest = safeGetChild(PlayerFolder, "DailyQuest", 2)
+        local DailyQuest = safeGetChild(PlayerFolder, "DailyQuest", 4)
         if not DailyQuest then
-            warn("Không tìm thấy DailyQuest")
+            safeWarn("Không tìm thấy DailyQuest")
             return
         end
         
         -- Lấy đường dẫn đến QuestEvent
-        local QuestEvent = safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gameplay", "QuestEvent"}, 2)
+        local QuestEvent = safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gameplay", "QuestEvent"}, 4)
         if not QuestEvent then
-            warn("Không tìm thấy QuestEvent")
+            safeWarn("Không tìm thấy QuestEvent")
             return
         end
         
@@ -788,13 +835,13 @@ local function claimAllQuests()
                 }
                 
                 QuestEvent:FireServer(unpack(args))
-                wait(0.2) -- Chờ một chút giữa các lần claim để tránh lag
+                task.wait(0.2) -- Chờ một chút giữa các lần claim để tránh lag
             end
         end
     end)
     
     if not success then
-        warn("Lỗi khi claim quest: " .. tostring(err))
+        safeWarn("Lỗi khi claim quest: " .. tostring(err))
     end
 end
 
@@ -830,7 +877,7 @@ QuestSection:AddToggle("AutoClaimQuestToggle", {
             
             -- Tạo vòng lặp Auto Claim Quests
             spawn(function()
-                while autoClaimQuestEnabled and wait(30) do -- Claim mỗi 30 giây
+                while autoClaimQuestEnabled and task.wait(30) do -- Claim mỗi 30 giây
                     claimAllQuests()
                 end
             end)
@@ -863,7 +910,7 @@ SettingsSection:AddDropdown("ThemeDropdown", {
 -- Auto Save Config
 local function AutoSaveConfig()
     spawn(function()
-        while wait(5) do -- Lưu mỗi 5 giây
+        while task.wait(5) do -- Lưu mỗi 5 giây
             pcall(function()
                 ConfigSystem.SaveConfig()
             end)
@@ -873,28 +920,32 @@ end
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({InfoTab, PlayTab, ShopTab, SettingsTab}) do
-        if tab and tab._components then
-            for _, element in pairs(tab._components) do
-                if element and element.OnChanged then
-                    element.OnChanged:Connect(function()
-                        pcall(function()
-                            ConfigSystem.SaveConfig()
+    pcall(function()
+        for _, tab in pairs({InfoTab, PlayTab, ShopTab, SettingsTab}) do
+            if tab and tab._components then
+                for _, element in pairs(tab._components) do
+                    if element and element.OnChanged then
+                        element.OnChanged:Connect(function()
+                            pcall(function()
+                                ConfigSystem.SaveConfig()
+                            end)
                         end)
-                    end)
+                    end
                 end
             end
         end
-    end
+    end)
 end
 
 -- Tích hợp với SaveManager
-SaveManager:SetLibrary(Fluent)
-InterfaceManager:SetLibrary(Fluent)
+if SaveManager and InterfaceManager then
+    SaveManager:SetLibrary(Fluent)
+    InterfaceManager:SetLibrary(Fluent)
 
--- Thay đổi cách lưu cấu hình để sử dụng tên người chơi
-InterfaceManager:SetFolder("HTHubAR")
-SaveManager:SetFolder("HTHubAR/" .. playerName)
+    -- Thay đổi cách lưu cấu hình để sử dụng tên người chơi
+    InterfaceManager:SetFolder("HTHubAR")
+    SaveManager:SetFolder("HTHubAR/" .. playerName)
+end
 
 -- Thêm thông tin vào tab Settings
 SettingsTab:AddParagraph({

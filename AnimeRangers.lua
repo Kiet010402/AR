@@ -6,6 +6,15 @@ repeat task.wait(0.5) until game:IsLoaded()
 -- Đợi thêm 2 giây để đảm bảo các dịch vụ đã sẵn sàng
 task.wait(2)
 
+-- Bảo vệ lỗi attempt to call a nil value
+local function safeCall(func, ...)
+    if typeof(func) == "function" then
+        return func(...)
+    else
+        return nil
+    end
+end
+
 -- Hàm báo lỗi an toàn
 local function safeWarn(...)
     pcall(function() warn(...) end)
@@ -972,3 +981,56 @@ Fluent:Notify({
 })
 
 print("Anime Rangers X Script has been loaded!")
+
+-- Thêm bảo vệ lỗi cho các UI element có thể gây lỗi
+local success, err = pcall(function()
+    -- Tìm và bảo vệ các TextButton trong game
+    for _, instance in pairs(game:GetDescendants()) do
+        if instance:IsA("TextButton") then
+            -- Kiểm tra xem button có đang cố truy cập View không
+            if instance.Name == "Goku" then
+                -- Ghi đè phương thức để tránh lỗi
+                local oldNamecall
+                oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                    local method = getnamecallmethod()
+                    
+                    -- Nếu đang cố gọi View trên button Goku
+                    if self == instance and (method == "View" or method:find("View")) then
+                        safeWarn("Prevented error: Attempt to use View on TextButton")
+                        return nil
+                    end
+                    
+                    return oldNamecall(self, ...)
+                end)
+            end
+        end
+    end
+end)
+
+if not success then
+    safeWarn("Không thể hook các UI element: " .. tostring(err))
+end
+
+-- Bảo vệ các lỗi gây crash script
+task.spawn(function()
+    while true do
+        task.wait(1)
+        -- Kiểm tra và khắc phục các lỗi script theo định kỳ
+        pcall(function()
+            -- Kiểm tra xem các tabs có còn tồn tại không
+            if not InfoTab or not PlayTab or not ShopTab or not SettingsTab then
+                safeWarn("Phát hiện tab UI bị hủy, đang cố khôi phục...")
+                
+                -- Cố gắng khôi phục tabs nếu cần
+                if Window and Window.AddTab then
+                    if not InfoTab then InfoTab = Window:AddTab({Title = "Info", Icon = "rbxassetid://7733964719"}) end
+                    if not PlayTab then PlayTab = Window:AddTab({Title = "Play", Icon = "rbxassetid://7743878070"}) end
+                    if not ShopTab then ShopTab = Window:AddTab({Title = "Shop", Icon = "rbxassetid://7734056747"}) end
+                    if not SettingsTab then SettingsTab = Window:AddTab({Title = "Settings", Icon = "rbxassetid://6031280882"}) end
+                end
+            end
+        end)
+    end
+end)
+
+print("Đã áp dụng các biện pháp bảo vệ UI")

@@ -1,29 +1,114 @@
 -- Anime Rangers X Script
 
--- Tải thư viện Fluent từ Arise
-local success, err = pcall(function()
-    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+-- Global error handler
+local oldError = error
+local function customError(message, level)
+    warn("ERROR: " .. tostring(message))
+    return oldError(message, level)
+end
+error = customError
+
+-- Catching unhandled errors
+spawn(function()
+    while wait(1) do
+        pcall(function()
+            -- Keep checking for known error patterns and fix them
+            if not ReplicatedStorage:FindFirstChild("UIS") or 
+               (ReplicatedStorage:FindFirstChild("UIS") and not ReplicatedStorage.UIS:FindFirstChild("Store")) then
+                -- Recreate the UIS store structure
+                local UIS = ReplicatedStorage:FindFirstChild("UIS") or Instance.new("Folder")
+                UIS.Name = "UIS"
+                UIS.Parent = ReplicatedStorage
+                
+                local Store = Instance.new("Folder")
+                Store.Name = "Store"
+                Store.Parent = UIS
+                
+                print("Fixed missing UIS.Store")
+            end
+        end)
+    end
 end)
 
-if not success then
-    warn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
-    -- Thử tải từ URL dự phòng
-    pcall(function()
-        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
-        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-    end)
+-- Đảm bảo các services quan trọng được khởi tạo trước
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Tạo UIS store nếu chưa tồn tại để tránh lỗi
+if not ReplicatedStorage:FindFirstChild("UIS") then
+    local UIS = Instance.new("Folder")
+    UIS.Name = "UIS"
+    UIS.Parent = ReplicatedStorage
+    
+    local Store = Instance.new("Folder")
+    Store.Name = "Store"
+    Store.Parent = UIS
+    
+    print("Đã tạo UIS.Store cho ReplicatedStorage")
 end
 
-if not Fluent then
+-- Tải thư viện Fluent từ Arise với cơ chế bảo vệ tốt hơn
+local Fluent, SaveManager, InterfaceManager
+local loadSuccess = false
+
+-- Hàm tải an toàn
+local function safeLoad(url)
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet(url))()
+    end)
+    
+    if success then
+        return result
+    else
+        warn("Không thể tải từ URL: " .. url .. "\nLỗi: " .. tostring(result))
+        return nil
+    end
+end
+
+-- Thử URL chính
+Fluent = safeLoad("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua")
+if Fluent then
+    SaveManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua")
+    InterfaceManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua")
+    loadSuccess = true
+end
+
+-- Thử URL dự phòng nếu không thành công
+if not loadSuccess then
+    Fluent = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua")
+    if Fluent then
+        SaveManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua")
+        InterfaceManager = safeLoad("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua")
+        loadSuccess = true
+    end
+end
+
+-- Kiểm tra và hiển thị thông báo
+if not loadSuccess then
     error("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
     return
 end
 
--- Wait to ensure UI components are ready
-wait(2)
+-- Patch slider rounding issue - thêm hàm monkey patch để sửa lỗi slider
+if Fluent and Fluent.Components and Fluent.Components.Slider then
+    -- Backup function gốc
+    local originalSliderNew = Fluent.Components.Slider.New
+    
+    -- Thay thế bằng phiên bản có Rounding mặc định
+    Fluent.Components.Slider.New = function(...)
+        local args = {...}
+        if args[2] and type(args[2]) == "table" and args[2].Rounding == nil then
+            args[2].Rounding = 0
+        end
+        return originalSliderNew(unpack(args))
+    end
+    
+    print("Đã patch lỗi Slider rounding")
+end
+
+-- Wait để đảm bảo mọi thứ đã được khởi tạo
+wait(3)
 
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)
@@ -204,15 +289,23 @@ local rangerTimeDelay = ConfigSystem.CurrentConfig.RangerTimeDelay or 5
 local playerName = game:GetService("Players").LocalPlayer.Name
 
 -- Tạo Window
-local Window = Fluent:CreateWindow({
-    Title = "HT Hub | Anime Rangers X",
-    SubTitle = "",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
-})
+local Window = nil
+pcall(function()
+    Window = Fluent:CreateWindow({
+        Title = "HT Hub | Anime Rangers X",
+        SubTitle = "",
+        TabWidth = 160,
+        Size = UDim2.fromOffset(580, 460),
+        Acrylic = true,
+        Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
+        MinimizeKey = Enum.KeyCode.LeftControl
+    })
+end)
+
+if not Window then
+    error("Không thể tạo cửa sổ UI. Vui lòng kiểm tra lại Fluent library.")
+    return
+end
 
 -- Tạo tab Info
 local InfoTab = Window:AddTab({

@@ -684,20 +684,10 @@ StorySection:AddButton({
 })
 
 -- Hiển thị trạng thái trong game
-local statusLabel = StorySection:AddParagraph({
+StorySection:AddParagraph({
     Title = "Trạng thái",
     Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
 })
-
--- Cập nhật trạng thái định kỳ
-local statusUpdateTimer = nil
-statusUpdateTimer = spawn(function()
-    while wait(5) do
-        if statusLabel then
-            statusLabel:SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
-        end
-    end
-end)
 
 -- Thêm section Summon trong tab Shop
 local SummonSection = ShopTab:AddSection("Summon")

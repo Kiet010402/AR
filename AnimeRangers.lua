@@ -31,9 +31,19 @@ local function safeGetService(serviceName)
     return service
 end
 
+-- Hàm an toàn để kiểm tra sự tồn tại của đối tượng
+local function isValidInstance(obj)
+    if obj == nil then return false end
+    local success = pcall(function() 
+        return obj.ClassName ~= nil 
+    end)
+    return success
+end
+
 -- Hàm an toàn để truy cập WaitForChild
 local function safeWaitForChild(parent, childName, waitTime)
     if not parent then return nil end
+    if not isValidInstance(parent) then return nil end
     
     local child = nil
     waitTime = waitTime or 1
@@ -53,13 +63,6 @@ end
 
 -- Cập nhật hàm safeGetChild để sử dụng safeWaitForChild
 local function safeGetChild(parent, childName, waitTime)
-    if not parent then return nil end
-    
-    -- Kiểm tra xem parent có phải là một Instance không
-    if typeof(parent) ~= "Instance" then
-        return nil
-    end
-    
     return safeWaitForChild(parent, childName, waitTime)
 end
 
@@ -695,12 +698,33 @@ StorySection:AddButton({
     end
 })
 
--- Hiển thị trạng thái trong game
-local statusLabel = StorySection:AddLabel({
-    Text = isPlayerInMap() and "Trạng thái: Đang ở trong map" or "Trạng thái: Đang ở sảnh chờ"
-})
+-- Biến toàn cục để theo dõi paragraph trạng thái
+local statusParagraph = nil
 
--- Cập nhật trạng thái định kỳ, chỉ cập nhật nội dung label thay vì tạo mới
+-- Hàm an toàn để cập nhật trạng thái
+local function updateStatusDisplay()
+    pcall(function()
+        -- Đầu tiên xóa paragraph cũ nếu có
+        if statusParagraph and statusParagraph._components then
+            for i, comp in pairs(statusParagraph._components) do
+                if comp and comp.Destroy then
+                    comp:Destroy()
+                end
+            end
+        end
+        
+        -- Tạo paragraph mới để hiển thị trạng thái
+        statusParagraph = StorySection:AddParagraph({
+            Title = "Trạng thái",
+            Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+        })
+    end)
+end
+
+-- Cập nhật trạng thái ngay lập tức
+updateStatusDisplay()
+
+-- Cập nhật trạng thái định kỳ
 local statusUpdateTimer = nil
 if statusUpdateTimer then
     pcall(function()
@@ -709,13 +733,10 @@ if statusUpdateTimer then
     statusUpdateTimer = nil
 end
 
+-- Cập nhật trạng thái mỗi 10 giây thay vì 5 giây để giảm tải
 statusUpdateTimer = spawn(function()
-    while wait(5) do
-        pcall(function()
-            if statusLabel then
-                statusLabel.Text = isPlayerInMap() and "Trạng thái: Đang ở trong map" or "Trạng thái: Đang ở sảnh chờ"
-            end
-        end)
+    while wait(10) do
+        updateStatusDisplay()
     end
 end)
 

@@ -696,21 +696,25 @@ StorySection:AddButton({
 })
 
 -- Hiển thị trạng thái trong game
-StorySection:AddParagraph({
-    Title = "Trạng thái",
-    Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+local statusLabel = StorySection:AddLabel({
+    Text = isPlayerInMap() and "Trạng thái: Đang ở trong map" or "Trạng thái: Đang ở sảnh chờ"
 })
 
--- Cập nhật trạng thái định kỳ bằng cách xoá và tạo lại paragraph
+-- Cập nhật trạng thái định kỳ, chỉ cập nhật nội dung label thay vì tạo mới
 local statusUpdateTimer = nil
+if statusUpdateTimer then
+    pcall(function()
+        statusUpdateTimer:Disconnect()
+    end)
+    statusUpdateTimer = nil
+end
+
 statusUpdateTimer = spawn(function()
     while wait(5) do
         pcall(function()
-            -- Xóa paragraph cũ nếu có và tạo lại để cập nhật trạng thái
-            StorySection:AddParagraph({
-                Title = "Trạng thái",
-                Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
-            })
+            if statusLabel then
+                statusLabel.Text = isPlayerInMap() and "Trạng thái: Đang ở trong map" or "Trạng thái: Đang ở sảnh chờ"
+            end
         end)
     end
 end)

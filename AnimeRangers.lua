@@ -22,6 +22,30 @@ if not Fluent then
     return
 end
 
+-- Vô hiệu hóa các cảnh báo lỗi không cần thiết
+local originalWarn = warn
+warn = function(...)
+    if not string.find(tostring(...), "attempt to index nil with 'WaitForChild'") then
+        originalWarn(...)
+    end
+end
+
+-- Wrapper an toàn cho WaitForChild
+local safeWaitForChild = function(parent, childName, timeOut)
+    if not parent then return nil end
+    timeOut = timeOut or 1
+    
+    local success, result = pcall(function()
+        return parent:WaitForChild(childName, timeOut)
+    end)
+    
+    if success then
+        return result
+    else
+        return nil
+    end
+end
+
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)
     local service = nil
@@ -41,7 +65,7 @@ local function safeGetChild(parent, childName, waitTime)
     local success = pcall(function()
         child = parent:FindFirstChild(childName)
         if not child and waitTime > 0 then
-            child = parent:WaitForChild(childName, waitTime)
+            child = safeWaitForChild(parent, childName, waitTime)
         end
     end)
     
@@ -187,6 +211,43 @@ local autoBossEventEnabled = ConfigSystem.CurrentConfig.AutoBossEvent or false
 
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
+
+-- Cache cho các đường dẫn hay sử dụng để tránh gọi WaitForChild nhiều lần
+local ReplicatedStorage = safeGetService("ReplicatedStorage")
+local PathCache = {
+    PlayRoomEvent = nil,
+    UnitsGacha = nil,
+    QuestEvent = nil
+}
+
+-- Hàm lazy loading cho các đường dẫn thường dùng
+local function getPathFromCache(cacheName, getPathFunc)
+    if not PathCache[cacheName] then
+        PathCache[cacheName] = getPathFunc()
+    end
+    return PathCache[cacheName]
+end
+
+-- Hàm lấy PlayRoom Event
+local function getPlayRoomEvent()
+    return getPathFromCache("PlayRoomEvent", function()
+        return safeGetPath(ReplicatedStorage, {"Remote", "Server", "PlayRoom", "Event"}, 2)
+    end)
+end
+
+-- Hàm lấy Units Gacha
+local function getUnitsGacha()
+    return getPathFromCache("UnitsGacha", function() 
+        return safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gambling", "UnitsGacha"}, 2)
+    end)
+end
+
+-- Hàm lấy Quest Event
+local function getQuestEvent()
+    return getPathFromCache("QuestEvent", function()
+        return safeGetPath(ReplicatedStorage, {"Remote", "Server", "Gameplay", "QuestEvent"}, 2)
+    end)
+end
 
 -- Tạo Window
 local Window = Fluent:CreateWindow({
@@ -389,7 +450,7 @@ end
 -- Hàm để thay đổi difficulty
 local function changeDifficulty(difficulty)
     local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        local Event = getPlayRoomEvent()
         
         if Event then
             local args = {
@@ -991,6 +1052,35 @@ AutoSaveConfig()
 -- Thiết lập events
 setupSaveEvents()
 
+-- Khởi tạo các đường dẫn cần thiết khi game bắt đầu
+spawn(function()
+    -- Khởi tạo cache ban đầu
+    local PlayRoomEvent = getPlayRoomEvent()
+    local UnitsGacha = getUnitsGacha()
+    local QuestEvent = getQuestEvent()
+    
+    -- Khắc phục lỗi UIS.Store
+    if ReplicatedStorage then
+        if not ReplicatedStorage:FindFirstChild("UIS") then
+            local UIS = Instance.new("Folder")
+            UIS.Name = "UIS"
+            UIS.Parent = ReplicatedStorage
+            
+            local Store = Instance.new("Folder")
+            Store.Name = "Store"
+            Store.Parent = UIS
+            
+            print("Đã tạo UIS.Store để tránh lỗi")
+        elseif not ReplicatedStorage.UIS:FindFirstChild("Store") then
+            local Store = Instance.new("Folder")
+            Store.Name = "Store"
+            Store.Parent = ReplicatedStorage.UIS
+            
+            print("Đã tạo UIS.Store để tránh lỗi")
+        end
+    end
+end)
+
 -- Kiểm tra trạng thái người chơi khi script khởi động
 if isPlayerInMap() then
     Fluent:Notify({
@@ -1372,7 +1462,7 @@ RangerSection:AddButton({
 -- Hàm để tự động tham gia Boss Event
 local function joinBossEvent()
     local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        local Event = getPlayRoomEvent()
         
         if Event then
             local args = {

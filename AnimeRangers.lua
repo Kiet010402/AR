@@ -79,6 +79,7 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Story
     SelectedMap = "OnePiece",
     SelectedChapter = "Chapter1",
+    SelectedDifficulty = "Normal",
     FriendOnly = false,
     AutoJoinMap = false,
     StoryTimeDelay = 5,
@@ -161,6 +162,7 @@ end
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
 local selectedDisplayMap = reverseMapNameMapping[selectedMap] or "Voocha Village"
 local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
+local selectedDifficulty = ConfigSystem.CurrentConfig.SelectedDifficulty or "Normal"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
 local autoJoinMapLoop = nil
@@ -445,6 +447,16 @@ local function joinMap()
         Event:FireServer(unpack(args2))
         wait(0.5)
         
+        -- 3.3 Đổi Difficulty
+        local args3 = {
+            [1] = "Change-Difficulty",
+            [2] = {
+                ["Difficulty"] = selectedDifficulty
+            }
+        }
+        Event:FireServer(unpack(args3))
+        wait(0.5)
+        
         -- 4. Submit
         Event:FireServer("Submit")
         wait(1)
@@ -452,7 +464,7 @@ local function joinMap()
         -- 5. Start
         Event:FireServer("Start")
         
-        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter)
+        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter .. " với difficulty: " .. selectedDifficulty)
     end)
     
     if not success then
@@ -461,6 +473,31 @@ local function joinMap()
     end
     
     return true
+end
+
+-- Hàm để thay đổi difficulty
+local function changeDifficulty(difficulty)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Difficulty",
+                [2] = {
+                    ["Difficulty"] = difficulty
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi difficulty: " .. difficulty)
+        else
+            warn("Không tìm thấy Event để đổi difficulty")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi difficulty: " .. tostring(err))
+    end
 end
 
 -- Dropdown để chọn Map
@@ -495,6 +532,23 @@ StorySection:AddDropdown("ChapterDropdown", {
         -- Thay đổi chapter khi người dùng chọn
         changeChapter(selectedMap, Value)
         print("Đã chọn chapter: " .. Value)
+    end
+})
+
+-- Dropdown để chọn Difficulty
+StorySection:AddDropdown("DifficultyDropdown", {
+    Title = "Choose Difficulty",
+    Values = {"Normal", "Hard", "Nightmare"},
+    Multi = false,
+    Default = ConfigSystem.CurrentConfig.SelectedDifficulty or "Normal",
+    Callback = function(Value)
+        selectedDifficulty = Value
+        ConfigSystem.CurrentConfig.SelectedDifficulty = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Thay đổi difficulty khi người dùng chọn
+        changeDifficulty(Value)
+        print("Đã chọn difficulty: " .. Value)
     end
 })
 

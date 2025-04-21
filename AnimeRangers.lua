@@ -377,6 +377,31 @@ local function changeChapter(map, chapter)
     end
 end
 
+-- Hàm để thay đổi difficulty
+local function changeDifficulty(difficulty)
+    local success, err = pcall(function()
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if Event then
+            local args = {
+                [1] = "Change-Difficulty",
+                [2] = {
+                    ["Difficulty"] = difficulty
+                }
+            }
+            
+            Event:FireServer(unpack(args))
+            print("Đã đổi difficulty: " .. difficulty)
+        else
+            warn("Không tìm thấy Event để đổi difficulty")
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi đổi difficulty: " .. tostring(err))
+    end
+end
+
 -- Hàm để toggle Friend Only
 local function toggleFriendOnly()
     local success, err = pcall(function()
@@ -464,7 +489,7 @@ local function joinMap()
         -- 5. Start
         Event:FireServer("Start")
         
-        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter .. " với difficulty: " .. selectedDifficulty)
+        print("Đã join map: " .. selectedMap .. "_" .. selectedChapter .. " với độ khó " .. selectedDifficulty)
     end)
     
     if not success then
@@ -473,31 +498,6 @@ local function joinMap()
     end
     
     return true
-end
-
--- Hàm để thay đổi difficulty
-local function changeDifficulty(difficulty)
-    local success, err = pcall(function()
-        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-        
-        if Event then
-            local args = {
-                [1] = "Change-Difficulty",
-                [2] = {
-                    ["Difficulty"] = difficulty
-                }
-            }
-            
-            Event:FireServer(unpack(args))
-            print("Đã đổi difficulty: " .. difficulty)
-        else
-            warn("Không tìm thấy Event để đổi difficulty")
-        end
-    end)
-    
-    if not success then
-        warn("Lỗi khi đổi difficulty: " .. tostring(err))
-    end
 end
 
 -- Dropdown để chọn Map
@@ -549,6 +549,12 @@ StorySection:AddDropdown("DifficultyDropdown", {
         -- Thay đổi difficulty khi người dùng chọn
         changeDifficulty(Value)
         print("Đã chọn difficulty: " .. Value)
+        
+        Fluent:Notify({
+            Title = "Difficulty Changed",
+            Content = "Đã đổi độ khó thành: " .. Value,
+            Duration = 2
+        })
     end
 })
 
@@ -675,7 +681,7 @@ StorySection:AddButton({
 })
 
 -- Hiển thị trạng thái trong game
-local statusParagraph = StorySection:AddParagraph({
+StorySection:AddParagraph({
     Title = "Trạng thái hiện tại",
     Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
 })
@@ -683,13 +689,10 @@ local statusParagraph = StorySection:AddParagraph({
 -- Cập nhật trạng thái định kỳ
 spawn(function()
     while wait(5) do
-        pcall(function()
-            -- Tạo lại paragraph thay vì sử dụng GetComponent
-            StorySection:AddParagraph({
-                Title = "Trạng thái hiện tại",
-                Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
-            })
-        end)
+        local paragraph = StorySection:GetComponent("Trạng thái hiện tại")
+        if paragraph then
+            paragraph:SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
+        end
     end
 end)
 

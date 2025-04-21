@@ -1363,3 +1363,154 @@ RangerSection:AddButton({
         end
     end
 })
+
+-- Thêm section Boss Event vào tab Play
+local BossEventSection = PlayTab:AddSection("Boss Event")
+
+-- Biến lưu trạng thái Boss Event
+local autoBossEventEnabled = ConfigSystem.CurrentConfig.AutoBossEvent or false
+local autoBossEventLoop = nil
+local bossEventTimeDelay = ConfigSystem.CurrentConfig.BossEventTimeDelay or 5
+
+-- Hàm để tham gia Boss Event
+local function joinBossEvent()
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Boss Event")
+        return false
+    end
+    
+    local success, err = pcall(function()
+        -- Lấy Event 
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if not Event then
+            warn("Không tìm thấy Event để join Boss Event")
+            return
+        end
+        
+        -- Gửi yêu cầu tham gia Boss Event
+        local args = {
+            [1] = "Boss-Event"
+        }
+        
+        Event:FireServer(unpack(args))
+        print("Đã gửi yêu cầu tham gia Boss Event")
+    end)
+    
+    if not success then
+        warn("Lỗi khi join Boss Event: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
+-- Time Delay slider cho Boss Event
+BossEventSection:AddSlider("BossEventTimeDelaySlider", {
+    Title = "Time Delay (giây)",
+    Default = bossEventTimeDelay,
+    Min = 1,
+    Max = 30,
+    Rounding = 1,
+    Callback = function(Value)
+        bossEventTimeDelay = Value
+        ConfigSystem.CurrentConfig.BossEventTimeDelay = Value
+        ConfigSystem.SaveConfig()
+        print("Đã đặt Boss Event Time Delay: " .. Value .. " giây")
+    end
+})
+
+-- Toggle Auto Boss Event
+BossEventSection:AddToggle("AutoBossEventToggle", {
+    Title = "Auto Boss Event",
+    Default = ConfigSystem.CurrentConfig.AutoBossEvent or false,
+    Callback = function(Value)
+        autoBossEventEnabled = Value
+        ConfigSystem.CurrentConfig.AutoBossEvent = Value
+        ConfigSystem.SaveConfig()
+        
+        if autoBossEventEnabled then
+            -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
+            if isPlayerInMap() then
+                Fluent:Notify({
+                    Title = "Auto Boss Event",
+                    Content = "Đang ở trong map, Auto Boss Event sẽ hoạt động khi bạn rời khỏi map",
+                    Duration = 3
+                })
+            else
+                Fluent:Notify({
+                    Title = "Auto Boss Event",
+                    Content = "Auto Boss Event đã được bật, sẽ bắt đầu sau " .. bossEventTimeDelay .. " giây",
+                    Duration = 3
+                })
+                
+                -- Thực hiện join Boss Event sau thời gian delay
+                spawn(function()
+                    wait(bossEventTimeDelay)
+                    if autoBossEventEnabled and not isPlayerInMap() then
+                        joinBossEvent()
+                    end
+                end)
+            end
+            
+            -- Tạo vòng lặp Auto Join Boss Event
+            spawn(function()
+                while autoBossEventEnabled and wait(10) do -- Thử join Boss Event mỗi 10 giây
+                    -- Chỉ thực hiện join nếu người chơi không ở trong map
+                    if not isPlayerInMap() then
+                        -- Áp dụng time delay
+                        print("Đợi " .. bossEventTimeDelay .. " giây trước khi join Boss Event")
+                        wait(bossEventTimeDelay)
+                        
+                        -- Kiểm tra lại sau khi delay
+                        if autoBossEventEnabled and not isPlayerInMap() then
+                            joinBossEvent()
+                        end
+                    else
+                        -- Người chơi đang ở trong map, không cần join
+                        print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
+                    end
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Boss Event",
+                Content = "Auto Boss Event đã được tắt",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Nút Join Boss Event (manual)
+BossEventSection:AddButton({
+    Title = "Join Boss Event Now",
+    Callback = function()
+        -- Kiểm tra nếu người chơi đã ở trong map
+        if isPlayerInMap() then
+            Fluent:Notify({
+                Title = "Join Boss Event",
+                Content = "Bạn đang ở trong map, không thể join Boss Event mới",
+                Duration = 2
+            })
+            return
+        end
+        
+        local success = joinBossEvent()
+        
+        if success then
+            Fluent:Notify({
+                Title = "Join Boss Event",
+                Content = "Đã gửi yêu cầu tham gia Boss Event",
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Join Boss Event",
+                Content = "Không thể tham gia Boss Event. Vui lòng thử lại sau.",
+                Duration = 2
+            })
+        end
+    end
+})

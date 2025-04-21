@@ -31,8 +31,8 @@ local function safeGetService(serviceName)
     return service
 end
 
--- Utility function để kiểm tra và lấy child một cách an toàn
-local function safeGetChild(parent, childName, waitTime)
+-- Hàm an toàn để truy cập WaitForChild
+local function safeWaitForChild(parent, childName, waitTime)
     if not parent then return nil end
     
     local child = nil
@@ -41,11 +41,26 @@ local function safeGetChild(parent, childName, waitTime)
     local success = pcall(function()
         child = parent:FindFirstChild(childName)
         if not child and waitTime > 0 then
-            child = parent:WaitForChild(childName, waitTime)
+            -- Chỉ gọi WaitForChild nếu parent có phương thức này
+            if typeof(parent) == "Instance" and parent.WaitForChild then
+                child = parent:WaitForChild(childName, waitTime)
+            end
         end
     end)
     
     return child
+end
+
+-- Cập nhật hàm safeGetChild để sử dụng safeWaitForChild
+local function safeGetChild(parent, childName, waitTime)
+    if not parent then return nil end
+    
+    -- Kiểm tra xem parent có phải là một Instance không
+    if typeof(parent) ~= "Instance" then
+        return nil
+    end
+    
+    return safeWaitForChild(parent, childName, waitTime)
 end
 
 -- Utility function để lấy đường dẫn đầy đủ một cách an toàn
@@ -55,7 +70,7 @@ local function safeGetPath(startPoint, path, waitTime)
     
     for _, name in ipairs(path) do
         if not current then return nil end
-        current = safeGetChild(current, name, waitTime)
+        current = safeWaitForChild(current, name, waitTime)
     end
     
     return current
@@ -681,18 +696,22 @@ StorySection:AddButton({
 })
 
 -- Hiển thị trạng thái trong game
-local statusLabel = StorySection:AddParagraph({
+StorySection:AddParagraph({
     Title = "Trạng thái",
     Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
 })
 
--- Cập nhật trạng thái định kỳ
+-- Cập nhật trạng thái định kỳ bằng cách xoá và tạo lại paragraph
 local statusUpdateTimer = nil
 statusUpdateTimer = spawn(function()
     while wait(5) do
-        if statusLabel then
-            statusLabel:SetContent(isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ")
-        end
+        pcall(function()
+            -- Xóa paragraph cũ nếu có và tạo lại để cập nhật trạng thái
+            StorySection:AddParagraph({
+                Title = "Trạng thái",
+                Content = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
+            })
+        end)
     end
 end)
 
@@ -823,19 +842,19 @@ local function claimAllQuests()
             return
         end
         
-        local PlayerData = safeGetChild(ReplicatedStorage, "Player_Data", 2)
+        local PlayerData = safeWaitForChild(ReplicatedStorage, "Player_Data", 2)
         if not PlayerData then
             warn("Không tìm thấy Player_Data")
             return
         end
         
-        local PlayerFolder = safeGetChild(PlayerData, playerName, 2)
+        local PlayerFolder = safeWaitForChild(PlayerData, playerName, 2)
         if not PlayerFolder then
             warn("Không tìm thấy dữ liệu người chơi: " .. playerName)
             return
         end
         
-        local DailyQuest = safeGetChild(PlayerFolder, "DailyQuest", 2)
+        local DailyQuest = safeWaitForChild(PlayerFolder, "DailyQuest", 2)
         if not DailyQuest then
             warn("Không tìm thấy DailyQuest")
             return

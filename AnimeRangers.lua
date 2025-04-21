@@ -48,28 +48,17 @@ local function safeGetChild(parent, childName, waitTime)
     return child
 end
 
--- Hàm để kiểm tra đường dẫn một cách an toàn với timeout
-function safeGetPath(parent, childName, timeoutSeconds)
-    if not parent then
-        return nil
+-- Utility function để lấy đường dẫn đầy đủ một cách an toàn
+local function safeGetPath(startPoint, path, waitTime)
+    waitTime = waitTime or 1
+    local current = startPoint
+    
+    for _, name in ipairs(path) do
+        if not current then return nil end
+        current = safeGetChild(current, name, waitTime)
     end
     
-    local timeout = timeoutSeconds or 0.5
-    local startTime = os.time()
-    
-    while os.time() - startTime < timeout do
-        local success, result = pcall(function()
-            return parent:FindFirstChild(childName)
-        end)
-        
-        if success and result then
-            return result
-        end
-        
-        task.wait(0.1)
-    end
-    
-    return nil
+    return current
 end
 
 -- Hệ thống lưu trữ cấu hình
@@ -160,64 +149,6 @@ for display, real in pairs(mapNameMapping) do
     reverseMapNameMapping[real] = display
 end
 
--- Tọa độ để xác định người chơi đang ở trong map
-local mapCoordinates = {
-    ["Voocha Village"] = Vector3.new(200.0367431640625, 51.66412353515625, 156.52072143554688),
-    ["Green Planet"] = Vector3.new(200, 50, 150), -- Thay bằng tọa độ thật
-    ["Demon Forest"] = Vector3.new(200, 50, 150), -- Thay bằng tọa độ thật
-    ["Leaf Village"] = Vector3.new(200, 50, 150), -- Thay bằng tọa độ thật
-    ["Z City"] = Vector3.new(200, 50, 150) -- Thay bằng tọa độ thật
-}
-
--- Hàm để kiểm tra người chơi đã ở trong map chưa
-local function isPlayerInMap(mapName)
-    local player = game:GetService("Players").LocalPlayer
-    if not player or not player.Character then return false end
-    
-    local humanoidRootPart = player.Character:FindFirstChild("HumanoidRootPart")
-    if not humanoidRootPart then return false end
-    
-    local position = humanoidRootPart.Position
-    local mapPos = mapCoordinates[mapName]
-    
-    if not mapPos then return false end
-    
-    -- Kiểm tra xem người chơi có ở gần tọa độ của map không
-    local distance = (position - mapPos).Magnitude
-    print("Khoảng cách đến map " .. mapName .. ": " .. distance)
-    
-    -- Nếu khoảng cách nhỏ hơn 500 thì coi như đang ở trong map
-    return distance < 500
-end
-
--- Hàm kiểm tra xem người chơi đang ở lobby hay không
-function isPlayerInLobby()
-    local success, result = pcall(function()
-        local LobbyGui = safeGetPath(game:GetService("Players").LocalPlayer.PlayerGui, "LobbyGui")
-        if LobbyGui and LobbyGui.Enabled then
-            return true
-        end
-        return false
-    end)
-    
-    if not success then
-        warn("Error checking if player is in lobby: " .. tostring(result))
-        return false
-    end
-    
-    return result
-end
-
--- Hàm kiểm tra xem người chơi đang ở map hay không
-function isPlayerInGame()
-    local success, result = pcall(function()
-        local battleGui = safeGetPath(game:GetService("Players").LocalPlayer.PlayerGui, "BattleGui", 2)
-        return battleGui and battleGui.Enabled
-    end)
-    
-    return success and result
-end
-
 -- Biến lưu trạng thái Story
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "OnePiece"
 local selectedDisplayMap = reverseMapNameMapping[selectedMap] or "Voocha Village"
@@ -225,6 +156,30 @@ local selectedChapter = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1"
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoinMapEnabled = ConfigSystem.CurrentConfig.AutoJoinMap or false
 local autoJoinMapLoop = nil
+
+-- Tọa độ xác nhận cho mỗi map (để kiểm tra nếu người chơi đã ở trong map)
+local mapSpawnCoordinates = {
+    ["Voocha Village"] = {
+        center = Vector3.new(200.037, 51.664, 156.521),
+        radius = 50 -- Bán kính xung quanh tọa độ trung tâm để xác nhận
+    },
+    ["Green Planet"] = {
+        center = Vector3.new(200.037, 51.664, 156.521), -- Thay bằng tọa độ thực tế
+        radius = 50 
+    },
+    ["Demon Forest"] = {
+        center = Vector3.new(200.037, 51.664, 156.521), -- Thay bằng tọa độ thực tế
+        radius = 50
+    },
+    ["Leaf Village"] = {
+        center = Vector3.new(200.037, 51.664, 156.521), -- Thay bằng tọa độ thực tế
+        radius = 50
+    },
+    ["Z City"] = {
+        center = Vector3.new(200.037, 51.664, 156.521), -- Thay bằng tọa độ thực tế
+        radius = 50
+    }
+}
 
 -- Thông tin người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -357,6 +312,25 @@ InfoSection:AddParagraph({
 -- Thêm section Story trong tab Play
 local StorySection = PlayTab:AddSection("Story")
 
+-- Hàm để kiểm tra xem người chơi có đang ở trong map đã chọn không
+local function isPlayerInSelectedMap()
+    local player = game:GetService("Players").LocalPlayer
+    if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+        return false
+    end
+    
+    local hrp = player.Character.HumanoidRootPart
+    local playerPos = hrp.Position
+    
+    -- Tìm thông tin tọa độ cho map đã chọn
+    local mapInfo = mapSpawnCoordinates[selectedDisplayMap]
+    if not mapInfo then return false end
+    
+    -- Kiểm tra khoảng cách từ vị trí người chơi đến trung tâm map
+    local distance = (playerPos - mapInfo.center).Magnitude
+    return distance <= mapInfo.radius
+end
+
 -- Hàm để thay đổi map
 local function changeWorld(worldDisplay)
     local success, err = pcall(function()
@@ -434,16 +408,10 @@ end
 
 -- Hàm để tự động tham gia map
 local function joinMap()
-    -- Kiểm tra xem người chơi đã ở trong map chưa
-    if isPlayerInMap(selectedDisplayMap) then
-        print("Người chơi đã ở trong map " .. selectedDisplayMap .. ", không cần join lại")
-        return false
-    end
-    
-    -- Kiểm tra xem người chơi có đang ở trong lobby không
-    if not isPlayerInLobby() then
-        print("Người chơi không ở trong lobby, không thể join map")
-        return false
+    -- Kiểm tra xem người chơi đã ở trong map được chọn chưa
+    if isPlayerInSelectedMap() then
+        print("Người chơi đã ở trong map " .. selectedDisplayMap .. ". Không cần join lại.")
+        return
     end
     
     local success, err = pcall(function()
@@ -498,11 +466,34 @@ local function joinMap()
     
     if not success then
         warn("Lỗi khi join map: " .. tostring(err))
-        return false
     end
-    
-    return true
 end
+
+-- Hiển thị tọa độ hiện tại (chỉ để debug)
+StorySection:AddButton({
+    Title = "Show Current Position",
+    Callback = function()
+        local player = game:GetService("Players").LocalPlayer
+        if player and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local pos = player.Character.HumanoidRootPart.Position
+            print("Tọa độ hiện tại: X=" .. pos.X .. ", Y=" .. pos.Y .. ", Z=" .. pos.Z)
+            
+            Fluent:Notify({
+                Title = "Current Position",
+                Content = "X=" .. string.format("%.2f", pos.X) .. ", Y=" .. string.format("%.2f", pos.Y) .. ", Z=" .. string.format("%.2f", pos.Z),
+                Duration = 5
+            })
+            
+            -- Cập nhật tọa độ cho map hiện tại để sử dụng sau này
+            if mapSpawnCoordinates[selectedDisplayMap] then
+                mapSpawnCoordinates[selectedDisplayMap].center = pos
+                print("Đã cập nhật tọa độ cho map " .. selectedDisplayMap)
+            end
+        else
+            print("Không thể lấy tọa độ người chơi")
+        end
+    end
+})
 
 -- Dropdown để chọn Map
 StorySection:AddDropdown("MapDropdown", {
@@ -577,11 +568,11 @@ StorySection:AddToggle("AutoJoinMapToggle", {
         ConfigSystem.SaveConfig()
         
         if autoJoinMapEnabled then
-            -- Kiểm tra xem người chơi đã ở trong map chưa
-            if isPlayerInMap(selectedDisplayMap) then
+            -- Kiểm tra xem người chơi đã ở trong map được chọn chưa
+            if isPlayerInSelectedMap() then
                 Fluent:Notify({
                     Title = "Auto Join Map",
-                    Content = "Bạn đã ở trong map " .. selectedDisplayMap .. " rồi",
+                    Content = "Bạn đã ở trong map " .. selectedDisplayMap .. ". Auto Join Map sẽ không kích hoạt.",
                     Duration = 3
                 })
             else
@@ -594,10 +585,10 @@ StorySection:AddToggle("AutoJoinMapToggle", {
                 -- Tạo vòng lặp Auto Join Map
                 spawn(function()
                     while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
-                        if not isPlayerInMap(selectedDisplayMap) and isPlayerInLobby() then
+                        if not isPlayerInSelectedMap() then
                             joinMap()
                         else
-                            print("Không join map: Người chơi đã ở trong map hoặc không ở lobby")
+                            print("Người chơi đã ở trong map " .. selectedDisplayMap .. ". Không cần join lại.")
                         end
                     end
                 end)
@@ -616,62 +607,25 @@ StorySection:AddToggle("AutoJoinMapToggle", {
 StorySection:AddButton({
     Title = "Join Map Now",
     Callback = function()
-        -- Kiểm tra xem người chơi đã ở trong map chưa
-        if isPlayerInMap(selectedDisplayMap) then
+        -- Kiểm tra xem người chơi đã ở trong map được chọn chưa
+        if isPlayerInSelectedMap() then
             Fluent:Notify({
                 Title = "Join Map",
-                Content = "Bạn đã ở trong map " .. selectedDisplayMap .. " rồi",
-                Duration = 2
+                Content = "Bạn đã ở trong map " .. selectedDisplayMap .. ". Không cần join lại.",
+                Duration = 3
             })
             return
-        end
+        }
         
-        -- Kiểm tra xem người chơi có đang ở trong lobby không
-        if not isPlayerInLobby() then
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Bạn cần ở trong lobby để join map",
-                Duration = 2
-            })
-            return
-        end
+        joinMap()
         
-        if joinMap() then
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
-                Duration = 2
-            })
-        else
-            Fluent:Notify({
-                Title = "Join Map",
-                Content = "Không thể join map. Vui lòng thử lại sau.",
-                Duration = 2
-            })
-        end
+        Fluent:Notify({
+            Title = "Join Map",
+            Content = "Đang tham gia map: " .. selectedDisplayMap .. " - " .. selectedChapter,
+            Duration = 2
+        })
     end
 })
-
--- Hiển thị trạng thái hiện tại
-local mapStatusLabel = StorySection:AddLabel("Đang kiểm tra trạng thái...")
-
--- Hàm cập nhật trạng thái
-local function updateMapStatus()
-    spawn(function()
-        while wait(5) do
-            if isPlayerInMap(selectedDisplayMap) then
-                mapStatusLabel:Set("Trạng thái: Đang ở trong map " .. selectedDisplayMap)
-            elseif isPlayerInLobby() then
-                mapStatusLabel:Set("Trạng thái: Đang ở lobby")
-            else
-                mapStatusLabel:Set("Trạng thái: Không xác định")
-            end
-        end
-    end)
-end
-
--- Gọi hàm cập nhật trạng thái
-updateMapStatus()
 
 -- Thêm section Summon trong tab Shop
 local SummonSection = ShopTab:AddSection("Summon")
@@ -965,18 +919,5 @@ Fluent:Notify({
     Content = "Script đã tải thành công! Đã tải cấu hình cho " .. playerName,
     Duration = 3
 })
-
--- Kiểm tra ban đầu xem người chơi đang ở đâu
-spawn(function()
-    wait(1)
-    if isPlayerInMap(selectedDisplayMap) then
-        Fluent:Notify({
-            Title = "Thông báo",
-            Content = "Bạn đang ở trong map " .. selectedDisplayMap,
-            Duration = 3
-        })
-        mapStatusLabel:Set("Trạng thái: Đang ở trong map " .. selectedDisplayMap)
-    end
-end)
 
 print("Anime Rangers X Script has been loaded!")

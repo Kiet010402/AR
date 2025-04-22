@@ -95,6 +95,10 @@ ConfigSystem.DefaultConfig = {
     AutoBossEvent = false,
     BossEventTimeDelay = 5,
     
+    -- Cài đặt Challenge
+    AutoChallenge = false,
+    ChallengeTimeDelay = 5,
+    
     -- Cài đặt In-Game
     AutoPlay = false,
     AutoRetry = false,
@@ -201,6 +205,11 @@ local autoJoinRangerLoop = nil
 -- Biến lưu trạng thái Boss Event
 local autoBossEventEnabled = ConfigSystem.CurrentConfig.AutoBossEvent or false
 local autoBossEventLoop = nil
+
+-- Biến lưu trạng thái Challenge
+local autoChallengeEnabled = ConfigSystem.CurrentConfig.AutoChallenge or false
+local autoChallengeLoop = nil
+local challengeTimeDelay = ConfigSystem.CurrentConfig.ChallengeTimeDelay or 5
 
 -- Biến lưu trạng thái In-Game
 local autoPlayEnabled = ConfigSystem.CurrentConfig.AutoPlay or false
@@ -1126,6 +1135,22 @@ else
             end
         end)
     end
+    
+    -- Nếu Auto Challenge được bật, thực hiện join Challenge sau time delay
+    if autoChallengeEnabled then
+        Fluent:Notify({
+            Title = "Auto Join",
+            Content = "Sẽ tham gia Challenge sau " .. challengeTimeDelay .. " giây",
+            Duration = 3
+        })
+        
+        spawn(function()
+            wait(challengeTimeDelay) -- Chờ theo time delay đã đặt
+            if autoChallengeEnabled and not isPlayerInMap() then
+                joinChallenge()
+            end
+        end)
+    end
 end
 
 -- Thông báo khi script đã tải xong
@@ -1527,6 +1552,162 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
                 Title = "Auto Boss Event",
                 Content = "Auto Boss Event đã được tắt",
                 Duration = 3
+            })
+        end
+    end
+})
+
+-- Thêm section Challenge trong tab Play
+local ChallengeSection = PlayTab:AddSection("Challenge")
+
+-- Hàm để tham gia Challenge
+local function joinChallenge()
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Challenge")
+        return false
+    end
+    
+    local success, err = pcall(function()
+        -- Lấy Event
+        local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
+        
+        if not Event then
+            warn("Không tìm thấy Event để join Challenge")
+            return
+        end
+        
+        -- 1. Create Challenge Room
+        local args1 = {
+            [1] = "Create",
+            [2] = {
+                ["CreateChallengeRoom"] = true
+            }
+        }
+        Event:FireServer(unpack(args1))
+        print("Đã tạo Challenge Room")
+        wait(1) -- Đợi 1 giây
+        
+        -- 2. Start Challenge
+        local args2 = {
+            [1] = "Start"
+        }
+        Event:FireServer(unpack(args2))
+        print("Đã bắt đầu Challenge")
+    end)
+    
+    if not success then
+        warn("Lỗi khi join Challenge: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
+-- Time Delay slider cho Challenge
+ChallengeSection:AddSlider("ChallengeTimeDelaySlider", {
+    Title = "Time Delay (giây)",
+    Default = challengeTimeDelay,
+    Min = 1,
+    Max = 30,
+    Rounding = 1,
+    Callback = function(Value)
+        challengeTimeDelay = Value
+        ConfigSystem.CurrentConfig.ChallengeTimeDelay = Value
+        ConfigSystem.SaveConfig()
+        print("Đã đặt Challenge Time Delay: " .. Value .. " giây")
+    end
+})
+
+-- Toggle Auto Challenge
+ChallengeSection:AddToggle("AutoChallengeToggle", {
+    Title = "Auto Challenge",
+    Default = ConfigSystem.CurrentConfig.AutoChallenge or false,
+    Callback = function(Value)
+        autoChallengeEnabled = Value
+        ConfigSystem.CurrentConfig.AutoChallenge = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
+            if isPlayerInMap() then
+                Fluent:Notify({
+                    Title = "Auto Challenge",
+                    Content = "Đang ở trong map, Auto Challenge sẽ hoạt động khi bạn rời khỏi map",
+                    Duration = 3
+                })
+            else
+                Fluent:Notify({
+                    Title = "Auto Challenge",
+                    Content = "Auto Challenge đã được bật, sẽ bắt đầu sau " .. challengeTimeDelay .. " giây",
+                    Duration = 3
+                })
+                
+                -- Thực hiện join Challenge sau thời gian delay
+                spawn(function()
+                    wait(challengeTimeDelay)
+                    if autoChallengeEnabled and not isPlayerInMap() then
+                        joinChallenge()
+                    end
+                end)
+            end
+            
+            -- Tạo vòng lặp Auto Join Challenge
+            spawn(function()
+                while autoChallengeEnabled and wait(10) do -- Thử join challenge mỗi 10 giây
+                    -- Chỉ thực hiện join challenge nếu người chơi không ở trong map
+                    if not isPlayerInMap() then
+                        -- Áp dụng time delay
+                        print("Đợi " .. challengeTimeDelay .. " giây trước khi join Challenge")
+                        wait(challengeTimeDelay)
+                        
+                        -- Kiểm tra lại sau khi delay
+                        if autoChallengeEnabled and not isPlayerInMap() then
+                            joinChallenge()
+                        end
+                    else
+                        -- Người chơi đang ở trong map, không cần join
+                        print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
+                    end
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Challenge",
+                Content = "Auto Challenge đã được tắt",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Nút Join Challenge (manual)
+ChallengeSection:AddButton({
+    Title = "Join Challenge Now",
+    Callback = function()
+        -- Kiểm tra nếu người chơi đã ở trong map
+        if isPlayerInMap() then
+            Fluent:Notify({
+                Title = "Join Challenge",
+                Content = "Bạn đang ở trong map, không thể tham gia Challenge mới",
+                Duration = 2
+            })
+            return
+        end
+        
+        local success = joinChallenge()
+        
+        if success then
+            Fluent:Notify({
+                Title = "Challenge",
+                Content = "Đang tham gia Challenge",
+                Duration = 2
+            })
+        else
+            Fluent:Notify({
+                Title = "Challenge",
+                Content = "Không thể tham gia Challenge. Vui lòng thử lại sau.",
+                Duration = 2
             })
         end
     end

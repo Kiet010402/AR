@@ -245,17 +245,9 @@ local Window = Fluent:CreateWindow({
     TabWidth = 160,
     Size = UDim2.fromOffset(580, 460),
     Acrylic = true,
-    Theme = ConfigSystem.CurrentConfig.UITheme or "Amethyst",
+    Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
 })
-
--- Tạo logo UI ngay khi script khởi động
-OpenUI = CreateLogoUI()
-if OpenUI then
-    -- Mặc định logo bị ẩn vì UI đang hiển thị
-    OpenUI.Enabled = false
-    print("Logo đã được tạo khi khởi động script")
-end
 
 -- Tạo tab Info
 local InfoTab = Window:AddTab({
@@ -362,7 +354,7 @@ local oldMinimize = Window.Minimize
 Window.Minimize = function()
     isMinimized = not isMinimized
     
-    -- Đảm bảo logo đã được tạo (phòng trường hợp chưa được tạo)
+    -- Đảm bảo logo đã được tạo
     if not OpenUI then
         OpenUI = CreateLogoUI()
     end

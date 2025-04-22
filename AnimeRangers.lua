@@ -305,7 +305,7 @@ local function CreateLogoUI()
     Button.BackgroundTransparency = 0.2
     Button.Position = UDim2.new(0.9, -25, 0.1, 0)
     Button.Size = UDim2.new(0, 50, 0, 50)
-    Button.Image = "rbxassetid://10723424401"
+    Button.Image = "https://media.discordapp.net/attachments/1321123079409238067/1364239705394122873/ChatGPT_Image_Apr_22_2025_09_01_03_PM.png?ex=6808f2bc&is=6807a13c&hm=f5b9974d43ac06614f7cc3ee032bb79a70215c7b4f17be06cada14b9786402e8&=&format=webp&quality=lossless&width=930&height=930"
     Button.ImageTransparency = 0.1
     Button.Active = true
     Button.Draggable = true

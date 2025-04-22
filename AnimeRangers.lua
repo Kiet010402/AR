@@ -286,18 +286,25 @@ local function CreateLogoUI()
     local UICorner = Instance.new("UICorner")
     
     -- Kiểm tra môi trường
-    if syn and syn.protect_gui then
-        syn.protect_gui(UI)
-        UI.Parent = game:GetService("CoreGui")
-    elseif gethui then
-        UI.Parent = gethui()
-    else
-        UI.Parent = game:GetService("CoreGui")
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(UI)
+            UI.Parent = game:GetService("CoreGui")
+        elseif gethui then
+            UI.Parent = gethui()
+        else
+            UI.Parent = game:GetService("CoreGui")
+        end
+    end)
+    
+    if not UI.Parent then
+        UI.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
     end
     
     UI.Name = "AnimeRangersLogo"
     UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     UI.ResetOnSpawn = false
+    UI.DisplayOrder = 9999
     
     Button.Name = "LogoButton"
     Button.Parent = UI
@@ -309,6 +316,7 @@ local function CreateLogoUI()
     Button.ImageTransparency = 0.1
     Button.Active = true
     Button.Draggable = true
+    Button.ZIndex = 10000
     
     UICorner.CornerRadius = UDim.new(1, 0)
     UICorner.Parent = Button
@@ -316,94 +324,91 @@ local function CreateLogoUI()
     -- Ẩn logo ban đầu
     UI.Enabled = false
     
-    -- Khi click vào logo
-    Button.MouseButton1Click:Connect(function()
-        -- Ẩn logo
-        UI.Enabled = false
-        
-        -- Cập nhật trạng thái
-        isMinimized = false
-        
-        -- Hiển thị lại UI chính
-        pcall(function()
-            -- Đảm bảo Window là hợp lệ trước khi gọi
-            if Window then
-                -- Nếu có hàm Toggle, sử dụng nó thay vì gọi Minimize trực tiếp
-                if Window.Toggle then
-                    Window.Toggle()
-                elseif Window.Minimize then
-                    Window.Minimize()
-                end
-                
-                -- Đảm bảo UI chính được hiển thị
-                if Window.Frame then
-                    Window.Frame.Visible = true
-                end
-            end
-        end)
-        
-        -- Hiển thị thông báo (debug)
-        print("Đã nhấp vào logo, mở lại UI")
-    end)
-    
-    return UI
+    return UI, Button
 end
+
+-- Tạo logo từ đầu
+local LogoUI, LogoButton = CreateLogoUI()
+
+-- Xử lý sự kiện click vào logo
+LogoButton.MouseButton1Click:Connect(function()
+    -- Ẩn logo
+    LogoUI.Enabled = false
+    
+    -- Hiển thị UI chính
+    if Window and Window.Frame then
+        Window.Frame.Visible = true
+    end
+    
+    -- Cập nhật trạng thái
+    isMinimized = false
+    
+    print("Logo clicked: Showing UI")
+end)
 
 -- Ghi đè hàm minimize mặc định của thư viện
-local oldMinimize = Window.Minimize
-Window.Minimize = function()
-    isMinimized = not isMinimized
+if Window then
+    -- Backup hàm gốc nếu có
+    local oldMinimize = Window.Minimize
     
-    -- Đảm bảo logo đã được tạo
-    if not OpenUI then
-        OpenUI = CreateLogoUI()
-    end
-    
-    -- Hiển thị/ẩn logo dựa vào trạng thái
-    if OpenUI then
-        OpenUI.Enabled = isMinimized
+    -- Thay thế bằng hàm mới
+    Window.Minimize = function()
+        -- Đảo ngược trạng thái
+        isMinimized = not isMinimized
         
-        -- Đảm bảo logo vẫn hiển thị (phòng trường hợp bị ẩn do lỗi)
         if isMinimized then
+            -- Ẩn UI
+            if Window.Frame then
+                Window.Frame.Visible = false
+            end
+            
+            -- Hiện logo
+            LogoUI.Enabled = true
+            
+            -- Đảm bảo logo hiển thị sau một chút
             spawn(function()
-                wait(0.5) -- Đợi một chút để đảm bảo UI đã được cập nhật
-                if OpenUI and isMinimized then
-                    OpenUI.Enabled = true
-                end
+                wait(0.1)
+                LogoUI.Enabled = true
+                print("Minimized: Logo should be visible now")
             end)
+        else
+            -- Hiện UI
+            if Window.Frame then
+                Window.Frame.Visible = true
+            end
+            
+            -- Ẩn logo
+            LogoUI.Enabled = false
+            print("Maximized: UI should be visible now")
         end
-    end
-    
-    -- Gọi hàm minimize gốc
-    pcall(function()
-        oldMinimize()
-    end)
-    
-    -- Kiểm tra xem UI đã hiển thị đúng chưa sau khi minimize
-    spawn(function()
-        wait(0.5)
-        if isMinimized and OpenUI then
-            -- Đảm bảo logo hiển thị khi UI ẩn
-            OpenUI.Enabled = true
-        elseif not isMinimized and Window and Window.Frame then
-            -- Đảm bảo UI hiển thị khi không minimize
-            Window.Frame.Visible = true
-        end
-    end)
-end
-
--- Thêm phương thức Toggle cho Window nếu chưa có
-if not Window.Toggle then
-    Window.Toggle = function()
-        -- Chuyển đổi trạng thái và gọi hàm minimize đã ghi đè
-        Window.Minimize()
+        
+        -- Gọi hàm gốc nếu an toàn
+        pcall(function()
+            if oldMinimize then
+                oldMinimize()
+            end
+        end)
     end
 end
 
 -- Bắt sự kiện phím để kích hoạt minimize
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
-        Window.Minimize()
+        if Window and Window.Minimize then
+            Window.Minimize()
+        end
+    end
+end)
+
+-- Cập nhật lại logo sau mỗi khoảng thời gian
+spawn(function()
+    while wait(2) do
+        if isMinimized and not LogoUI.Enabled then
+            LogoUI.Enabled = true
+            print("Periodic check: Restored missing logo")
+        elseif not isMinimized and LogoUI.Enabled then
+            LogoUI.Enabled = false
+        end
     end
 end)
 

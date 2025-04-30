@@ -191,7 +191,7 @@ KeySystem.CreateKeyUI = function()
     GetKeyButton.Position = UDim2.new(0.5, -75, 0, 200)
     GetKeyButton.Size = UDim2.new(0, 150, 0, 35)
     GetKeyButton.Font = Enum.Font.GothamBold
-    GetKeyButton.Text = "Lấy key mới"
+    GetKeyButton.Text = "Lấy key tại discord"
     GetKeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
     GetKeyButton.TextSize = 14.000
     
@@ -261,7 +261,7 @@ KeySystem.CreateKeyUI = function()
     
     -- Xử lý sự kiện nút Get Key
     GetKeyButton.MouseButton1Click:Connect(function()
-        setclipboard("https://link-center.net/ht-hub-key")
+        setclipboard("https://discord.gg/6WXu2zZC3d")
         StatusLabel.Text = "Đã sao chép liên kết vào clipboard"
         StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
     end)

@@ -165,7 +165,7 @@ end
 
 -- Delay 30 giây trước khi mở script
 print("HT Hub | Anime Rangers X đang khởi động, vui lòng đợi 15 giây...")
-wait(30)
+wait(15)
 print("Đang tải script...")
 
 -- Tải thư viện Fluent từ Arise (không cần tải lại vì đã tải ở trên)

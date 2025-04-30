@@ -9,6 +9,23 @@ if currentPlaceId ~= allowedPlaceId then
     return
 end
 
+-- Phiên bản thay thế cho Fluent:Notify
+local Fluent = {}
+Fluent.Notify = function(options)
+    local title = options.Title or ""
+    local content = options.Content or ""
+    local duration = options.Duration or 3
+    
+    -- In thông báo ra console thay vì hiển thị UI
+    print("[" .. title .. "] " .. content)
+    
+    -- Có thể thêm logic thông báo khác tại đây nếu cần
+    return {
+        -- Giả lập các phương thức của đối tượng thông báo Fluent nếu cần
+        Destroy = function() end
+    }
+end
+
 -- Hệ thống xác thực key
 local KeySystem = {}
 KeySystem.Keys = {
@@ -441,9 +458,6 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Auto Leave
     AutoLeave = false,
     
-    -- Cài đặt Thông báo
-    ShowNotifications = true, -- Mặc định bật
-    
     -- Cài đặt Webhook
     WebhookURL = "",
     AutoSendWebhook = false,
@@ -454,20 +468,6 @@ ConfigSystem.CurrentConfig = {}
 ConfigSystem.LastSaveTime = 0
 ConfigSystem.SaveCooldown = 2 -- 2 giây giữa các lần lưu
 ConfigSystem.PendingSave = false
-
--- Biến lưu trạng thái thông báo
-local showNotificationsEnabled = true
-
--- Hàm wrapper để kiểm soát thông báo
-local function showNotification(title, content, duration)
-    if not showNotificationsEnabled then return end
-    
-    Fluent:Notify({
-        Title = title,
-        Content = content,
-        Duration = duration or 2
-    })
-end
 
 -- Hàm để lưu cấu hình
 ConfigSystem.SaveConfig = function()
@@ -538,9 +538,6 @@ end)
 
 -- Tải cấu hình khi khởi động
 ConfigSystem.LoadConfig()
-
--- Khởi tạo biến thông báo từ cấu hình đã lưu
-showNotificationsEnabled = ConfigSystem.CurrentConfig.ShowNotifications ~= false -- Mặc định là true nếu không có trong cấu hình
 
 -- Biến toàn cục để theo dõi UI
 local OpenUI = nil
@@ -694,131 +691,54 @@ local WebhookTab = Window:AddTab({
     Icon = "rbxassetid://7734058803"
 })
 
--- Tạo logo UI để mở lại khi đã thu nhỏ
-local function CreateLogoUI()
-    local UI = Instance.new("ScreenGui")
-    local Button = Instance.new("ImageButton")
-    local UICorner = Instance.new("UICorner")
-    
-    -- Kiểm tra môi trường
-    if syn and syn.protect_gui then
-        syn.protect_gui(UI)
-        UI.Parent = game:GetService("CoreGui")
-    elseif gethui then
-        UI.Parent = gethui()
-    else
-        UI.Parent = game:GetService("CoreGui")
-    end
-    
-    UI.Name = "AnimeRangersLogo"
-    UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    UI.ResetOnSpawn = false
-    
-    Button.Name = "LogoButton"
-    Button.Parent = UI
-    Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-    Button.BackgroundTransparency = 0.2
-    Button.Position = UDim2.new(0.9, -25, 0.1, 0)
-    Button.Size = UDim2.new(0, 50, 0, 50)
-    Button.Image = "rbxassetid://90319448802378" -- Sử dụng ID của logo HT Hub
-    Button.ImageTransparency = 0.1
-    Button.Active = true
-    Button.Draggable = true
-    
-    UICorner.CornerRadius = UDim.new(1, 0)
-    UICorner.Parent = Button
-    
-    -- Ẩn logo ban đầu
-    UI.Enabled = false
-    
-    -- Khi click vào logo
-    Button.MouseButton1Click:Connect(function()
-        -- Ẩn logo
-        UI.Enabled = false
-        
-        -- Cập nhật trạng thái
-        isMinimized = false
-        
-        -- Hiển thị lại UI chính
-        pcall(function()
-            -- Đảm bảo Window là hợp lệ trước khi gọi
-            if Window then
-                -- Nếu có hàm Toggle, sử dụng nó thay vì gọi Minimize trực tiếp
-                if Window.Toggle then
-                    Window.Toggle()
-                elseif Window.Minimize then
-                    Window.Minimize()
-                end
-                
-                -- Đảm bảo UI chính được hiển thị
-                if Window.Frame then
-                    Window.Frame.Visible = true
-                end
-            end
-        end)
-        
-        -- Hiển thị thông báo (debug)
-        print("Đã nhấp vào logo, mở lại UI")
-    end)
-    
-    return UI
-end
+-- Thêm hỗ trợ Logo khi minimize
+repeat task.wait(0.25) until game:IsLoaded()
+getgenv().Image = "rbxassetid://90319448802378" -- ID tài nguyên hình ảnh logo
+getgenv().ToggleUI = "LeftControl" -- Phím để bật/tắt giao diện
 
--- Ghi đè hàm minimize mặc định của thư viện
-local oldMinimize = Window.Minimize
-Window.Minimize = function()
-    isMinimized = not isMinimized
-    
-    -- Đảm bảo logo đã được tạo
-    if not OpenUI then
-        OpenUI = CreateLogoUI()
-    end
-    
-    -- Hiển thị/ẩn logo dựa vào trạng thái
-    if OpenUI then
-        OpenUI.Enabled = isMinimized
-        
-        -- Đảm bảo logo vẫn hiển thị (phòng trường hợp bị ẩn do lỗi)
-        if isMinimized then
-            spawn(function()
-                wait(0.5) -- Đợi một chút để đảm bảo UI đã được cập nhật
-                if OpenUI and isMinimized then
-                    OpenUI.Enabled = true
-                end
+-- Tạo logo để mở lại UI khi đã minimize
+task.spawn(function()
+    local success, errorMsg = pcall(function()
+        if not getgenv().LoadedMobileUI == true then 
+            getgenv().LoadedMobileUI = true
+            local OpenUI = Instance.new("ScreenGui")
+            local ImageButton = Instance.new("ImageButton")
+            local UICorner = Instance.new("UICorner")
+            
+            -- Kiểm tra môi trường
+            if syn and syn.protect_gui then
+                syn.protect_gui(OpenUI)
+                OpenUI.Parent = game:GetService("CoreGui")
+            elseif gethui then
+                OpenUI.Parent = gethui()
+            else
+                OpenUI.Parent = game:GetService("CoreGui")
+            end
+            
+            OpenUI.Name = "OpenUI"
+            OpenUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+            
+            ImageButton.Parent = OpenUI
+            ImageButton.BackgroundColor3 = Color3.fromRGB(105,105,105)
+            ImageButton.BackgroundTransparency = 0.8
+            ImageButton.Position = UDim2.new(0.9,0,0.1,0)
+            ImageButton.Size = UDim2.new(0,50,0,50)
+            ImageButton.Image = getgenv().Image
+            ImageButton.Draggable = true
+            ImageButton.Transparency = 0.2
+            
+            UICorner.CornerRadius = UDim.new(0,200)
+            UICorner.Parent = ImageButton
+            
+            -- Khi click vào logo sẽ mở lại UI
+            ImageButton.MouseButton1Click:Connect(function()
+                game:GetService("VirtualInputManager"):SendKeyEvent(true,getgenv().ToggleUI,false,game)
             end)
         end
-    end
-    
-    -- Gọi hàm minimize gốc
-    pcall(function()
-        oldMinimize()
     end)
     
-    -- Kiểm tra xem UI đã hiển thị đúng chưa sau khi minimize
-    spawn(function()
-        wait(0.5)
-        if isMinimized and OpenUI then
-            -- Đảm bảo logo hiển thị khi UI ẩn
-            OpenUI.Enabled = true
-        elseif not isMinimized and Window and Window.Frame then
-            -- Đảm bảo UI hiển thị khi không minimize
-            Window.Frame.Visible = true
-        end
-    end)
-end
-
--- Thêm phương thức Toggle cho Window nếu chưa có
-if not Window.Toggle then
-    Window.Toggle = function()
-        -- Chuyển đổi trạng thái và gọi hàm minimize đã ghi đè
-        Window.Minimize()
-    end
-end
-
--- Bắt sự kiện phím để kích hoạt minimize
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
-        Window.Minimize()
+    if not success then
+        warn("Lỗi khi tạo nút Logo UI: " .. tostring(errorMsg))
     end
 end)
 
@@ -1278,11 +1198,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
         ConfigSystem.SaveConfig()
         
         if autoSummonEnabled then
-            Fluent:Notify({
-                Title = "Auto Summon",
-                Content = "Auto Summon đã được bật",
-                Duration = 3
-            })
+            print("Auto Summon đã được bật")
             
             -- Tạo vòng lặp Auto Summon
             if autoSummonLoop then
@@ -1298,11 +1214,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
             end)
             
         else
-            Fluent:Notify({
-                Title = "Auto Summon",
-                Content = "Auto Summon đã được tắt",
-                Duration = 3
-            })
+            print("Auto Summon đã được tắt")
             
             if autoSummonLoop then
                 autoSummonLoop:Disconnect()
@@ -1393,11 +1305,7 @@ QuestSection:AddToggle("AutoClaimQuestToggle", {
         ConfigSystem.SaveConfig()
         
         if autoClaimQuestEnabled then
-            Fluent:Notify({
-                Title = "Auto Claim Quests",
-                Content = "Auto Claim Quests đã được bật",
-                Duration = 3
-            })
+            print("Auto Claim Quests đã được bật")
             
             -- Tạo vòng lặp Auto Claim Quests
             spawn(function()
@@ -1406,11 +1314,7 @@ QuestSection:AddToggle("AutoClaimQuestToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Claim Quests",
-                Content = "Auto Claim Quests đã được tắt",
-                Duration = 3
-            })
+            print("Auto Claim Quests đã được tắt")
         end
     end
 })
@@ -3142,26 +3046,6 @@ end)
 
 -- Thêm section UI Settings vào tab Settings
 local UISettingsSection = SettingsTab:AddSection("UI Settings")
-
--- Toggle Show Notifications (thêm vào đầu section)
-UISettingsSection:AddToggle("ShowNotificationsToggle", {
-    Title = "Hiển thị thông báo",
-    Default = ConfigSystem.CurrentConfig.ShowNotifications or true,
-    Callback = function(Value)
-        showNotificationsEnabled = Value
-        ConfigSystem.CurrentConfig.ShowNotifications = Value
-        ConfigSystem.SaveConfig()
-        
-        -- Hiển thị thông báo khi thay đổi
-        if Value then
-            Fluent:Notify({
-                Title = "Thông báo",
-                Content = "Đã bật hiển thị thông báo",
-                Duration = 2
-            })
-        end
-    end
-})
 
 -- Toggle Auto Hide UI
 UISettingsSection:AddToggle("AutoHideUIToggle", {

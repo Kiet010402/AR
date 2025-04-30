@@ -9,6 +9,25 @@ if currentPlaceId ~= allowedPlaceId then
     return
 end
 
+-- Tải thư viện Fluent trước để sử dụng GetKey
+local Fluent = nil
+local success, err = pcall(function()
+    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+
+if not success then
+    warn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
+    -- Thử tải từ URL dự phòng
+    pcall(function()
+        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
+    end)
+end
+
+if not Fluent then
+    error("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
+    return
+end
+
 -- Hệ thống xác thực key
 local KeySystem = {}
 KeySystem.Keys = {
@@ -91,7 +110,7 @@ KeySystem.SendWebhook = function(username, key, status)
     return success
 end
 
--- Tạo UI nhập key
+-- Sử dụng Fluent:GetKey() thay vì tự tạo UI
 KeySystem.CreateKeyUI = function()
     local success, keyValid = KeySystem.CheckSavedKey()
     if success then
@@ -99,169 +118,42 @@ KeySystem.CreateKeyUI = function()
         KeySystem.SendWebhook(game.Players.LocalPlayer.Name, "Key đã lưu", true)
         return true
     end
-    
-    local ScreenGui = Instance.new("ScreenGui")
-    local Main = Instance.new("Frame")
-    local UICorner = Instance.new("UICorner")
-    local Title = Instance.new("TextLabel")
-    local Description = Instance.new("TextLabel")
-    local KeyInput = Instance.new("TextBox")
-    local UICorner_2 = Instance.new("UICorner")
-    local SubmitButton = Instance.new("TextButton")
-    local UICorner_3 = Instance.new("UICorner")
-    local GetKeyButton = Instance.new("TextButton")
-    local UICorner_4 = Instance.new("UICorner")
-    local StatusLabel = Instance.new("TextLabel")
-    
-    -- Thiết lập UI
-    if syn and syn.protect_gui then
-        syn.protect_gui(ScreenGui)
-        ScreenGui.Parent = game:GetService("CoreGui")
-    elseif gethui then
-        ScreenGui.Parent = gethui()
+
+    local valid = Fluent:GetKey({
+        Title = "HT Hub | Anime Rangers X",
+        Subtitle = "Hệ thống xác thực key",
+        Note = "Nhập key để sử dụng script",
+        FileName = KeySystem.KeyFileName,
+        SaveKey = true,
+        GrabKeyFromSite = false,
+        Key = KeySystem.Keys,
+        Actions = {
+            [1] = {
+                Text = "Lấy key",
+                Callback = function()
+                    setclipboard("https://link-center.net/ht-hub-key")
+                    Fluent:Notify({
+                        Title = "HT Hub",
+                        Content = "Đã sao chép liên kết lấy key vào clipboard",
+                        Duration = 3
+                    })
+                end
+            }
+        }
+    })
+
+    if valid then
+        KeySystem.SendWebhook(game.Players.LocalPlayer.Name, "Key hợp lệ", true)
+        Fluent:Notify({
+            Title = "Xác thực key",
+            Content = "Key hợp lệ! Đang tải script...",
+            Duration = 3
+        })
+        return true
     else
-        ScreenGui.Parent = game:GetService("CoreGui")
-    end
-    
-    ScreenGui.Name = "HTHubKeySystem"
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.ResetOnSpawn = false
-    
-    Main.Name = "Main"
-    Main.Parent = ScreenGui
-    Main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Main.Position = UDim2.new(0.5, -175, 0.5, -125)
-    Main.Size = UDim2.new(0, 350, 0, 250)
-    
-    UICorner.CornerRadius = UDim.new(0, 10)
-    UICorner.Parent = Main
-    
-    Title.Name = "Title"
-    Title.Parent = Main
-    Title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Title.BackgroundTransparency = 1.000
-    Title.Position = UDim2.new(0, 0, 0, 10)
-    Title.Size = UDim2.new(1, 0, 0, 30)
-    Title.Font = Enum.Font.GothamBold
-    Title.Text = "HT Hub | Anime Rangers X"
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 20.000
-    
-    Description.Name = "Description"
-    Description.Parent = Main
-    Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Description.BackgroundTransparency = 1.000
-    Description.Position = UDim2.new(0, 0, 0, 45)
-    Description.Size = UDim2.new(1, 0, 0, 40)
-    Description.Font = Enum.Font.Gotham
-    Description.Text = "Nhập key để sử dụng script"
-    Description.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Description.TextSize = 14.000
-    
-    KeyInput.Name = "KeyInput"
-    KeyInput.Parent = Main
-    KeyInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    KeyInput.Position = UDim2.new(0.5, -125, 0, 100)
-    KeyInput.Size = UDim2.new(0, 250, 0, 40)
-    KeyInput.Font = Enum.Font.Gotham
-    KeyInput.PlaceholderText = "Nhập key vào đây..."
-    KeyInput.Text = ""
-    KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    KeyInput.TextSize = 14.000
-    
-    UICorner_2.CornerRadius = UDim.new(0, 6)
-    UICorner_2.Parent = KeyInput
-    
-    SubmitButton.Name = "SubmitButton"
-    SubmitButton.Parent = Main
-    SubmitButton.BackgroundColor3 = Color3.fromRGB(90, 90, 255)
-    SubmitButton.Position = UDim2.new(0.5, -60, 0, 155)
-    SubmitButton.Size = UDim2.new(0, 120, 0, 35)
-    SubmitButton.Font = Enum.Font.GothamBold
-    SubmitButton.Text = "Xác nhận"
-    SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SubmitButton.TextSize = 14.000
-    
-    UICorner_3.CornerRadius = UDim.new(0, 6)
-    UICorner_3.Parent = SubmitButton
-    
-    GetKeyButton.Name = "GetKeyButton"
-    GetKeyButton.Parent = Main
-    GetKeyButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-    GetKeyButton.Position = UDim2.new(0.5, -75, 0, 200)
-    GetKeyButton.Size = UDim2.new(0, 150, 0, 35)
-    GetKeyButton.Font = Enum.Font.GothamBold
-    GetKeyButton.Text = "Lấy key mới"
-    GetKeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    GetKeyButton.TextSize = 14.000
-    
-    UICorner_4.CornerRadius = UDim.new(0, 6)
-    UICorner_4.Parent = GetKeyButton
-    
-    StatusLabel.Name = "StatusLabel"
-    StatusLabel.Parent = Main
-    StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    StatusLabel.BackgroundTransparency = 1.000
-    StatusLabel.Position = UDim2.new(0, 0, 0, 240)
-    StatusLabel.Size = UDim2.new(1, 0, 0, 20)
-    StatusLabel.Font = Enum.Font.Gotham
-    StatusLabel.Text = ""
-    StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-    StatusLabel.TextSize = 12.000
-    
-    -- Hàm xác thực key
-    local function checkKey(key)
-        for _, validKey in ipairs(KeySystem.Keys) do
-            if key == validKey then
-                return true
-            end
-        end
+        KeySystem.SendWebhook(game.Players.LocalPlayer.Name, "Key không hợp lệ", false)
         return false
     end
-    
-    -- Xử lý sự kiện nút Submit
-    SubmitButton.MouseButton1Click:Connect(function()
-        local inputKey = KeyInput.Text
-        
-        if inputKey == "" then
-            StatusLabel.Text = "Vui lòng nhập key"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            return
-        end
-        
-        local isKeyValid = checkKey(inputKey)
-        
-        if isKeyValid then
-            StatusLabel.Text = "Key hợp lệ! Đang tải script..."
-            StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-            
-            -- Lưu key
-            KeySystem.SaveKey(inputKey)
-            
-            -- Gửi log
-            KeySystem.SendWebhook(game.Players.LocalPlayer.Name, inputKey, true)
-            
-            -- Xóa UI và tiếp tục tải script
-            wait(1)
-            ScreenGui:Destroy()
-            return
-        else
-            StatusLabel.Text = "Key không hợp lệ, vui lòng thử lại"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            
-            -- Gửi log
-            KeySystem.SendWebhook(game.Players.LocalPlayer.Name, inputKey, false)
-        end
-    end)
-    
-    -- Xử lý sự kiện nút Get Key
-    GetKeyButton.MouseButton1Click:Connect(function()
-        setclipboard("https://link-center.net/ht-hub-key")
-        StatusLabel.Text = "Đã sao chép liên kết vào clipboard"
-        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    end)
-    
-    return false
 end
 
 -- Khởi chạy hệ thống key
@@ -276,27 +168,11 @@ print("HT Hub | Anime Rangers X đang khởi động, vui lòng đợi 15 giây.
 wait(30)
 print("Đang tải script...")
 
--- Tải thư viện Fluent từ Arise
-local success, err = pcall(function()
-    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+-- Tải thư viện Fluent từ Arise (không cần tải lại vì đã tải ở trên)
+pcall(function()
     SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
     InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
-
-if not success then
-    warn("Lỗi khi tải thư viện Fluent: " .. tostring(err))
-    -- Thử tải từ URL dự phòng
-    pcall(function()
-        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
-        SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-        InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
-    end)
-end
-
-if not Fluent then
-    error("Không thể tải thư viện Fluent. Vui lòng kiểm tra kết nối internet hoặc executor.")
-    return
-end
 
 -- Utility function để kiểm tra và lấy service/object một cách an toàn
 local function safeGetService(serviceName)

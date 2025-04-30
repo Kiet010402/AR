@@ -996,11 +996,6 @@ StorySection:AddDropdown("DifficultyDropdown", {
         changeDifficulty(Value)
         print("Đã chọn difficulty: " .. Value)
         
-        Fluent:Notify({
-            Title = "Difficulty Changed",
-            Content = "Đã đổi độ khó thành: " .. Value,
-            Duration = 2
-        })
     end
 })
 
@@ -1017,17 +1012,9 @@ StorySection:AddToggle("FriendOnlyToggle", {
         toggleFriendOnly()
         
         if Value then
-            Fluent:Notify({
-                Title = "Friend Only",
-                Content = "Đã bật chế độ Friend Only",
-                Duration = 2
-            })
+            print("Đã bật chế độ Friend Only")
         else
-            Fluent:Notify({
-                Title = "Friend Only",
-                Content = "Đã tắt chế độ Friend Only",
-                Duration = 2
-            })
+            print("Đã tắt chế độ Friend Only")
         end
     end
 })
@@ -1044,17 +1031,9 @@ StorySection:AddToggle("AutoJoinMapToggle", {
         if autoJoinMapEnabled then
             -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
             if isPlayerInMap() then
-                Fluent:Notify({
-                    Title = "Auto Join Map",
-                    Content = "Đang ở trong map, Auto Join Map sẽ hoạt động khi bạn rời khỏi map",
-                    Duration = 3
-                })
+                print("Đang ở trong map, Auto Join Map sẽ hoạt động khi bạn rời khỏi map")
             else
-                Fluent:Notify({
-                    Title = "Auto Join Map",
-                    Content = "Auto Join Map đã được bật, sẽ bắt đầu sau " .. storyTimeDelay .. " giây",
-                    Duration = 3
-                })
+                print("Auto Join Map đã được bật, sẽ bắt đầu sau " .. storyTimeDelay .. " giây")
                 
                 -- Thực hiện join map sau thời gian delay
                 spawn(function()
@@ -1085,11 +1064,7 @@ StorySection:AddToggle("AutoJoinMapToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Join Map",
-                Content = "Auto Join Map đã được tắt",
-                Duration = 3
-            })
+            print("Auto Join Map đã được tắt")
         end
     end
 })
@@ -1171,20 +1146,6 @@ SummonSection:AddDropdown("SummonBannerDropdown", {
         ConfigSystem.CurrentConfig.SummonBanner = Value
         ConfigSystem.SaveConfig()
         print("Đã chọn banner: " .. Value)
-    end
-})
-
--- Nút manual summon
-SummonSection:AddButton({
-    Title = "Summon Once",
-    Callback = function()
-        performSummon()
-        
-        Fluent:Notify({
-            Title = "Summon",
-            Content = "Đã summon: " .. selectedSummonAmount .. " - " .. selectedSummonBanner,
-            Duration = 2
-        })
     end
 })
 
@@ -1280,20 +1241,6 @@ local function claimAllQuests()
         warn("Lỗi khi claim quest: " .. tostring(err))
     end
 end
-
--- Nút Claim All Quest (manual)
-QuestSection:AddButton({
-    Title = "Claim All Quests",
-    Callback = function()
-        claimAllQuests()
-        
-        Fluent:Notify({
-            Title = "Quests",
-            Content = "Đã claim tất cả nhiệm vụ",
-            Duration = 2
-        })
-    end
-})
 
 -- Toggle Auto Claim All Quest
 QuestSection:AddToggle("AutoClaimQuestToggle", {
@@ -1713,17 +1660,9 @@ RangerSection:AddDropdown("ActDropdown", {
         
         if selectedActsText ~= "" then
             selectedActsText = selectedActsText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
-            Fluent:Notify({
-                Title = "Acts Selected",
-                Content = "Đã chọn: " .. selectedActsText,
-                Duration = 2
-            })
+            print("Đã chọn act: " .. selectedActsText)
         else
-            Fluent:Notify({
-                Title = "Warning",
-                Content = "Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.",
-                Duration = 2
-            })
+            print("Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.")
         end
     end
 })
@@ -1741,17 +1680,9 @@ RangerSection:AddToggle("RangerFriendOnlyToggle", {
         toggleRangerFriendOnly()
         
         if Value then
-            Fluent:Notify({
-                Title = "Ranger Friend Only",
-                Content = "Đã bật chế độ Friend Only cho Ranger Stage",
-                Duration = 2
-            })
+            print("Đã bật chế độ Friend Only cho Ranger Stage")
         else
-            Fluent:Notify({
-                Title = "Ranger Friend Only",
-                Content = "Đã tắt chế độ Friend Only cho Ranger Stage",
-                Duration = 2
-            })
+            print("Đã tắt chế độ Friend Only cho Ranger Stage")
         end
     end
 })
@@ -1791,27 +1722,15 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
             end
             
             if not hasSelectedAct then
-                Fluent:Notify({
-                    Title = "Warning",
-                    Content = "Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.",
-                    Duration = 3
-                })
+                print("Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.")
                 return
             end
             
             -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
             if isPlayerInMap() then
-                Fluent:Notify({
-                    Title = "Auto Join Ranger Stage",
-                    Content = "Đang ở trong map, Auto Join Ranger sẽ hoạt động khi bạn rời khỏi map",
-                    Duration = 3
-                })
+                print("Đang ở trong map, Auto Join Ranger Stage sẽ hoạt động khi bạn rời khỏi map")
             else
-                Fluent:Notify({
-                    Title = "Auto Join Ranger Stage",
-                    Content = "Auto Join Ranger Stage đã được bật, sẽ bắt đầu sau " .. rangerTimeDelay .. " giây",
-                    Duration = 3
-                })
+                print("Auto Join Ranger Stage đã được bật, sẽ bắt đầu sau " .. rangerTimeDelay .. " giây")
                 
                 -- Thực hiện join Ranger Stage sau thời gian delay
                 spawn(function()
@@ -1836,11 +1755,7 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Join Ranger Stage",
-                Content = "Auto Join Ranger Stage đã được tắt",
-                Duration = 3
-            })
+            print("Auto Join Ranger Stage đã được tắt")
         end
     end
 })
@@ -1856,11 +1771,7 @@ local function leaveMap()
         local TeleportService = game:GetService("TeleportService")
         
         -- Hiển thị thông báo trước khi teleport
-        Fluent:Notify({
-            Title = "Auto Leave",
-            Content = "Không tìm thấy kẻ địch và agent trong 10 giây, đang teleport về lobby...",
-            Duration = 3
-        })
+        print("Không tìm thấy kẻ địch và agent trong 10 giây, đang teleport về lobby...")
         
         -- Thực hiện teleport tất cả người chơi
         for _, player in pairs(Players:GetPlayers()) do
@@ -1908,11 +1819,7 @@ RangerSection:AddToggle("AutoLeaveToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Auto Leave",
-                Content = "Auto Leave đã được bật. Sẽ tự động rời map nếu không có kẻ địch và agent trong 10 giây",
-                Duration = 3
-            })
+            print("Auto Leave đã được bật. Sẽ tự động rời map nếu không có kẻ địch và agent trong 10 giây")
             
             -- Hủy vòng lặp cũ nếu có
             if autoLeaveLoop then
@@ -1959,11 +1866,7 @@ RangerSection:AddToggle("AutoLeaveToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Leave",
-                Content = "Auto Leave đã được tắt",
-                Duration = 3
-            })
+            print("Auto Leave đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoLeaveLoop then
@@ -2038,17 +1941,9 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
         if autoBossEventEnabled then
             -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
             if isPlayerInMap() then
-                Fluent:Notify({
-                    Title = "Auto Boss Event",
-                    Content = "Đang ở trong map, Auto Boss Event sẽ hoạt động khi bạn rời khỏi map",
-                    Duration = 3
-                })
+                print("Đang ở trong map, Auto Boss Event sẽ hoạt động khi bạn rời khỏi map")
             else
-                Fluent:Notify({
-                    Title = "Auto Boss Event",
-                    Content = "Auto Boss Event đã được bật, sẽ bắt đầu sau " .. bossEventTimeDelay .. " giây",
-                    Duration = 3
-                })
+                print("Auto Boss Event đã được bật, sẽ bắt đầu sau " .. bossEventTimeDelay .. " giây")
                 
                 -- Thực hiện tham gia Boss Event sau thời gian delay
                 spawn(function()
@@ -2079,11 +1974,7 @@ BossEventSection:AddToggle("AutoJoinBossEventToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Boss Event",
-                Content = "Auto Boss Event đã được tắt",
-                Duration = 3
-            })
+            print("Auto Boss Event đã được tắt")
         end
     end
 })
@@ -2162,17 +2053,9 @@ ChallengeSection:AddToggle("AutoChallengeToggle", {
         if Value then
             -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
             if isPlayerInMap() then
-                Fluent:Notify({
-                    Title = "Auto Challenge",
-                    Content = "Đang ở trong map, Auto Challenge sẽ hoạt động khi bạn rời khỏi map",
-                    Duration = 3
-                })
+                print("Đang ở trong map, Auto Challenge sẽ hoạt động khi bạn rời khỏi map")
             else
-                Fluent:Notify({
-                    Title = "Auto Challenge",
-                    Content = "Auto Challenge đã được bật, sẽ bắt đầu sau " .. challengeTimeDelay .. " giây",
-                    Duration = 3
-                })
+                print("Auto Challenge đã được bật, sẽ bắt đầu sau " .. challengeTimeDelay .. " giây")
                 
                 -- Thực hiện join Challenge sau thời gian delay
                 spawn(function()
@@ -2203,11 +2086,7 @@ ChallengeSection:AddToggle("AutoChallengeToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Challenge",
-                Content = "Auto Challenge đã được tắt",
-                Duration = 3
-            })
+            print("Auto Challenge đã được tắt")
         end
     end
 })
@@ -2218,28 +2097,16 @@ ChallengeSection:AddButton({
     Callback = function()
         -- Kiểm tra nếu người chơi đã ở trong map
         if isPlayerInMap() then
-            Fluent:Notify({
-                Title = "Join Challenge",
-                Content = "Bạn đang ở trong map, không thể tham gia Challenge mới",
-                Duration = 2
-            })
+            print("Bạn đang ở trong map, không thể tham gia Challenge mới")
             return
         end
         
         local success = joinChallenge()
         
         if success then
-            Fluent:Notify({
-                Title = "Challenge",
-                Content = "Đang tham gia Challenge",
-                Duration = 2
-            })
+            print("Đang tham gia Challenge")
         else
-            Fluent:Notify({
-                Title = "Challenge",
-                Content = "Không thể tham gia Challenge. Vui lòng thử lại sau.",
-                Duration = 2
-            })
+            print("Không thể tham gia Challenge. Vui lòng thử lại sau.")
         end
     end
 })
@@ -2259,11 +2126,7 @@ local function teleportToLobby()
         local TeleportService = game:GetService("TeleportService")
         
         -- Hiển thị thông báo trước khi teleport
-        Fluent:Notify({
-            Title = "Auto TP Lobby",
-            Content = "Đang teleport về lobby...",
-            Duration = 3
-        })
+        print("Đang teleport về lobby...")
         
         -- Thực hiện teleport
         for _, player in pairs(Players:GetPlayers()) do
@@ -2291,11 +2154,7 @@ InGameSection:AddSlider("AutoTPLobbyDelaySlider", {
         ConfigSystem.CurrentConfig.AutoTPLobbyDelay = Value
         ConfigSystem.SaveConfig()
         
-        Fluent:Notify({
-            Title = "Auto TP Lobby",
-            Content = "Đã đặt thời gian delay: " .. Value .. " phút",
-            Duration = 2
-        })
+        print("Đã đặt Auto TP Lobby Delay: " .. Value .. " phút")
         
         print("Đã đặt Auto TP Lobby Delay: " .. Value .. " phút")
     end
@@ -2311,11 +2170,7 @@ InGameSection:AddToggle("AutoTPLobbyToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Auto TP Lobby",
-                Content = "Auto TP Lobby đã được bật, sẽ teleport sau " .. autoTPLobbyDelay .. " phút",
-                Duration = 3
-            })
+            print("Auto TP Lobby đã được bật, sẽ teleport sau " .. autoTPLobbyDelay .. " phút")
             
             -- Hủy vòng lặp cũ nếu có
             if autoTPLobbyLoop then
@@ -2332,11 +2187,7 @@ InGameSection:AddToggle("AutoTPLobbyToggle", {
                     
                     -- Hiển thị thông báo khi còn 1 phút
                     if timeRemaining == 60 then
-                        Fluent:Notify({
-                            Title = "Auto TP Lobby",
-                            Content = "Sẽ teleport về lobby trong 1 phút nữa",
-                            Duration = 3
-                        })
+                        print("Sẽ teleport về lobby trong 1 phút nữa")
                     end
                     
                     -- Khi hết thời gian, thực hiện teleport
@@ -2351,11 +2202,7 @@ InGameSection:AddToggle("AutoTPLobbyToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto TP Lobby",
-                Content = "Auto TP Lobby đã được tắt",
-                Duration = 3
-            })
+            print("Auto TP Lobby đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoTPLobbyLoop then
@@ -2439,24 +2286,12 @@ InGameSection:AddToggle("AutoPlayToggle", {
             toggleAutoPlay()
             
             if Value then
-                Fluent:Notify({
-                    Title = "Auto Play",
-                    Content = "Auto Play đã được bật",
-                    Duration = 2
-                })
+                print("Auto Play đã được bật")
             else
-                Fluent:Notify({
-                    Title = "Auto Play",
-                    Content = "Auto Play đã được tắt",
-                    Duration = 2
-                })
+                print("Auto Play đã được tắt")
             end
         else
-            Fluent:Notify({
-                Title = "Auto Play",
-                Content = "Trạng thái Auto Play đã phù hợp (" .. (Value and "bật" or "tắt") .. ")",
-                Duration = 2
-            })
+            print("Trạng thái Auto Play đã phù hợp (" .. (Value and "bật" or "tắt") .. ")")
         end
     end
 })
@@ -2525,11 +2360,7 @@ InGameSection:AddToggle("AutoRetryToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Auto Retry",
-                Content = "Auto Retry đã được bật",
-                Duration = 2
-            })
+            print("Auto Retry đã được bật")
             
             -- Hủy vòng lặp cũ nếu có
             if autoRetryLoop then
@@ -2544,11 +2375,7 @@ InGameSection:AddToggle("AutoRetryToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Retry",
-                Content = "Auto Retry đã được tắt",
-                Duration = 2
-            })
+            print("Auto Retry đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoRetryLoop then
@@ -2569,11 +2396,7 @@ InGameSection:AddToggle("AutoNextToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Auto Next",
-                Content = "Auto Next đã được bật",
-                Duration = 2
-            })
+            print("Auto Next đã được bật")
             
             -- Hủy vòng lặp cũ nếu có
             if autoNextLoop then
@@ -2588,11 +2411,7 @@ InGameSection:AddToggle("AutoNextToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Next",
-                Content = "Auto Next đã được tắt",
-                Duration = 2
-            })
+            print("Auto Next đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoNextLoop then
@@ -2613,11 +2432,7 @@ InGameSection:AddToggle("AutoVoteToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Auto Vote",
-                Content = "Auto Vote đã được bật, sẽ bắt đầu sau 15 giây",
-                Duration = 3
-            })
+            print("Auto Vote đã được bật, sẽ bắt đầu sau 15 giây")
             
             -- Hủy vòng lặp cũ nếu có
             if autoVoteLoop then
@@ -2633,11 +2448,7 @@ InGameSection:AddToggle("AutoVoteToggle", {
                 -- Kiểm tra lại nếu toggle vẫn được bật sau khi đợi
                 if autoVoteEnabled then
                     -- Thông báo bắt đầu
-                    Fluent:Notify({
-                        Title = "Auto Vote",
-                        Content = "Auto Vote bắt đầu hoạt động",
-                        Duration = 2
-                    })
+                    print("Auto Vote bắt đầu hoạt động")
                     
                     -- Bắt đầu vòng lặp sau khi delay
                     while autoVoteEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
@@ -2646,11 +2457,7 @@ InGameSection:AddToggle("AutoVoteToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Vote",
-                Content = "Auto Vote đã được tắt",
-                Duration = 2
-            })
+            print("Auto Vote đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoVoteLoop then
@@ -2741,11 +2548,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
             -- Scan unit trước khi bắt đầu
             scanUnits()
             
-            Fluent:Notify({
-                Title = "Auto Update",
-                Content = "Auto Update đã được bật",
-                Duration = 2
-            })
+            print("Auto Update đã được bật")
             
             -- Hủy vòng lặp cũ nếu có
             if autoUpdateLoop then
@@ -2774,11 +2577,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Update",
-                Content = "Auto Update đã được tắt",
-                Duration = 2
-            })
+            print("Auto Update đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoUpdateLoop then
@@ -2802,11 +2601,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
             -- Scan unit trước khi bắt đầu
             scanUnits()
             
-            Fluent:Notify({
-                Title = "Auto Update Random",
-                Content = "Auto Update Random đã được bật",
-                Duration = 2
-            })
+            print("Auto Update Random đã được bật")
             
             -- Hủy vòng lặp cũ nếu có
             if autoUpdateRandomLoop then
@@ -2831,11 +2626,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Update Random",
-                Content = "Auto Update Random đã được tắt",
-                Duration = 2
-            })
+            print("Auto Update Random đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoUpdateRandomLoop then
@@ -2954,22 +2745,14 @@ AFKSection:AddToggle("AutoJoinAFKToggle", {
         if Value then
             -- Kiểm tra trạng thái AFKWorld
             local isInAFKWorld = checkAFKWorldState()
-            
-            Fluent:Notify({
-                Title = "Auto Join AFK",
-                Content = "Auto Join AFK đã được bật",
-                Duration = 2
-            })
+
+            print("Auto Join AFK đã được bật")
             
             -- Nếu không ở trong AFKWorld, teleport ngay lập tức
             if not isInAFKWorld then
                 joinAFKWorld()
             else
-                Fluent:Notify({
-                    Title = "AFKWorld",
-                    Content = "Bạn đã ở trong AFKWorld",
-                    Duration = 2
-                })
+                print("Bạn đã ở trong AFKWorld")
             end
             
             -- Hủy vòng lặp cũ nếu có
@@ -2988,11 +2771,7 @@ AFKSection:AddToggle("AutoJoinAFKToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Join AFK",
-                Content = "Auto Join AFK đã được tắt",
-                Duration = 2
-            })
+            print("Auto Join AFK đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoJoinAFKLoop then
@@ -3010,21 +2789,13 @@ AFKSection:AddButton({
         local isInAFKWorld = checkAFKWorldState()
         
         if isInAFKWorld then
-            Fluent:Notify({
-                Title = "AFKWorld",
-                Content = "Bạn đã ở trong AFKWorld",
-                Duration = 2
-            })
+            print("Bạn đã ở trong AFKWorld")
             return
         end
         
         joinAFKWorld()
         
-        Fluent:Notify({
-            Title = "AFKWorld",
-            Content = "Đang teleport đến AFKWorld...",
-            Duration = 2
-        })
+        print("Đang teleport đến AFKWorld...")
     end
 })
 
@@ -3057,11 +2828,7 @@ UISettingsSection:AddToggle("AutoHideUIToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Auto Hide UI",
-                Content = "Auto Hide UI đã được bật, UI sẽ tự động ẩn sau 5 giây",
-                Duration = 3
-            })
+            print("Auto Hide UI đã được bật, UI sẽ tự động ẩn sau 1 giây")
             
             -- Tạo timer mới để tự động ẩn UI
             if autoHideUITimer then
@@ -3070,18 +2837,14 @@ UISettingsSection:AddToggle("AutoHideUIToggle", {
             end
             
             autoHideUITimer = spawn(function()
-                wait(5) -- Đợi 5 giây
+                wait(1) -- Đợi 1 giây
                 if autoHideUIEnabled and not isMinimized then
                     -- Tự động ẩn UI
                     Window.Minimize()
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Hide UI",
-                Content = "Auto Hide UI đã được tắt",
-                Duration = 3
-            })
+            print("Auto Hide UI đã được tắt")
             
             -- Hủy timer nếu có
             if autoHideUITimer then
@@ -3101,11 +2864,7 @@ spawn(function()
         -- Tự động ẩn UI
         Window.Minimize()
         
-        Fluent:Notify({
-            Title = "Auto Hide UI",
-            Content = "UI đã được tự động ẩn. Nhấp vào logo để hiển thị lại.",
-            Duration = 3
-        })
+        print("UI đã được tự động ẩn. Nhấp vào logo để hiển thị lại.")
     end
 end)
 
@@ -3158,11 +2917,7 @@ InGameSection:AddToggle("RemoveAnimationToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            Fluent:Notify({
-                Title = "Remove Animation",
-                Content = "Remove Animation đã được bật",
-                Duration = 2
-            })
+            print("Remove Animation đã được bật")
             
             -- Hủy vòng lặp cũ nếu có
             if removeAnimationLoop then
@@ -3186,11 +2941,7 @@ InGameSection:AddToggle("RemoveAnimationToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Remove Animation",
-                Content = "Remove Animation đã được tắt",
-                Duration = 2
-            })
+            print("Remove Animation đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if removeAnimationLoop then
@@ -3255,11 +3006,7 @@ local function buyMerchantItem(itemName)
             print("Đã mua item: " .. itemName)
             
             -- Hiển thị thông báo
-            Fluent:Notify({
-                Title = "Merchant",
-                Content = "Đã mua item: " .. itemName,
-                Duration = 2
-            })
+            print("Đã mua item: " .. itemName)
         else
             warn("Không tìm thấy Remote Merchant")
         end
@@ -3315,11 +3062,7 @@ MerchantSection:AddButton({
         end
         
         if selectedItemsCount == 0 then
-            Fluent:Notify({
-                Title = "Merchant",
-                Content = "Không có item nào được chọn để mua",
-                Duration = 2
-            })
+            print("Không có item nào được chọn để mua")
         end
     end
 })
@@ -3342,17 +3085,9 @@ MerchantSection:AddToggle("AutoMerchantBuyToggle", {
             end
             
             if selectedItemsCount == 0 then
-                Fluent:Notify({
-                    Title = "Auto Merchant Buy",
-                    Content = "Auto Buy đã bật nhưng không có item nào được chọn",
-                    Duration = 3
-                })
+                print("Auto Buy đã bật nhưng không có item nào được chọn")
             else
-                Fluent:Notify({
-                    Title = "Auto Merchant Buy",
-                    Content = "Auto Buy đã được bật, sẽ tự động mua items mỗi 2 giây",
-                    Duration = 3
-                })
+                print("Auto Buy đã được bật, sẽ tự động mua items mỗi 2 giây")
             end
             
             -- Hủy vòng lặp cũ nếu có
@@ -3373,11 +3108,7 @@ MerchantSection:AddToggle("AutoMerchantBuyToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Merchant Buy",
-                Content = "Auto Buy đã được tắt",
-                Duration = 3
-            })
+            print("Auto Buy đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoMerchantBuyLoop then
@@ -3509,17 +3240,9 @@ EasterEggSection:AddToggle("AutoJoinEasterEggToggle", {
         if Value then
             -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
             if isPlayerInMap() then
-                Fluent:Notify({
-                    Title = "Auto Join Easter Egg",
-                    Content = "Đang ở trong map, Auto Join Easter Egg sẽ hoạt động khi bạn rời khỏi map",
-                    Duration = 3
-                })
+                print("Đang ở trong map, Auto Join Easter Egg sẽ hoạt động khi bạn rời khỏi map")
             else
-                Fluent:Notify({
-                    Title = "Auto Join Easter Egg",
-                    Content = "Auto Join Easter Egg đã được bật, sẽ bắt đầu sau " .. easterEggTimeDelay .. " giây",
-                    Duration = 3
-                })
+                print("Auto Join Easter Egg đã được bật, sẽ bắt đầu sau " .. easterEggTimeDelay .. " giây")
                 
                 -- Thực hiện join Easter Egg Event sau thời gian delay
                 spawn(function()
@@ -3550,11 +3273,7 @@ EasterEggSection:AddToggle("AutoJoinEasterEggToggle", {
                 end
             end)
         else
-            Fluent:Notify({
-                Title = "Auto Join Easter Egg",
-                Content = "Auto Join Easter Egg đã được tắt",
-                Duration = 3
-            })
+            print("Auto Join Easter Egg đã được tắt")
             
             -- Hủy vòng lặp nếu có
             if autoJoinEasterEggLoop then
@@ -3571,19 +3290,11 @@ EasterEggSection:AddButton({
     Callback = function()
         -- Kiểm tra nếu người chơi đang ở trong map
         if isPlayerInMap() then
-            Fluent:Notify({
-                Title = "Join Easter Egg",
-                Content = "Bạn đang ở trong map, không thể tham gia Easter Egg Event mới",
-                Duration = 3
-            })
+        print("Bạn đang ở trong map, không thể tham gia Easter Egg Event mới")
             return
         end
         
-        Fluent:Notify({
-            Title = "Easter Egg Event",
-            Content = "Đang tham gia Easter Egg Event...",
-            Duration = 2
-        })
+        print("Đang tham gia Easter Egg Event...")
         
         joinEasterEggEvent()
     end
@@ -3627,11 +3338,7 @@ setupOptimizedLoops()
 
 -- Kiểm tra trạng thái người chơi khi script khởi động
 if isPlayerInMap() then
-    Fluent:Notify({
-        Title = "Phát hiện trạng thái",
-        Content = "Bạn đang ở trong map, Auto Join sẽ chỉ hoạt động khi bạn rời khỏi map",
-        Duration = 3
-    })
+    print("Bạn đang ở trong map, Auto Join sẽ chỉ hoạt động khi bạn rời khỏi map")
 end
 
 -- Thông báo khi script đã tải xong
@@ -3916,11 +3623,7 @@ WebhookSection:AddInput("WebhookURLInput", {
         ConfigSystem.CurrentConfig.WebhookURL = Value
         ConfigSystem.SaveConfig()
         
-        Fluent:Notify({
-            Title = "Webhook URL",
-            Content = "Đã cập nhật URL webhook",
-            Duration = 2
-        })
+        print("Đã cập nhật URL webhook")
     end
 })
 
@@ -3936,25 +3639,13 @@ WebhookSection:AddToggle("AutoSendWebhookToggle", {
         if Value then
             -- Kiểm tra URL webhook
             if webhookURL == "" then
-                Fluent:Notify({
-                    Title = "Auto Send Webhook",
-                    Content = "URL webhook trống! Vui lòng nhập URL webhook trước khi bật tính năng này.",
-                    Duration = 3
-                })
+                print("URL webhook trống! Vui lòng nhập URL webhook trước khi bật tính năng này.")
                 return
             end
             
-            Fluent:Notify({
-                Title = "Auto Send Webhook",
-                Content = "Auto Send Webhook đã được bật. Thông tin trận đấu sẽ tự động gửi khi game kết thúc.",
-                Duration = 3
-            })
+            print("Auto Send Webhook đã được bật. Thông tin trận đấu sẽ tự động gửi khi game kết thúc.")
         else
-            Fluent:Notify({
-                Title = "Auto Send Webhook",
-                Content = "Auto Send Webhook đã được tắt",
-                Duration = 3
-            })
+            print("Auto Send Webhook đã được tắt")
         end
     end
 })
@@ -3965,11 +3656,7 @@ WebhookSection:AddButton({
     Callback = function()
         -- Kiểm tra URL webhook
         if webhookURL == "" then
-            Fluent:Notify({
-                Title = "Test Webhook",
-                Content = "URL webhook trống! Vui lòng nhập URL webhook trước khi test.",
-                Duration = 3
-            })
+            print("URL webhook trống! Vui lòng nhập URL webhook trước khi test.")
             return
         end
         
@@ -3984,17 +3671,9 @@ WebhookSection:AddButton({
         local success = sendWebhook(testRewards)
         
         if success then
-            Fluent:Notify({
-                Title = "Test Webhook",
-                Content = "Đã gửi webhook test thành công!",
-                Duration = 3
-            })
+            print("Đã gửi webhook test thành công!")
         else
-            Fluent:Notify({
-                Title = "Test Webhook",
-                Content = "Gửi webhook test thất bại! Kiểm tra lại URL và quyền truy cập.",
-                Duration = 3
-            })
+            print("Gửi webhook test thất bại! Kiểm tra lại URL và quyền truy cập.")
         end
     end
 })

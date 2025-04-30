@@ -693,6 +693,7 @@ local function CreateLogoUI()
     UI.Name = "AnimeRangersLogo"
     UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     UI.ResetOnSpawn = false
+    UI.DisplayOrder = 9999 -- Đảm bảo luôn hiển thị trên cùng
     
     Button.Name = "LogoButton"
     Button.Parent = UI
@@ -721,33 +722,24 @@ local function CreateLogoUI()
         
         -- Hiển thị lại UI chính
         pcall(function()
+            -- Đảm bảo Window là hợp lệ trước khi gọi
             if Window then
-                -- Đảm bảo Frame hiển thị trước khi gọi Minimize
-                if Window.Frame then
-                    Window.Frame.Visible = true
-                end
-                
-                -- Gọi Toggle/Minimize để hiển thị UI
+                -- Nếu có hàm Toggle, sử dụng nó thay vì gọi Minimize trực tiếp
                 if Window.Toggle then
                     Window.Toggle()
                 elseif Window.Minimize then
                     Window.Minimize()
                 end
+                
+                -- Đảm bảo UI chính được hiển thị
+                if Window.Frame then
+                    Window.Frame.Visible = true
+                end
             end
         end)
         
+        -- Hiển thị thông báo (debug)
         print("Đã nhấp vào logo, mở lại UI")
-    end)
-    
-    -- Thêm sự kiện để đảm bảo logo luôn hiển thị sau khi bấm Minimize
-    task.spawn(function()
-        while true do
-            task.wait(1)
-            if isMinimized and UI and not UI.Enabled then
-                UI.Enabled = true
-                print("Phát hiện lỗi: Logo không hiển thị, đã khôi phục")
-            end
-        end
     end)
     
     return UI
@@ -765,7 +757,18 @@ Window.Minimize = function()
     
     -- Hiển thị/ẩn logo dựa vào trạng thái
     if OpenUI then
+        -- Luôn hiển thị logo khi UI chính bị ẩn
         OpenUI.Enabled = isMinimized
+        
+        -- Đảm bảo logo vẫn hiển thị (phòng trường hợp bị ẩn do lỗi)
+        if isMinimized then
+            spawn(function()
+                wait(0.5) -- Đợi một chút để đảm bảo UI đã được cập nhật
+                if OpenUI then
+                    OpenUI.Enabled = true
+                end
+            end)
+        end
     end
     
     -- Gọi hàm minimize gốc
@@ -773,38 +776,15 @@ Window.Minimize = function()
         oldMinimize()
     end)
     
-    -- Đảm bảo hiển thị đúng UI sau khi minimize
-    task.spawn(function()
-        task.wait(0.2) -- Giảm thời gian chờ xuống để phản hồi nhanh hơn
-        
-        if isMinimized then
-            -- Khi đã thu nhỏ, đảm bảo logo hiển thị
-            if OpenUI then
-                OpenUI.Enabled = true
-                
-                -- Kiểm tra lại sau 0.5 giây để đảm bảo logo vẫn hiển thị
-                task.delay(0.5, function()
-                    if isMinimized and OpenUI and not OpenUI.Enabled then
-                        OpenUI.Enabled = true
-                        print("Logo không hiển thị, đã khôi phục")
-                    end
-                end)
-            end
-            
-            -- Đảm bảo UI chính bị ẩn
-            if Window and Window.Frame then
-                Window.Frame.Visible = false
-            end
-        else
-            -- Khi không bị thu nhỏ, đảm bảo logo ẩn và UI chính hiển thị
-            if OpenUI then
-                OpenUI.Enabled = false
-            end
-            
-            -- Đảm bảo UI chính hiển thị
-            if Window and Window.Frame then
-                Window.Frame.Visible = true
-            end
+    -- Kiểm tra xem UI đã hiển thị đúng chưa sau khi minimize
+    spawn(function()
+        wait(0.5)
+        if isMinimized and OpenUI then
+            -- Đảm bảo logo luôn hiển thị khi UI ẩn
+            OpenUI.Enabled = true
+        elseif not isMinimized and Window and Window.Frame then
+            -- Đảm bảo UI hiển thị khi không minimize
+            Window.Frame.Visible = true
         end
     end)
 end
@@ -817,30 +797,10 @@ if not Window.Toggle then
     end
 end
 
--- Thêm cơ chế sửa chữa tự động khi UI gặp sự cố
-task.spawn(function()
-    while true do
-        task.wait(2)
-        -- Kiểm tra nếu UI đang bị lỗi hiển thị
-        if not isMinimized and Window and Window.Frame and not Window.Frame.Visible then
-            print("Phát hiện lỗi UI: Window bị ẩn khi không ở chế độ minimize, đang khôi phục")
-            Window.Frame.Visible = true
-        end
-        
-        -- Kiểm tra nếu logo bị lỗi hiển thị
-        if isMinimized and OpenUI and not OpenUI.Enabled then
-            print("Phát hiện lỗi UI: Logo không hiển thị khi ở chế độ minimize, đang khôi phục")
-            OpenUI.Enabled = true
-        end
-    end
-end)
-
 -- Bắt sự kiện phím để kích hoạt minimize
 game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
     if not gameProcessed and input.KeyCode == Enum.KeyCode.LeftControl then
-        pcall(function()
-            Window.Minimize()
-        end)
+        Window.Minimize()
     end
 end)
 

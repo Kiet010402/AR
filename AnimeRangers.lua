@@ -693,7 +693,6 @@ local function CreateLogoUI()
     UI.Name = "AnimeRangersLogo"
     UI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     UI.ResetOnSpawn = false
-    UI.DisplayOrder = 9999 -- Đảm bảo luôn hiển thị trên cùng
     
     Button.Name = "LogoButton"
     Button.Parent = UI
@@ -757,14 +756,13 @@ Window.Minimize = function()
     
     -- Hiển thị/ẩn logo dựa vào trạng thái
     if OpenUI then
-        -- Luôn hiển thị logo khi UI chính bị ẩn
         OpenUI.Enabled = isMinimized
         
         -- Đảm bảo logo vẫn hiển thị (phòng trường hợp bị ẩn do lỗi)
         if isMinimized then
             spawn(function()
                 wait(0.5) -- Đợi một chút để đảm bảo UI đã được cập nhật
-                if OpenUI then
+                if OpenUI and isMinimized then
                     OpenUI.Enabled = true
                 end
             end)
@@ -780,7 +778,7 @@ Window.Minimize = function()
     spawn(function()
         wait(0.5)
         if isMinimized and OpenUI then
-            -- Đảm bảo logo luôn hiển thị khi UI ẩn
+            -- Đảm bảo logo hiển thị khi UI ẩn
             OpenUI.Enabled = true
         elseif not isMinimized and Window and Window.Frame then
             -- Đảm bảo UI hiển thị khi không minimize

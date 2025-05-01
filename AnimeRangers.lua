@@ -2928,14 +2928,31 @@ UISettingsSection:AddToggle("AutoHideUIToggle", {
 
 -- Tự động ẩn UI nếu tính năng được bật KHI KHỞI ĐỘNG SCRIPT
 spawn(function()
+    print("AutoHideUI startup: Waiting for Window and game load...") -- Debug
     -- Đợi cho đến khi Window được tạo và game load xong
     while not Window or not game:IsLoaded() do wait(0.1) end
-    wait(0.5) -- Đợi thêm chút để UI ổn định
+    print("AutoHideUI startup: Window and game loaded.") -- Debug
+    wait(1.5) -- Tăng thời gian chờ lên 1.5 giây
+    print("AutoHideUI startup: Checking config...") -- Debug
 
     -- Kiểm tra config và thực hiện minimize nếu cần
     if ConfigSystem.CurrentConfig.AutoHideUI then
-        print("Auto Hide UI đang bật, thực hiện ẩn UI khi khởi động...")
-        Window:Minimize()
+        print("AutoHideUI startup: Config enabled. Attempting to minimize Window...") -- Debug
+        -- Kiểm tra kỹ Window và phương thức Minimize trước khi gọi
+        if Window and type(Window.Minimize) == 'function' then 
+            local success, err = pcall(function()
+                 Window:Minimize()
+            end)
+            if success then
+                 print("AutoHideUI startup: Window:Minimize() called successfully.") -- Debug
+            else
+                 print("AutoHideUI startup: Error calling Window:Minimize():", err) -- Debug
+            end
+        else
+             print("AutoHideUI startup: Error - Window object or Window.Minimize method not available or not a function.") -- Debug
+        end
+    else
+        print("AutoHideUI startup: Config disabled.") -- Debug
     end
 end)
 

@@ -1489,114 +1489,87 @@ local function updateOrderedActs()
     end
 end
 
--- Hàm để tự động tham gia Ranger Stage
-local function joinRangerStage()
+-- Hàm để tự động tham gia Ranger Stage (Sửa đổi để nhận map và act)
+local function joinRangerStage(mapToJoin, actToJoin)
     -- Kiểm tra xem người chơi đã ở trong map chưa
     if isPlayerInMap() then
         print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Ranger Stage")
         return false
     end
-    
-    -- Cập nhật danh sách Acts đã sắp xếp
-    updateOrderedActs()
-    
-    -- Kiểm tra xem có Act nào được chọn không
-    if #orderedActs == 0 then
-        warn("Không có Act nào được chọn để join Ranger Stage")
+
+    -- Nếu không có map/act cụ thể được cung cấp, dùng giá trị từ UI
+    if not mapToJoin or not actToJoin then
+        updateOrderedActs()
+        if #orderedActs == 0 then
+            warn("Không có Act nào được chọn để join Ranger Stage (UI)")
+            return false
+        end
+        mapToJoin = selectedRangerMap -- Lấy từ UI
+        actToJoin = orderedActs[currentActIndex] -- Lấy từ UI
+    end
+
+    -- Kiểm tra lại nếu map/act vẫn nil
+    if not mapToJoin or not actToJoin then
+        warn("Map hoặc Act không hợp lệ để join Ranger Stage")
         return false
     end
-    
-    -- Lấy Act hiện tại từ danh sách đã sắp xếp
-    local currentAct = orderedActs[currentActIndex]
-    
+
     local success, err = pcall(function()
         -- Lấy Event
         local Event = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "PlayRoom", "Event"}, 2)
-        
-        if not Event then
-            warn("Không tìm thấy Event để join Ranger Stage")
-            return
-        end
-        
+        if not Event then warn("Không tìm thấy Event để join Ranger Stage"); return end
+
         -- 1. Create
         Event:FireServer("Create")
         wait(0.5)
-        
+
         -- 2. Change Mode to Ranger Stage
-        local modeArgs = {
-            [1] = "Change-Mode",
-            [2] = {
-                ["Mode"] = "Ranger Stage"
-            }
-        }
+        local modeArgs = { [1] = "Change-Mode", [2] = { ["Mode"] = "Ranger Stage" } }
         Event:FireServer(unpack(modeArgs))
         wait(0.5)
-        
-        -- 3. Friend Only (nếu được bật)
+
+        -- 3. Friend Only (sử dụng cài đặt global)
         if rangerFriendOnly then
             Event:FireServer("Change-FriendOnly")
             wait(0.5)
         end
-        
-        -- 4. Chọn Map và Act
+
+        -- 4. Chọn Map và Act (sử dụng tham số đầu vào)
         -- 4.1 Đổi Map
-        local args1 = {
-            [1] = "Change-World",
-            [2] = {
-                ["World"] = selectedRangerMap
-            }
-        }
+        local args1 = { [1] = "Change-World", [2] = { ["World"] = mapToJoin } }
         Event:FireServer(unpack(args1))
         wait(0.5)
-        
-        -- 4.2 Đổi Act - dùng Act hiện tại theo thứ tự luân phiên
-        local args2 = {
-            [1] = "Change-Chapter",
-            [2] = {
-                ["Chapter"] = selectedRangerMap .. "_" .. currentAct
-            }
-        }
+
+        -- 4.2 Đổi Act
+        local args2 = { [1] = "Change-Chapter", [2] = { ["Chapter"] = mapToJoin .. "_" .. actToJoin } }
         Event:FireServer(unpack(args2))
         wait(0.5)
-        
+
         -- 5. Submit
         Event:FireServer("Submit")
         wait(1)
-        
+
         -- 6. Start
         Event:FireServer("Start")
-        
-        print("Đã join Ranger Stage: " .. selectedRangerMap .. "_" .. currentAct)
-        
-        -- Cập nhật index cho lần tiếp theo
-        currentActIndex = (currentActIndex % #orderedActs) + 1
+
+        print("Đã join Ranger Stage: " .. mapToJoin .. "_" .. actToJoin)
+
+        -- Cập nhật index cho lần tiếp theo chỉ khi dùng giá trị từ UI
+        if not mapToJoin or not actToJoin then
+            currentActIndex = (currentActIndex % #orderedActs) + 1
+        end
     end)
-    
+
     if not success then
         warn("Lỗi khi join Ranger Stage: " .. tostring(err))
         return false
     end
-    
+
     return true
 end
 
--- Hàm để lặp qua các selected Acts
-local function cycleRangerStages()
-    if not autoJoinRangerEnabled or isPlayerInMap() then
-        return
-    end
-    
-    -- Đợi theo time delay 
-    wait(rangerTimeDelay)
-    
-    -- Kiểm tra lại điều kiện sau khi đợi
-    if not autoJoinRangerEnabled or isPlayerInMap() then
-        return
-    end
-    
-    -- Join Ranger Stage với Act theo thứ tự luân phiên
-    joinRangerStage()
-end
+-- Hàm để lặp qua các selected Acts (Sửa đổi để không cần thiết nữa nếu chỉ dùng cho Auto Join All)
+-- local function cycleRangerStages() ... end -- Có thể xóa hoặc giữ lại nếu vẫn cần Auto Join Ranger theo UI
 
 -- Time Delay slider cho Story
 StorySection:AddSlider("StoryTimeDelaySlider", {
@@ -3786,29 +3759,36 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                     for _, map in ipairs(allMaps) do
                         for _, act in ipairs(allActs) do
                             if not autoJoinAllRangerEnabled then return end
-                            -- Chỉ join khi không ở trong map
                             if not isPlayerInMap() then
-                                -- Đổi map
-                                local displayMap = reverseMapNameMapping[map] or map
-                                changeWorld(displayMap)
-                                wait(0.5)
-                                -- Đổi act
-                                changeAct(map, act)
-                                wait(0.5)
-                                -- Join Ranger Stage
-                                joinRangerStage()
-                                print("Đã join: " .. map .. " - " .. act)
+                                -- Đổi map và act không cần thiết nữa vì joinRangerStage đã xử lý
+                                -- local displayMap = reverseMapNameMapping[map] or map
+                                -- changeWorld(displayMap)
+                                -- wait(0.5)
+                                -- changeAct(map, act)
+                                -- wait(0.5)
+                                
+                                -- Join Ranger Stage với map và act cụ thể
+                                joinRangerStage(map, act) -- << Truyền map và act vào đây
+                                
+                                print("Đã yêu cầu join: " .. map .. " - " .. act)
+                                
                                 -- Đợi cho đến khi vào map hoặc hết delay
                                 local t = 0
-                                while not isPlayerInMap() and t < 10 do wait(0.5) t = t + 0.5 end
-                                -- Đợi delay giữa các lần join
-                                wait(rangerTimeDelay)
+                                while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5) t = t + 0.5 end
+                                
+                                -- Đợi delay giữa các lần join (nếu còn bật)
+                                if autoJoinAllRangerEnabled then wait(rangerTimeDelay) end
                             else
                                 -- Nếu đang ở trong map thì đợi ra khỏi map
                                 while isPlayerInMap() and autoJoinAllRangerEnabled do wait(1) end
                             end
+                            -- Thêm delay nhỏ để tránh spam quá nhanh nếu lỗi join
+                            if not isPlayerInMap() and autoJoinAllRangerEnabled then wait(1) end 
                         end
                     end
+                    -- Lặp lại từ đầu sau khi hết các map/act
+                    print("Đã hoàn thành vòng lặp Auto Join All, bắt đầu lại...")
+                    wait(1)
                 end
             end)
         else

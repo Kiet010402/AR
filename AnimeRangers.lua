@@ -1,4 +1,4 @@
-\-- Anime Rangers X Script
+-- Anime Rangers X Script
 
 -- Kiểm tra Place ID
 local currentPlaceId = game.PlaceId
@@ -3312,6 +3312,9 @@ spawn(function()
     end
 end)
 
+-- Thêm section Ranger Stage trong tab Play
+local RangerSection = PlayTab:AddSection("Ranger Stage")
+
 -- Tự động xóa animations khi khởi động script nếu tính năng được bật và đang ở trong map
 spawn(function()
     wait(3) -- Đợi game load
@@ -3778,7 +3781,7 @@ local autoJoinAllRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinAllRanger or
 local autoJoinAllRangerLoop = nil
 
 RangerSection:AddToggle("AutoJoinAllRangerToggle", {
-    Title = "Auto Join All",
+    Title = "Auto Join All (Tất cả map & act)",
     Default = autoJoinAllRangerEnabled,
     Callback = function(Value)
         autoJoinAllRangerEnabled = Value

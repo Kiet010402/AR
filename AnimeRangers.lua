@@ -401,6 +401,7 @@ ConfigSystem.DefaultConfig = {
     
     -- Cài đặt Ranger Stage
     SelectedRangerMap = "OnePiece",
+    SelectedRangerMaps = {}, -- Thêm cấu hình mặc định cho map đã chọn (ban đầu rỗng hoặc chỉ có map default)
     SelectedActs = {RangerStage1 = true},
     RangerFriendOnly = false,
     AutoJoinRanger = false,
@@ -580,6 +581,8 @@ local autoJoinMapLoop = nil
 -- Biến lưu trạng thái Ranger Stage
 local selectedRangerMap = ConfigSystem.CurrentConfig.SelectedRangerMap or "OnePiece"
 local selectedRangerDisplayMap = reverseMapNameMapping[selectedRangerMap] or "Voocha Village"
+-- Thêm biến lưu các map đã chọn
+local selectedRangerMaps = ConfigSystem.CurrentConfig.SelectedRangerMaps or { [selectedRangerMap] = true } -- Lưu dạng table {MapName = true}
 local selectedActs = ConfigSystem.CurrentConfig.SelectedActs or {RangerStage1 = true}
 local currentActIndex = 1  -- Lưu trữ index của Act hiện tại đang được sử dụng
 local orderedActs = {}     -- Lưu trữ danh sách các Acts theo thứ tự
@@ -1588,19 +1591,57 @@ StorySection:AddSlider("StoryTimeDelaySlider", {
 
 -- Dropdown để chọn Map cho Ranger
 RangerSection:AddDropdown("RangerMapDropdown", {
-    Title = "Choose Map",
+    Title = "Choose Map(s)", -- Sửa tiêu đề
     Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
-    Multi = false,
-    Default = selectedRangerDisplayMap,
-    Callback = function(Value)
-        selectedRangerDisplayMap = Value
-        selectedRangerMap = mapNameMapping[Value] or "OnePiece"
-        ConfigSystem.CurrentConfig.SelectedRangerMap = selectedRangerMap
+    Multi = true, -- Cho phép chọn nhiều
+    Default = (function() -- Khôi phục trạng thái đã chọn từ config
+        local defaults = {}
+        for mapName, isSelected in pairs(selectedRangerMaps) do
+            local displayMap = reverseMapNameMapping[mapName]
+            if displayMap and isSelected then
+                defaults[displayMap] = true
+            end
+        end
+        -- Đảm bảo luôn có ít nhất 1 map được chọn ban đầu nếu config rỗng
+         if next(defaults) == nil and reverseMapNameMapping[selectedRangerMap] then
+             defaults[reverseMapNameMapping[selectedRangerMap]] = true
+         end
+        return defaults
+    end)(),
+    Callback = function(Values)
+        selectedRangerMaps = {} -- Reset trước khi cập nhật
+        local firstSelectedMap = nil
+        local firstSelectedDisplayMap = nil
+        for displayMap, isSelected in pairs(Values) do
+            local realMap = mapNameMapping[displayMap]
+            if realMap and isSelected then
+                selectedRangerMaps[realMap] = true
+                if not firstSelectedMap then
+                    firstSelectedMap = realMap
+                    firstSelectedDisplayMap = displayMap
+                end
+                print("Đã chọn Ranger map: " .. displayMap .. " (thực tế: " .. realMap .. ")")
+            end
+        end
+        -- Cập nhật selectedRangerMap (dùng cho các chức năng khác nếu cần) thành map đầu tiên được chọn
+        selectedRangerMap = firstSelectedMap or "OnePiece"
+        selectedRangerDisplayMap = firstSelectedDisplayMap or "Voocha Village"
+
+        ConfigSystem.CurrentConfig.SelectedRangerMaps = selectedRangerMaps
+        ConfigSystem.CurrentConfig.SelectedRangerMap = selectedRangerMap -- Lưu map đầu tiên làm map chính (nếu cần)
         ConfigSystem.SaveConfig()
-        
-        -- Thay đổi map khi người dùng chọn
-        changeWorld(Value)
-        print("Đã chọn Ranger map: " .. Value .. " (thực tế: " .. selectedRangerMap .. ")")
+
+        -- Thông báo (có thể bỏ nếu không muốn)
+        local selectedMapsText = ""
+        for map, isSelected in pairs(selectedRangerMaps) do
+             if isSelected then selectedMapsText = selectedMapsText .. (reverseMapNameMapping[map] or map) .. ", " end
+        end
+        if selectedMapsText ~= "" then
+             selectedMapsText = selectedMapsText:sub(1, -3)
+             print("Các map Ranger đã chọn: " .. selectedMapsText)
+        else
+             print("Chưa chọn map Ranger nào.")
+        end
     end
 })
 
@@ -1677,58 +1718,72 @@ RangerSection:AddSlider("RangerTimeDelaySlider", {
 
 -- Toggle Auto Join Ranger Stage
 RangerSection:AddToggle("AutoJoinRangerToggle", {
-    Title = "Auto Join Ranger Stage",
+    Title = "Auto Join Selected Stage", -- Đổi tên cho rõ nghĩa
     Default = ConfigSystem.CurrentConfig.AutoJoinRanger or false,
     Callback = function(Value)
         autoJoinRangerEnabled = Value
         ConfigSystem.CurrentConfig.AutoJoinRanger = Value
         ConfigSystem.SaveConfig()
-        
+
         if autoJoinRangerEnabled then
+            -- Kiểm tra xem có Map nào được chọn không
+            local hasSelectedMap = false
+            for _, isSelected in pairs(selectedRangerMaps) do if isSelected then hasSelectedMap = true; break; end end
+            if not hasSelectedMap then print("Chưa chọn map nào trong Ranger Stage!"); return end
+
             -- Kiểm tra xem có Act nào được chọn không
             local hasSelectedAct = false
-            for _, isSelected in pairs(selectedActs) do
-                if isSelected then
-                    hasSelectedAct = true
-                    break
-                end
-            end
-            
-            if not hasSelectedAct then
-                print("Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.")
-                return
-            end
-            
-            -- Kiểm tra ngay lập tức nếu người chơi đang ở trong map
-            if isPlayerInMap() then
-                print("Đang ở trong map, Auto Join Ranger Stage sẽ hoạt động khi bạn rời khỏi map")
-            else
-                print("Auto Join Ranger Stage đã được bật, sẽ bắt đầu sau " .. rangerTimeDelay .. " giây")
-                
-                -- Thực hiện join Ranger Stage sau thời gian delay
-                spawn(function()
-                    wait(rangerTimeDelay)
-                    if autoJoinRangerEnabled and not isPlayerInMap() then
-                        joinRangerStage()
+            for _, isSelected in pairs(selectedActs) do if isSelected then hasSelectedAct = true; break; end end
+            if not hasSelectedAct then print("Chưa chọn act nào trong Ranger Stage!"); return end
+
+            print("Auto Join Selected Ranger Stage đã được bật")
+            if autoJoinRangerLoop then autoJoinRangerLoop:Disconnect(); autoJoinRangerLoop = nil; end
+
+            autoJoinRangerLoop = spawn(function()
+                while autoJoinRangerEnabled do
+                    local didJoin = false
+                    -- Lặp qua các map đã chọn
+                    for map, mapSelected in pairs(selectedRangerMaps) do
+                        if mapSelected then
+                            -- Lặp qua các act đã chọn
+                            for act, actSelected in pairs(selectedActs) do
+                                if actSelected then
+                                    if not autoJoinRangerEnabled then return end -- Thoát nếu bị tắt giữa chừng
+                                    if not isPlayerInMap() then
+                                        print("Chuẩn bị join: " .. map .. " - " .. act)
+                                        joinRangerStage(map, act) -- Gọi join với map và act cụ thể
+                                        didJoin = true
+                                        -- Đợi vào map hoặc timeout
+                                        local t = 0
+                                        while not isPlayerInMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
+                                        -- Nếu đã vào map, đợi delay
+                                        if isPlayerInMap() and autoJoinRangerEnabled then
+                                             print("Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
+                                             wait(rangerTimeDelay)
+                                        end
+                                    else
+                                        -- Nếu đang trong map, đợi ra khỏi map
+                                        print("Đang ở trong map, đợi thoát...")
+                                        while isPlayerInMap() and autoJoinRangerEnabled do wait(1) end
+                                    end
+                                    -- Thêm delay nhỏ nếu join lỗi/không vào map và vẫn đang bật
+                                    if not isPlayerInMap() and autoJoinRangerEnabled then wait(1) end
+                                end
+                            end
+                        end
                     end
-                end)
-            end
-            
-            -- Tạo vòng lặp Auto Join Ranger Stage
-            spawn(function()
-                while autoJoinRangerEnabled and wait(1) do -- Thử join map mỗi 1 giây
-                    -- Chỉ thực hiện join map nếu người chơi không ở trong map
-                    if not isPlayerInMap() then
-                        -- Gọi hàm cycleRangerStages để luân phiên các Acts
-                        cycleRangerStages()
-                    else
-                        -- Người chơi đang ở trong map, không cần join
-                        print("Đang ở trong map, đợi đến khi người chơi rời khỏi map")
+                    -- Nếu không join được map nào trong vòng lặp (ví dụ: đang ở trong map suốt), thì đợi 1 chút
+                    if not didJoin and autoJoinRangerEnabled then
+                         print("Không thể join map nào, kiểm tra lại sau 5 giây...")
+                         wait(5)
                     end
+                    -- Lặp lại nếu vẫn đang bật
+                    if autoJoinRangerEnabled then print("Hoàn thành vòng lặp Auto Join Selected, bắt đầu lại..."); wait(1); end
                 end
             end)
         else
-            print("Auto Join Ranger Stage đã được tắt")
+            print("Auto Join Selected Ranger Stage đã được tắt")
+            if autoJoinRangerLoop then autoJoinRangerLoop:Disconnect(); autoJoinRangerLoop = nil; end
         end
     end
 })

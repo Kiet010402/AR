@@ -1365,35 +1365,35 @@ local function setupOptimizedLoops()
                 -- Kiểm tra Auto Join Map
                 if autoJoinMapEnabled and not shouldContinue then
                     joinMap()
-                    wait(5) -- Đợi để xem đã vào map chưa
+                    wait(1) -- Đợi để xem đã vào map chưa
                     shouldContinue = isPlayerInMap()
                 end
                 
                 -- Kiểm tra Auto Join Ranger
                 if autoJoinRangerEnabled and not shouldContinue then
                     cycleRangerStages()
-                    wait(5)
+                    wait(1)
                     shouldContinue = isPlayerInMap()
                 end
                 
                 -- Kiểm tra Auto Boss Event
                 if autoBossEventEnabled and not shouldContinue then
                 joinBossEvent()
-                    wait(5)
+                    wait(1)
                     shouldContinue = isPlayerInMap()
     end
     
                 -- Kiểm tra Auto Challenge
                 if autoChallengeEnabled and not shouldContinue then
                     joinChallenge()
-                    wait(5)
+                    wait(1)
                     shouldContinue = isPlayerInMap()
                 end
                 
                 -- Kiểm tra Auto Easter Egg
                 if autoJoinEasterEggEnabled and not shouldContinue then
                     joinEasterEggEvent()
-                    wait(5)
+                    wait(1)
                     shouldContinue = isPlayerInMap()
                 end
                 
@@ -1547,7 +1547,7 @@ local function joinRangerStage(mapToJoin, actToJoin)
 
         -- 5. Submit
         Event:FireServer("Submit")
-        wait(1)
+        wait(0.5)
 
         -- 6. Start
         Event:FireServer("Start")
@@ -1716,7 +1716,7 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
             
             -- Tạo vòng lặp Auto Join Ranger Stage
             spawn(function()
-                while autoJoinRangerEnabled and wait(10) do -- Thử join map mỗi 10 giây
+                while autoJoinRangerEnabled and wait(1) do -- Thử join map mỗi 1 giây
                     -- Chỉ thực hiện join map nếu người chơi không ở trong map
                     if not isPlayerInMap() then
                         -- Gọi hàm cycleRangerStages để luân phiên các Acts
@@ -3780,15 +3780,15 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                                 if autoJoinAllRangerEnabled then wait(rangerTimeDelay) end
                             else
                                 -- Nếu đang ở trong map thì đợi ra khỏi map
-                                while isPlayerInMap() and autoJoinAllRangerEnabled do wait(1) end
+                                while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.5) end
                             end
                             -- Thêm delay nhỏ để tránh spam quá nhanh nếu lỗi join
-                            if not isPlayerInMap() and autoJoinAllRangerEnabled then wait(1) end 
+                            if not isPlayerInMap() and autoJoinAllRangerEnabled then wait(0.5) end 
                         end
                     end
                     -- Lặp lại từ đầu sau khi hết các map/act
                     print("Đã hoàn thành vòng lặp Auto Join All, bắt đầu lại...")
-                    wait(1)
+                    wait(0.5)
                 end
             end)
         else

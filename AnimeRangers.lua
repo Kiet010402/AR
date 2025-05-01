@@ -3632,19 +3632,25 @@ WebhookSection:AddToggle("AutoSendWebhookToggle", {
     Title = "Auto Send Webhook",
     Default = autoSendWebhookEnabled,
     Callback = function(Value)
-        autoSendWebhookEnabled = Value
-        ConfigSystem.CurrentConfig.AutoSendWebhook = Value
-        ConfigSystem.SaveConfig()
-        
         if Value then
             -- Kiểm tra URL webhook
             if webhookURL == "" then
                 print("URL webhook trống! Vui lòng nhập URL webhook trước khi bật tính năng này.")
                 return
             end
-            
+            -- Kiểm tra có đang ở trong map không
+            if not isPlayerInMap() then
+                print("Bạn chỉ có thể bật Auto Send Webhook khi đang ở trong map!")
+                return
+            end
+            autoSendWebhookEnabled = true
+            ConfigSystem.CurrentConfig.AutoSendWebhook = true
+            ConfigSystem.SaveConfig()
             print("Auto Send Webhook đã được bật. Thông tin trận đấu sẽ tự động gửi khi game kết thúc.")
         else
+            autoSendWebhookEnabled = false
+            ConfigSystem.CurrentConfig.AutoSendWebhook = false
+            ConfigSystem.SaveConfig()
             print("Auto Send Webhook đã được tắt")
         end
     end

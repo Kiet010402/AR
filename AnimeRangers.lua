@@ -3686,3 +3686,92 @@ WebhookSection:AddButton({
 
 -- Khởi động vòng lặp kiểm tra game kết thúc
 setupWebhookMonitor()
+
+-- Thêm section Egg Event trong tab Shop
+local EggEventSection = ShopTab:AddSection("Egg Event")
+
+-- Biến lưu trạng thái Auto Buy Egg
+local autoBuyEggEnabled = ConfigSystem.CurrentConfig.AutoBuyEgg or false
+local autoBuyEggLoop = nil
+
+-- Biến lưu trạng thái Auto Open Egg
+local autoOpenEggEnabled = ConfigSystem.CurrentConfig.AutoOpenEgg or false
+local autoOpenEggLoop = nil
+
+-- Toggle Auto Buy Egg
+EggEventSection:AddToggle("AutoBuyEggToggle", {
+    Title = "Auto Buy Egg",
+    Default = autoBuyEggEnabled,
+    Callback = function(Value)
+        autoBuyEggEnabled = Value
+        ConfigSystem.CurrentConfig.AutoBuyEgg = Value
+        ConfigSystem.SaveConfig()
+        if Value then
+            print("Auto Buy Egg đã được bật")
+            if autoBuyEggLoop then
+                autoBuyEggLoop:Disconnect()
+                autoBuyEggLoop = nil
+            end
+            spawn(function()
+                while autoBuyEggEnabled do
+                    local args = {"Egg Capsule", 1}
+                    local success, err = pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gameplay"):WaitForChild("EasterEgg"):FireServer(unpack(args))
+                    end)
+                    if not success then
+                        warn("Lỗi khi Auto Buy Egg: " .. tostring(err))
+                    end
+                    wait(0.5)
+                end
+            end)
+        else
+            print("Auto Buy Egg đã được tắt")
+            if autoBuyEggLoop then
+                autoBuyEggLoop:Disconnect()
+                autoBuyEggLoop = nil
+            end
+        end
+    end
+})
+
+-- Toggle Auto Open Egg
+EggEventSection:AddToggle("AutoOpenEggToggle", {
+    Title = "Auto Open Egg",
+    Default = autoOpenEggEnabled,
+    Callback = function(Value)
+        autoOpenEggEnabled = Value
+        ConfigSystem.CurrentConfig.AutoOpenEgg = Value
+        ConfigSystem.SaveConfig()
+        if Value then
+            print("Auto Open Egg đã được bật")
+            if autoOpenEggLoop then
+                autoOpenEggLoop:Disconnect()
+                autoOpenEggLoop = nil
+            end
+            spawn(function()
+                while autoOpenEggEnabled do
+                    local playerName = game:GetService("Players").LocalPlayer.Name
+                    local eggItem = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data"):WaitForChild(playerName):WaitForChild("Items"):FindFirstChild("Egg Capsule")
+                    if eggItem then
+                        local args = {eggItem, {SummonAmount = 1}}
+                        local success, err = pcall(function()
+                            game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Lobby"):WaitForChild("ItemUse"):FireServer(unpack(args))
+                        end)
+                        if not success then
+                            warn("Lỗi khi Auto Open Egg: " .. tostring(err))
+                        end
+                    else
+                        warn("Không tìm thấy Egg Capsule trong Items!")
+                    end
+                    wait(0.5)
+                end
+            end)
+        else
+            print("Auto Open Egg đã được tắt")
+            if autoOpenEggLoop then
+                autoOpenEggLoop:Disconnect()
+                autoOpenEggLoop = nil
+            end
+        end
+    end
+})

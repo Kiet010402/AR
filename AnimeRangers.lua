@@ -2909,9 +2909,9 @@ UISettingsSection:AddToggle("AutoHideUIToggle", {
             
             autoHideUITimer = spawn(function()
                 wait(1) -- Đợi 1 giây
-                if autoHideUIEnabled and not isMinimized then
-                    -- Tự động ẩn UI
-                    Window.Minimize()
+                -- Sử dụng Window.Visible thay vì isMinimized để kiểm tra
+                if autoHideUIEnabled and Window and Window.Visible then 
+                    Window:Minimize()
                 end
             end)
         else
@@ -2926,16 +2926,16 @@ UISettingsSection:AddToggle("AutoHideUIToggle", {
     end
 })
 
--- Tự động ẩn UI nếu tính năng được bật
+-- Tự động ẩn UI nếu tính năng được bật KHI KHỞI ĐỘNG SCRIPT
 spawn(function()
-    wait(1) -- Đợi script khởi động hoàn tất
-    
-    -- Nếu Auto Hide UI được bật và UI không ở trạng thái ẩn
-    if autoHideUIEnabled and not isMinimized then
-        -- Tự động ẩn UI
-        Window.Minimize()
-        
-        print("UI đã được tự động ẩn. Nhấp vào logo để hiển thị lại.")
+    -- Đợi cho đến khi Window được tạo và game load xong
+    while not Window or not game:IsLoaded() do wait(0.1) end
+    wait(0.5) -- Đợi thêm chút để UI ổn định
+
+    -- Kiểm tra config và thực hiện minimize nếu cần
+    if ConfigSystem.CurrentConfig.AutoHideUI then
+        print("Auto Hide UI đang bật, thực hiện ẩn UI khi khởi động...")
+        Window:Minimize()
     end
 end)
 

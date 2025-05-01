@@ -1575,25 +1575,8 @@ end
 -- local function cycleRangerStages() ... end -- Có thể xóa hoặc giữ lại nếu vẫn cần Auto Join Ranger theo UI
 
 -- Lưu biến cho Story Time Delay
-local storyTimeDelaySlider = nil
 local storyTimeDelayInput = nil
 
--- Time Delay slider cho Story
-storyTimeDelaySlider = StorySection:AddSlider("StoryTimeDelaySlider", {
-    Title = "Time Delay (giây)",
-    Default = storyTimeDelay,
-    Min = 1,
-    Max = 30,
-    Rounding = 1,
-    Callback = function(Value)
-        storyTimeDelay = Value
-        ConfigSystem.CurrentConfig.StoryTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt Story Time Delay: " .. Value .. " giây")
-        -- Cập nhật Input khi Slider thay đổi
-        if storyTimeDelayInput and storyTimeDelayInput.Set then storyTimeDelayInput:Set(tostring(Value)) end
-    end
-})
 
 -- Input cho Story Time Delay
 storyTimeDelayInput = StorySection:AddInput("StoryTimeDelayInput", {
@@ -1732,27 +1715,9 @@ RangerSection:AddToggle("RangerFriendOnlyToggle", {
 })
 
 -- Lưu biến cho Ranger Time Delay
-local rangerTimeDelaySlider = nil
 local rangerTimeDelayInput = nil
 
--- Time Delay slider cho Ranger
-rangerTimeDelaySlider = RangerSection:AddSlider("RangerTimeDelaySlider", {
-    Title = "Time Delay (giây)",
-    Default = rangerTimeDelay,
-    Min = 1,
-    Max = 30,
-    Rounding = 1,
-    Callback = function(Value)
-        rangerTimeDelay = Value
-        ConfigSystem.CurrentConfig.RangerTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt Ranger Time Delay: " .. Value .. " giây")
-        -- Cập nhật Input khi Slider thay đổi
-        if rangerTimeDelayInput and rangerTimeDelayInput.Set then rangerTimeDelayInput:Set(tostring(Value)) end
-    end
-})
-
--- Input cho Ranger Time Delay
+-- Input cho Ranger Time Delay (Giữ lại, sửa callback)
 rangerTimeDelayInput = RangerSection:AddInput("RangerTimeDelayInput", {
     Title = "Ranger Time Delay (1-30s)",
     Placeholder = "Nhập delay",
@@ -2002,25 +1967,7 @@ local function joinBossEvent()
 end
 
 -- Lưu biến cho Boss Event Time Delay
-local bossEventTimeDelaySlider = nil
 local bossEventTimeDelayInput = nil
-
--- Time Delay slider cho Boss Event
-bossEventTimeDelaySlider = BossEventSection:AddSlider("BossEventTimeDelaySlider", {
-    Title = "Time Delay (giây)",
-    Default = bossEventTimeDelay,
-    Min = 1,
-    Max = 30,
-    Rounding = 1,
-    Callback = function(Value)
-        bossEventTimeDelay = Value
-        ConfigSystem.CurrentConfig.BossEventTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt Boss Event Time Delay: " .. Value .. " giây")
-        -- Cập nhật Input khi Slider thay đổi
-        if bossEventTimeDelayInput and bossEventTimeDelayInput.Set then bossEventTimeDelayInput:Set(tostring(Value)) end
-    end
-})
 
 -- Input cho Boss Event Time Delay
 bossEventTimeDelayInput = BossEventSection:AddInput("BossEventTimeDelayInput", {
@@ -2143,25 +2090,7 @@ local function joinChallenge()
 end
 
 -- Lưu biến cho Challenge Time Delay
-local challengeTimeDelaySlider = nil
 local challengeTimeDelayInput = nil
-
--- Time Delay slider cho Challenge
-challengeTimeDelaySlider = ChallengeSection:AddSlider("ChallengeTimeDelaySlider", {
-    Title = "Time Delay (giây)",
-    Default = challengeTimeDelay,
-    Min = 1,
-    Max = 30,
-    Rounding = 1,
-    Callback = function(Value)
-        challengeTimeDelay = Value
-        ConfigSystem.CurrentConfig.ChallengeTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt Challenge Time Delay: " .. Value .. " giây")
-        -- Cập nhật Input khi Slider thay đổi
-        if challengeTimeDelayInput and challengeTimeDelayInput.Set then challengeTimeDelayInput:Set(tostring(Value)) end
-    end
-})
 
 -- Input cho Challenge Time Delay
 challengeTimeDelayInput = ChallengeSection:AddInput("ChallengeTimeDelayInput", {
@@ -2288,25 +2217,7 @@ local function teleportToLobby()
 end
 
 -- Lưu biến cho Auto TP Lobby Delay
-local autoTPLobbyDelaySlider = nil
 local autoTPLobbyDelayInput = nil
-
--- Slider điều chỉnh thời gian delay cho Auto TP Lobby
-autoTPLobbyDelaySlider = InGameSection:AddSlider("AutoTPLobbyDelaySlider", {
-    Title = "Auto TP Lobby Delay (phút)",
-    Default = autoTPLobbyDelay,
-    Min = 1,
-    Max = 60,
-    Rounding = 0,
-    Callback = function(Value)
-        autoTPLobbyDelay = Value
-        ConfigSystem.CurrentConfig.AutoTPLobbyDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt Auto TP Lobby Delay: " .. Value .. " phút")
-        -- Cập nhật Input khi Slider thay đổi
-        if autoTPLobbyDelayInput and autoTPLobbyDelayInput.Set then autoTPLobbyDelayInput:Set(tostring(Value)) end
-    end
-})
 
 -- Input cho Auto TP Lobby Delay
 autoTPLobbyDelayInput = InGameSection:AddInput("AutoTPLobbyDelayInput", {
@@ -3374,25 +3285,7 @@ local function joinEasterEggEvent()
 end
 
 -- Lưu biến cho Easter Egg Time Delay
-local easterEggTimeDelaySlider = nil
 local easterEggTimeDelayInput = nil
-
--- Time Delay slider cho Easter Egg
-easterEggTimeDelaySlider = EasterEggSection:AddSlider("EasterEggTimeDelaySlider", {
-    Title = "Time Delay (giây)",
-    Default = easterEggTimeDelay,
-    Min = 1,
-    Max = 60,
-    Rounding = 1,
-    Callback = function(Value)
-        easterEggTimeDelay = Value
-        ConfigSystem.CurrentConfig.EasterEggTimeDelay = Value
-        ConfigSystem.SaveConfig()
-        print("Đã đặt Easter Egg Time Delay: " .. Value .. " giây")
-        -- Cập nhật Input khi Slider thay đổi
-        if easterEggTimeDelayInput and easterEggTimeDelayInput.Set then easterEggTimeDelayInput:Set(tostring(Value)) end
-    end
-})
 
 -- Input cho Easter Egg Time Delay
 easterEggTimeDelayInput = EasterEggSection:AddInput("EasterEggTimeDelayInput", {

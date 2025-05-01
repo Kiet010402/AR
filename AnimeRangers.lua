@@ -753,7 +753,7 @@ local InfoSection = InfoTab:AddSection("Thông tin")
 
 InfoSection:AddParagraph({
     Title = "Anime Rangers X",
-    Content = "Phiên bản: 1.0.0\nTrạng thái: Hoạt động"
+    Content = "Phiên bản: 0.2 Beta\nTrạng thái: Hoạt động"
 })
 
 InfoSection:AddParagraph({
@@ -1586,6 +1586,35 @@ StorySection:AddSlider("StoryTimeDelaySlider", {
         ConfigSystem.CurrentConfig.StoryTimeDelay = Value
         ConfigSystem.SaveConfig()
         print("Đã đặt Story Time Delay: " .. Value .. " giây")
+        -- Cập nhật Input khi Slider thay đổi
+        local input = StorySection:GetComponent("StoryTimeDelayInput")
+        if input and input.Set then input:Set(tostring(Value)) end
+    end
+})
+
+-- Input cho Story Time Delay
+StorySection:AddInput("StoryTimeDelayInput", {
+    Title = "", -- Để trống Title cho gọn
+    Placeholder = "Nhập delay",
+    Default = tostring(storyTimeDelay),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 and numValue <= 30 then
+            storyTimeDelay = numValue
+            ConfigSystem.CurrentConfig.StoryTimeDelay = numValue
+            ConfigSystem.SaveConfig()
+            print("Đã đặt Story Time Delay (Input): " .. numValue .. " giây")
+            -- Cập nhật Slider khi Input thay đổi
+            local slider = StorySection:GetComponent("StoryTimeDelaySlider")
+            if slider and slider.Set then slider:Set(numValue) end
+        else
+            print("Giá trị delay không hợp lệ (1-30)")
+            -- Reset Input về giá trị cũ nếu không hợp lệ
+            local input = StorySection:GetComponent("StoryTimeDelayInput")
+            if input and input.Set then input:Set(tostring(storyTimeDelay)) end
+        end
     end
 })
 
@@ -1713,6 +1742,34 @@ RangerSection:AddSlider("RangerTimeDelaySlider", {
         ConfigSystem.CurrentConfig.RangerTimeDelay = Value
         ConfigSystem.SaveConfig()
         print("Đã đặt Ranger Time Delay: " .. Value .. " giây")
+        -- Cập nhật Input khi Slider thay đổi
+        local input = RangerSection:GetComponent("RangerTimeDelayInput")
+        if input and input.Set then input:Set(tostring(Value)) end
+    end
+})
+
+-- Input cho Ranger Time Delay
+RangerSection:AddInput("RangerTimeDelayInput", {
+    Title = "",
+    Placeholder = "Nhập delay",
+    Default = tostring(rangerTimeDelay),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 and numValue <= 30 then
+            rangerTimeDelay = numValue
+            ConfigSystem.CurrentConfig.RangerTimeDelay = numValue
+            ConfigSystem.SaveConfig()
+            print("Đã đặt Ranger Time Delay (Input): " .. numValue .. " giây")
+            -- Cập nhật Slider khi Input thay đổi
+            local slider = RangerSection:GetComponent("RangerTimeDelaySlider")
+            if slider and slider.Set then slider:Set(numValue) end
+        else
+            print("Giá trị delay không hợp lệ (1-30)")
+            local input = RangerSection:GetComponent("RangerTimeDelayInput")
+            if input and input.Set then input:Set(tostring(rangerTimeDelay)) end
+        end
     end
 })
 
@@ -1954,6 +2011,34 @@ BossEventSection:AddSlider("BossEventTimeDelaySlider", {
         ConfigSystem.CurrentConfig.BossEventTimeDelay = Value
         ConfigSystem.SaveConfig()
         print("Đã đặt Boss Event Time Delay: " .. Value .. " giây")
+        -- Cập nhật Input khi Slider thay đổi
+        local input = BossEventSection:GetComponent("BossEventTimeDelayInput")
+        if input and input.Set then input:Set(tostring(Value)) end
+    end
+})
+
+-- Input cho Boss Event Time Delay
+BossEventSection:AddInput("BossEventTimeDelayInput", {
+    Title = "",
+    Placeholder = "Nhập delay",
+    Default = tostring(bossEventTimeDelay),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 and numValue <= 30 then
+            bossEventTimeDelay = numValue
+            ConfigSystem.CurrentConfig.BossEventTimeDelay = numValue
+            ConfigSystem.SaveConfig()
+            print("Đã đặt Boss Event Time Delay (Input): " .. numValue .. " giây")
+            -- Cập nhật Slider khi Input thay đổi
+            local slider = BossEventSection:GetComponent("BossEventTimeDelaySlider")
+            if slider and slider.Set then slider:Set(numValue) end
+        else
+            print("Giá trị delay không hợp lệ (1-30)")
+            local input = BossEventSection:GetComponent("BossEventTimeDelayInput")
+            if input and input.Set then input:Set(tostring(bossEventTimeDelay)) end
+        end
     end
 })
 
@@ -2066,6 +2151,34 @@ ChallengeSection:AddSlider("ChallengeTimeDelaySlider", {
         ConfigSystem.CurrentConfig.ChallengeTimeDelay = Value
         ConfigSystem.SaveConfig()
         print("Đã đặt Challenge Time Delay: " .. Value .. " giây")
+        -- Cập nhật Input khi Slider thay đổi
+        local input = ChallengeSection:GetComponent("ChallengeTimeDelayInput")
+        if input and input.Set then input:Set(tostring(Value)) end
+    end
+})
+
+-- Input cho Challenge Time Delay
+ChallengeSection:AddInput("ChallengeTimeDelayInput", {
+    Title = "",
+    Placeholder = "Nhập delay",
+    Default = tostring(challengeTimeDelay),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 and numValue <= 30 then
+            challengeTimeDelay = numValue
+            ConfigSystem.CurrentConfig.ChallengeTimeDelay = numValue
+            ConfigSystem.SaveConfig()
+            print("Đã đặt Challenge Time Delay (Input): " .. numValue .. " giây")
+            -- Cập nhật Slider khi Input thay đổi
+            local slider = ChallengeSection:GetComponent("ChallengeTimeDelaySlider")
+            if slider and slider.Set then slider:Set(numValue) end
+        else
+            print("Giá trị delay không hợp lệ (1-30)")
+            local input = ChallengeSection:GetComponent("ChallengeTimeDelayInput")
+            if input and input.Set then input:Set(tostring(challengeTimeDelay)) end
+        end
     end
 })
 
@@ -2181,10 +2294,35 @@ InGameSection:AddSlider("AutoTPLobbyDelaySlider", {
         autoTPLobbyDelay = Value
         ConfigSystem.CurrentConfig.AutoTPLobbyDelay = Value
         ConfigSystem.SaveConfig()
-        
         print("Đã đặt Auto TP Lobby Delay: " .. Value .. " phút")
-        
-        print("Đã đặt Auto TP Lobby Delay: " .. Value .. " phút")
+        -- Cập nhật Input khi Slider thay đổi
+        local input = InGameSection:GetComponent("AutoTPLobbyDelayInput")
+        if input and input.Set then input:Set(tostring(Value)) end
+    end
+})
+
+-- Input cho Auto TP Lobby Delay
+InGameSection:AddInput("AutoTPLobbyDelayInput", {
+    Title = "",
+    Placeholder = "Nhập phút",
+    Default = tostring(autoTPLobbyDelay),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 and numValue <= 60 then
+            autoTPLobbyDelay = numValue
+            ConfigSystem.CurrentConfig.AutoTPLobbyDelay = numValue
+            ConfigSystem.SaveConfig()
+            print("Đã đặt Auto TP Lobby Delay (Input): " .. numValue .. " phút")
+            -- Cập nhật Slider khi Input thay đổi
+            local slider = InGameSection:GetComponent("AutoTPLobbyDelaySlider")
+            if slider and slider.Set then slider:Set(numValue) end
+        else
+            print("Giá trị delay không hợp lệ (1-60 phút)")
+            local input = InGameSection:GetComponent("AutoTPLobbyDelayInput")
+            if input and input.Set then input:Set(tostring(autoTPLobbyDelay)) end
+        end
     end
 })
 
@@ -2575,7 +2713,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateEnabled and wait(2) do -- Cập nhật mỗi 2 giây
+                while autoUpdateEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() then
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
@@ -2628,7 +2766,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateRandomEnabled and wait(2) do -- Cập nhật mỗi 2 giây
+                while autoUpdateRandomEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() and #unitSlots > 0 then
                         -- Chọn ngẫu nhiên một slot để nâng cấp
@@ -3242,6 +3380,34 @@ EasterEggSection:AddSlider("EasterEggTimeDelaySlider", {
         ConfigSystem.CurrentConfig.EasterEggTimeDelay = Value
         ConfigSystem.SaveConfig()
         print("Đã đặt Easter Egg Time Delay: " .. Value .. " giây")
+        -- Cập nhật Input khi Slider thay đổi
+        local input = EasterEggSection:GetComponent("EasterEggTimeDelayInput")
+        if input and input.Set then input:Set(tostring(Value)) end
+    end
+})
+
+-- Input cho Easter Egg Time Delay
+EasterEggSection:AddInput("EasterEggTimeDelayInput", {
+    Title = "",
+    Placeholder = "Nhập delay",
+    Default = tostring(easterEggTimeDelay),
+    Numeric = true,
+    Finished = true,
+    Callback = function(Value)
+        local numValue = tonumber(Value)
+        if numValue and numValue >= 1 and numValue <= 60 then
+            easterEggTimeDelay = numValue
+            ConfigSystem.CurrentConfig.EasterEggTimeDelay = numValue
+            ConfigSystem.SaveConfig()
+            print("Đã đặt Easter Egg Time Delay (Input): " .. numValue .. " giây")
+            -- Cập nhật Slider khi Input thay đổi
+            local slider = EasterEggSection:GetComponent("EasterEggTimeDelaySlider")
+            if slider and slider.Set then slider:Set(numValue) end
+        else
+            print("Giá trị delay không hợp lệ (1-60)")
+            local input = EasterEggSection:GetComponent("EasterEggTimeDelayInput")
+            if input and input.Set then input:Set(tostring(easterEggTimeDelay)) end
+        end
     end
 })
 

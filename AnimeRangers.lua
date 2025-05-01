@@ -1,4 +1,4 @@
--- Anime Rangers X Script
+\-- Anime Rangers X Script
 
 -- Kiểm tra Place ID
 local currentPlaceId = game.PlaceId
@@ -1256,7 +1256,7 @@ QuestSection:AddToggle("AutoClaimQuestToggle", {
             
             -- Tạo vòng lặp Auto Claim Quests
             spawn(function()
-                while autoClaimQuestEnabled and wait(30) do -- Claim mỗi 30 giây
+                while autoClaimQuestEnabled and wait(1) do -- Claim mỗi 30 giây
                     claimAllQuests()
                 end
             end)
@@ -3312,9 +3312,6 @@ spawn(function()
     end
 end)
 
--- Thêm section Ranger Stage trong tab Play
-local RangerSection = PlayTab:AddSection("Ranger Stage")
-
 -- Tự động xóa animations khi khởi động script nếu tính năng được bật và đang ở trong map
 spawn(function()
     wait(3) -- Đợi game load
@@ -3771,6 +3768,65 @@ EggEventSection:AddToggle("AutoOpenEggToggle", {
             if autoOpenEggLoop then
                 autoOpenEggLoop:Disconnect()
                 autoOpenEggLoop = nil
+            end
+        end
+    end
+})
+
+-- Toggle Auto Join All (Ranger)
+local autoJoinAllRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinAllRanger or false
+local autoJoinAllRangerLoop = nil
+
+RangerSection:AddToggle("AutoJoinAllRangerToggle", {
+    Title = "Auto Join All",
+    Default = autoJoinAllRangerEnabled,
+    Callback = function(Value)
+        autoJoinAllRangerEnabled = Value
+        ConfigSystem.CurrentConfig.AutoJoinAllRanger = Value
+        ConfigSystem.SaveConfig()
+        if Value then
+            print("Auto Join All Ranger đã được bật")
+            if autoJoinAllRangerLoop then
+                autoJoinAllRangerLoop:Disconnect()
+                autoJoinAllRangerLoop = nil
+            end
+            spawn(function()
+                local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
+                local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
+                while autoJoinAllRangerEnabled do
+                    for _, map in ipairs(allMaps) do
+                        for _, act in ipairs(allActs) do
+                            if not autoJoinAllRangerEnabled then return end
+                            -- Chỉ join khi không ở trong map
+                            if not isPlayerInMap() then
+                                -- Đổi map
+                                local displayMap = reverseMapNameMapping[map] or map
+                                changeWorld(displayMap)
+                                wait(0.5)
+                                -- Đổi act
+                                changeAct(map, act)
+                                wait(0.5)
+                                -- Join Ranger Stage
+                                joinRangerStage()
+                                print("Đã join: " .. map .. " - " .. act)
+                                -- Đợi cho đến khi vào map hoặc hết delay
+                                local t = 0
+                                while not isPlayerInMap() and t < 10 do wait(0.5) t = t + 0.5 end
+                                -- Đợi delay giữa các lần join
+                                wait(rangerTimeDelay)
+                            else
+                                -- Nếu đang ở trong map thì đợi ra khỏi map
+                                while isPlayerInMap() and autoJoinAllRangerEnabled do wait(1) end
+                            end
+                        end
+                    end
+                end
+            end)
+        else
+            print("Auto Join All Ranger đã được tắt")
+            if autoJoinAllRangerLoop then
+                autoJoinAllRangerLoop:Disconnect()
+                autoJoinAllRangerLoop = nil
             end
         end
     end

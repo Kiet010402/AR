@@ -2541,30 +2541,46 @@ InGameSection:AddToggle("AutoVoteToggle", {
 
 -- Hàm để scan unit trong UnitsFolder
 local function scanUnits()
-        -- Lấy UnitsFolder
-        local player = game:GetService("Players").LocalPlayer
-        if not player then
+    -- Lấy UnitsFolder
+    local player = game:GetService("Players").LocalPlayer
+    if not player then
         return false
-        end
-        
-        local unitsFolder = player:FindFirstChild("UnitsFolder")
-        if not unitsFolder then
+    end
+    
+    local unitsFolder = player:FindFirstChild("UnitsFolder")
+    if not unitsFolder then
         return false
-        end
-        
-        -- Lấy danh sách unit theo thứ tự
-        unitSlots = {}
+    end
+    
+    -- Lấy danh sách unit theo thứ tự
+    unitSlots = {}
+    unitNames = {} -- Thêm mảng để lưu tên unit
     local children = unitsFolder:GetChildren()
     for i, unit in ipairs(children) do
         if (unit:IsA("Folder") or unit:IsA("Model")) and i <= 6 then -- Giới hạn 6 slot
-                unitSlots[i] = unit
-            -- Không in log để giảm spam
+            unitSlots[i] = unit
+            -- Lấy tên unit từ unit data
+            local unitName = "Unknown"
+            -- Cố gắng lấy tên unit từ các thuộc tính khác nhau
+            if unit:FindFirstChild("Name") and unit.Name.Value then
+                unitName = unit.Name.Value
+            elseif unit:FindFirstChild("UnitName") and unit.UnitName.Value then
+                unitName = unit.UnitName.Value
+            elseif unit:FindFirstChild("Unit") and unit.Unit.Value then
+                unitName = unit.Unit.Value
+            else
+                unitName = unit.Name -- Sử dụng tên folder/model nếu không tìm thấy thuộc tính khác
             end
+            unitNames[i] = unitName
         end
-        
-        return #unitSlots > 0
     end
     
+    -- Cập nhật các dropdown sau khi scan
+    updateUnitDropdowns()
+    
+    return #unitSlots > 0
+end
+
 -- Hàm để nâng cấp unit tối ưu
 local function upgradeUnit(unit)
     if not unit then
@@ -2583,10 +2599,28 @@ end
 -- Thêm section Units Update trong tab In-Game
 local UnitsUpdateSection = InGameTab:AddSection("Units Update")
 
+-- Lưu các tham chiếu tới dropdown để cập nhật sau
+local unitDropdowns = {}
+
+-- Hàm cập nhật dropdown titles
+local function updateUnitDropdowns()
+    for i = 1, 6 do
+        if unitDropdowns[i] then
+            local title = unitNames[i] and (unitNames[i] .. " (Slot " .. i .. ")") or ("Slot " .. i .. " Level")
+            -- Sử dụng hàm Set thay vì SetTitle
+            if unitDropdowns[i].Set then
+                unitDropdowns[i]:Set({
+                    Title = title
+                })
+            end
+        end
+    end
+end
+
 -- Tạo 6 dropdown cho 6 slot
 for i = 1, 6 do
-    UnitsUpdateSection:AddDropdown("Slot" .. i .. "LevelDropdown", {
-        Title = "Slot " .. i .. " Level",
+    unitDropdowns[i] = UnitsUpdateSection:AddDropdown("Slot" .. i .. "LevelDropdown", {
+        Title = "Slot " .. i .. " Level", -- Tiêu đề mặc định
         Values = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},
         Multi = false,
         Default = tostring(unitSlotLevels[i]),
@@ -2601,10 +2635,27 @@ for i = 1, 6 do
             ConfigSystem.CurrentConfig["Slot" .. i .. "Level"] = numberValue
             ConfigSystem.SaveConfig()
             
-            print("Đã đặt cấp độ slot " .. i .. " thành: " .. numberValue)
+            if unitNames and unitNames[i] then
+                print("Đã đặt cấp độ " .. unitNames[i] .. " (Slot " .. i .. ") thành: " .. numberValue)
+            else
+                print("Đã đặt cấp độ slot " .. i .. " thành: " .. numberValue)
+            end
         end
     })
 end
+
+-- Thêm nút để làm mới unit names
+UnitsUpdateSection:AddButton({
+    Title = "Làm mới danh sách",
+    Callback = function()
+        local success = scanUnits()
+        if success then
+            print("Đã làm mới danh sách units")
+        else
+            print("Không thể làm mới danh sách units. Vui lòng vào map trước.")
+        end
+    end
+})
 
 -- Toggle Auto Update
 UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
@@ -2635,6 +2686,8 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
                         for i = 1, 6 do
                             if unitSlots[i] and unitSlotLevels[i] > 0 then
+                                -- Hiển thị thông tin khi nâng cấp với tên unit
+                                local displayName = unitNames[i] or ("Slot " .. i)
                                 for j = 1, unitSlotLevels[i] do
                                     upgradeUnit(unitSlots[i])
                                     wait(0.1) -- Chờ một chút giữa các lần nâng cấp
@@ -2658,6 +2711,23 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
         end
     end
 })
+
+-- Thực hiện scan units khi script khởi động
+spawn(function()
+    wait(3) -- Đợi 5 giây để game load hoàn tất
+    if isPlayerInMap() then
+        print("Đang scan units...")
+        scanUnits()
+        print("Đã hoàn thành scan units")
+    end
+    
+    -- Thiết lập vòng lặp auto scan mỗi 10 giây khi ở trong map
+    while wait(3) do
+        if isPlayerInMap() and not unitNames[1] then
+            scanUnits()
+        end
+    end
+end)
 
 -- Toggle Auto Update Random
 UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
@@ -2688,6 +2758,8 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
                         -- Chọn ngẫu nhiên một slot để nâng cấp
                         local randomIndex = math.random(1, #unitSlots)
                         if unitSlots[randomIndex] then
+                            -- Hiển thị thông tin khi nâng cấp với tên unit
+                            local displayName = unitNames[randomIndex] or ("Slot " .. randomIndex)
                             upgradeUnit(unitSlots[randomIndex])
                         end
                     else

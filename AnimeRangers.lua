@@ -2432,33 +2432,22 @@ InGameSection:AddToggle("AutoVoteToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            print("Auto Vote đã được bật, sẽ bắt đầu sau 15 giây")
-            
+            print("Auto Vote đã được bật, sẽ bắt đầu ngay lập tức")
             -- Hủy vòng lặp cũ nếu có
             if autoVoteLoop then
                 autoVoteLoop:Disconnect()
                 autoVoteLoop = nil
             end
-            
-            -- Tạo vòng lặp mới với 15 giây delay trước khi bắt đầu
+            -- Gửi vote ngay lập tức
+            toggleAutoVote()
+            -- Tạo vòng lặp mới
             spawn(function()
-                -- Chờ 1 giây trước khi bắt đầu Auto Vote
-                wait(0.1)
-                
-                -- Kiểm tra lại nếu toggle vẫn được bật sau khi đợi
-                if autoVoteEnabled then
-                    -- Thông báo bắt đầu
-                    print("Auto Vote bắt đầu hoạt động")
-                    
-                    -- Bắt đầu vòng lặp sau khi delay
-                    while autoVoteEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
-                        toggleAutoVote()
-                    end
+                while autoVoteEnabled and wait(0.5) do -- Gửi yêu cầu mỗi 0.5 giây
+                    toggleAutoVote()
                 end
             end)
         else
             print("Auto Vote đã được tắt")
-            
             -- Hủy vòng lặp nếu có
             if autoVoteLoop then
                 autoVoteLoop:Disconnect()

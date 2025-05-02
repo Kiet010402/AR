@@ -624,8 +624,6 @@ local unitSlotLevels = {
     ConfigSystem.CurrentConfig.Slot6Level or 0
 }
 local unitSlots = {}
-local unitLevelDropdowns = {} -- Thêm dòng này
-local unitLabelParagraphs = {} -- Thêm dòng này
 
 -- Biến lưu trạng thái Time Delay
 local storyTimeDelay = ConfigSystem.CurrentConfig.StoryTimeDelay or 5
@@ -1409,20 +1407,17 @@ local function setupOptimizedLoops()
             else
                 -- Đang ở trong map, kiểm tra tính năng Auto Update Units
                 if autoUpdateEnabled then
-                    -- Sửa: Lặp qua unitSlots đã được cập nhật bởi scanUnits
-                    for i = 1, #unitSlots do
-                        -- Sửa: Kiểm tra object và level
-                        if unitSlots[i] and unitSlots[i].object and unitSlotLevels[i] > 0 then
-                            upgradeUnit(unitSlots[i].object)
-                            wait(0.1) -- Giữ wait ở đây để tránh spam quá nhanh trong vòng lặp chính
+                    for i = 1, 6 do
+                        if unitSlots[i] and unitSlotLevels[i] > 0 then
+                            upgradeUnit(unitSlots[i])
+                            wait(0.1)
                         end
                     end
                 elseif autoUpdateRandomEnabled and #unitSlots > 0 then
                     -- Chọn ngẫu nhiên một slot để nâng cấp
                     local randomIndex = math.random(1, #unitSlots)
-                    -- Sửa: Kiểm tra object
-                    if unitSlots[randomIndex] and unitSlots[randomIndex].object then
-                        upgradeUnit(unitSlots[randomIndex].object)
+                    if unitSlots[randomIndex] then
+                        upgradeUnit(unitSlots[randomIndex])
                     end
                 end
             end
@@ -2546,66 +2541,30 @@ InGameSection:AddToggle("AutoVoteToggle", {
 
 -- Hàm để scan unit trong UnitsFolder
 local function scanUnits()
-    -- Lấy UnitsFolder
-    local player = game:GetService("Players").LocalPlayer
-    if not player then
+        -- Lấy UnitsFolder
+        local player = game:GetService("Players").LocalPlayer
+        if not player then
         return false
-    end
-
-    local unitsFolder = player:FindFirstChild("UnitsFolder")
-    if not unitsFolder then
-        -- Reset labels nếu không tìm thấy folder
+        end
+        
+        local unitsFolder = player:FindFirstChild("UnitsFolder")
+        if not unitsFolder then
+        return false
+        end
+        
+        -- Lấy danh sách unit theo thứ tự
         unitSlots = {}
-        updateUnitLabels() -- Cập nhật UI để hiển thị (Empty)
-        return false
-    end
-
-    -- Lấy danh sách unit theo thứ tự và cập nhật
-    local changed = false
-    local newUnitSlots = {}
     local children = unitsFolder:GetChildren()
-
-    for i = 1, 6 do
-        local unit = children[i]
-        if unit and (unit:IsA("Folder") or unit:IsA("Model")) then
-            if not unitSlots[i] or unitSlots[i].name ~= unit.Name or unitSlots[i].object ~= unit then
-                newUnitSlots[i] = { name = unit.Name, object = unit }
-                changed = true
-            else
-                newUnitSlots[i] = unitSlots[i] -- Giữ lại nếu không đổi
+    for i, unit in ipairs(children) do
+        if (unit:IsA("Folder") or unit:IsA("Model")) and i <= 6 then -- Giới hạn 6 slot
+                unitSlots[i] = unit
+            -- Không in log để giảm spam
             end
-        elseif unitSlots[i] then -- Slot đã trống
-            changed = true
         end
+        
+        return #unitSlots > 0
     end
-
-    -- Chỉ cập nhật nếu có thay đổi thực sự hoặc số lượng thay đổi
-    if changed or #newUnitSlots ~= #unitSlots then
-        unitSlots = newUnitSlots
-        updateUnitLabels() -- Cập nhật UI
-    end
-
-    return #unitSlots > 0
-end
-
--- Hàm để cập nhật tiêu đề (Paragraphs) cho các unit slots
-local function updateUnitLabels()
-    for i = 1, 6 do
-        local paragraph = unitLabelParagraphs[i]
-        if paragraph and paragraph.Set then -- Check if paragraph and Set exist
-            local title
-            if unitSlots[i] and unitSlots[i].name then
-                title = unitSlots[i].name .. ":"
-            else
-                title = "Slot " .. i .. " (Empty):"
-            end
-            -- Thử cập nhật Title của Paragraph
-            pcall(function() paragraph:Set({ Title = title, Content = "" }) end) -- Cập nhật Title, giữ Content trống
-        end
-    end
-    print("Updated unit labels") -- Debug log
-end
-
+    
 -- Hàm để nâng cấp unit tối ưu
 local function upgradeUnit(unit)
     if not unit then
@@ -2626,15 +2585,8 @@ local UnitsUpdateSection = InGameTab:AddSection("Units Update")
 
 -- Tạo 6 dropdown cho 6 slot
 for i = 1, 6 do
-    -- Thêm Paragraph để hiển thị tên unit
-    unitLabelParagraphs[i] = UnitsUpdateSection:AddParagraph({
-        Title = "Slot " .. i .. " (Empty):", -- Tiêu đề ban đầu
-        Content = ""
-    })
-
-    -- Thêm Dropdown để chọn level
-    unitLevelDropdowns[i] = UnitsUpdateSection:AddDropdown("Slot" .. i .. "LevelDropdown", {
-        Title = "", -- Bỏ Title của Dropdown
+    UnitsUpdateSection:AddDropdown("Slot" .. i .. "LevelDropdown", {
+        Title = "Slot " .. i .. " Level",
         Values = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"},
         Multi = false,
         Default = tostring(unitSlotLevels[i]),
@@ -2682,18 +2634,16 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
                     if isPlayerInMap() then
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
                         for i = 1, 6 do
-                            -- Sửa: Kiểm tra unitSlots[i] và object trước khi nâng cấp
-                            if unitSlots[i] and unitSlots[i].object and unitSlotLevels[i] > 0 then
-                                -- Nâng cấp unit đến level đã chọn
-                                -- Cần logic kiểm tra level hiện tại của unit nếu muốn dừng ở mức level chính xác
-                                -- Hiện tại, nó sẽ gửi lệnh nâng cấp liên tục nếu level chưa đạt max
-                                upgradeUnit(unitSlots[i].object)
-                                -- Bỏ wait(0.1) ở đây để vòng lặp ngoài kiểm soát
+                            if unitSlots[i] and unitSlotLevels[i] > 0 then
+                                for j = 1, unitSlotLevels[i] do
+                                    upgradeUnit(unitSlots[i])
+                                    wait(0.1) -- Chờ một chút giữa các lần nâng cấp
+                                end
                             end
                         end
                     else
-                        -- Người chơi không ở trong map, thử scan lại nếu cần
-                        -- scanUnits() -- Bỏ scan ở đây vì đã có vòng lặp scan riêng
+                        -- Người chơi không ở trong map, thử scan lại
+                        scanUnits()
                     end
                 end
             end)
@@ -2734,19 +2684,15 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
             spawn(function()
                 while autoUpdateRandomEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
-                    if isPlayerInMap() then
-                        -- Sửa: Kiểm tra #unitSlots > 0 trước khi random
-                        if #unitSlots > 0 then
-                            -- Chọn ngẫu nhiên một slot để nâng cấp
-                            local randomIndex = math.random(1, #unitSlots)
-                            -- Sửa: Kiểm tra unitSlots[randomIndex] và object trước khi nâng cấp
-                            if unitSlots[randomIndex] and unitSlots[randomIndex].object then
-                                upgradeUnit(unitSlots[randomIndex].object)
-                            end
+                    if isPlayerInMap() and #unitSlots > 0 then
+                        -- Chọn ngẫu nhiên một slot để nâng cấp
+                        local randomIndex = math.random(1, #unitSlots)
+                        if unitSlots[randomIndex] then
+                            upgradeUnit(unitSlots[randomIndex])
                         end
                     else
-                        -- Người chơi không ở trong map, không cần làm gì vì đã có vòng lặp scan riêng
-                        -- scanUnits()
+                        -- Người chơi không ở trong map, thử scan lại
+                        scanUnits()
                     end
                 end
             end)
@@ -3485,9 +3431,6 @@ end)
 
 -- Khởi động các vòng lặp tối ưu
 setupOptimizedLoops()
-
--- Gọi scanUnits lần đầu để cập nhật UI
-scanUnits()
 
 -- Kiểm tra trạng thái người chơi khi script khởi động
 if isPlayerInMap() then

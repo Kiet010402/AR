@@ -2625,7 +2625,7 @@ for i = 1, 6 do
         end
     })
 end
-
+--[[
 -- Thêm nút Debug Unit Slots
 UnitsUpdateSection:AddButton({
     Title = "Debug Unit Slots",
@@ -2665,7 +2665,7 @@ UnitsUpdateSection:AddButton({
         end
     end
 })
-
+--]]
 -- Toggle Auto Update
 UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
     Title = "Auto Update",

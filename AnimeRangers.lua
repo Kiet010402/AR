@@ -1525,37 +1525,37 @@ local function joinRangerStage(mapToJoin, actToJoin)
 
         -- 1. Create
         Event:FireServer("Create")
-        wait(0.5)
+        wait(0.1)
 
         -- 2. Change Mode to Ranger Stage
         local modeArgs = { [1] = "Change-Mode", [2] = { ["Mode"] = "Ranger Stage" } }
         Event:FireServer(unpack(modeArgs))
-        wait(0.5)
+        wait(0.1)
 
         -- 3. Friend Only (sử dụng cài đặt global)
         if rangerFriendOnly then
             Event:FireServer("Change-FriendOnly")
-            wait(0.5)
+            wait(0.1)
         end
 
         -- 4. Chọn Map và Act (sử dụng tham số đầu vào)
         -- 4.1 Đổi Map
         local args1 = { [1] = "Change-World", [2] = { ["World"] = mapToJoin } }
         Event:FireServer(unpack(args1))
-        wait(0.5)
+        wait(0.1)
 
         -- 4.2 Đổi Act
         local args2 = { [1] = "Change-Chapter", [2] = { ["Chapter"] = mapToJoin .. "_" .. actToJoin } }
         Event:FireServer(unpack(args2))
-        wait(0.5)
+        wait(0.1)
 
         -- 5. Submit
         Event:FireServer("Submit")
-        wait(0.5)
+        wait(0.1)
 
         -- 6. Start
         Event:FireServer("Start")
-
+        wait(0.1)
         print("Đã join Ranger Stage: " .. mapToJoin .. "_" .. actToJoin)
 
         -- Cập nhật index cho lần tiếp theo chỉ khi dùng giá trị từ UI
@@ -1682,7 +1682,7 @@ RangerSection:AddDropdown("ActDropdown", {
         -- Thay đổi act khi người dùng chọn
                 changeAct(selectedRangerMap, act)
                 print("Đã chọn act: " .. act)
-                wait(0.5) -- Đợi 0.5 giây giữa các lần gửi để tránh lỗi
+                wait(0.1) -- Đợi 0.5 giây giữa các lần gửi để tránh lỗi
             end
         end
         
@@ -1789,10 +1789,10 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                                     else
                                         -- Nếu đang trong map, đợi ra khỏi map
                                         print("Đang ở trong map, đợi thoát...")
-                                        while isPlayerInMap() and autoJoinRangerEnabled do wait(1) end
+                                        while isPlayerInMap() and autoJoinRangerEnabled do wait(0.1) end
                                     end
                                     -- Thêm delay nhỏ nếu join lỗi/không vào map và vẫn đang bật
-                                    if not isPlayerInMap() and autoJoinRangerEnabled then wait(1) end
+                                    if not isPlayerInMap() and autoJoinRangerEnabled then wait(0.1) end
                                 end
                             end
                         end
@@ -1800,7 +1800,7 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                     -- Nếu không join được map nào trong vòng lặp (ví dụ: đang ở trong map suốt), thì đợi 1 chút
                     if not didJoin and autoJoinRangerEnabled then
                          print("Không thể join map nào, kiểm tra lại sau 5 giây...")
-                         wait(5)
+                         wait(0.1)
                     end
                     -- Lặp lại nếu vẫn đang bật
                     if autoJoinRangerEnabled then print("Hoàn thành vòng lặp Auto Join Selected, bắt đầu lại..."); wait(1); end
@@ -2689,7 +2689,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
+                while autoUpdateEnabled and wait(1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() then
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
@@ -2697,7 +2697,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
                             if unitSlots[i] and unitSlotLevels[i] > 0 then
                                 for j = 1, unitSlotLevels[i] do
                                     upgradeUnit(unitSlots[i])
-                                    wait(0.1) -- Chờ một chút giữa các lần nâng cấp
+                                    wait(1) -- Chờ một chút giữa các lần nâng cấp
                                 end
                             end
                         end
@@ -2742,7 +2742,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateRandomEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
+                while autoUpdateRandomEnabled and wait(1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() and #unitSlots > 0 then
                         -- Chọn ngẫu nhiên một slot để nâng cấp
@@ -3956,42 +3956,32 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                 while autoJoinAllRangerEnabled do
                     for _, map in ipairs(allMaps) do
                         for _, act in ipairs(allActs) do
-                            if not autoJoinAllRangerEnabled then return end -- Thoát nếu bị tắt
-
-                            -- >>> KIỂM TRA COOLDOWN <<< --
-                            if isRangerStageOnCooldown(map, act) then
-                                print("Skipping " .. map .. "_" .. act .. " (On Cooldown)")
+                            if not autoJoinAllRangerEnabled then return end
+                            if not isPlayerInMap() then
+                                -- Đổi map và act không cần thiết nữa vì joinRangerStage đã xử lý
+                                -- local displayMap = reverseMapNameMapping[map] or map
+                                -- changeWorld(displayMap)
+                                -- wait(0.5)
+                                -- changeAct(map, act)
+                                -- wait(0.5)
+                                
+                                -- Join Ranger Stage với map và act cụ thể
+                                joinRangerStage(map, act) -- << Truyền map và act vào đây
+                                
+                                print("Đã yêu cầu join: " .. map .. " - " .. act)
+                                
+                                -- Đợi cho đến khi vào map hoặc hết delay
+                                local t = 0
+                                while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5) t = t + 0.5 end
+                                
+                                -- Đợi delay giữa các lần join (nếu còn bật)
+                                if autoJoinAllRangerEnabled then wait(rangerTimeDelay) end
                             else
-                                -- >>> LOGIC JOIN HIỆN TẠI <<< --
-                                if not isPlayerInMap() then
-                                    -- Join Ranger Stage với map và act cụ thể
-                                    joinRangerStage(map, act)
-                                    print("Đã yêu cầu join: " .. map .. " - " .. act)
-                                    
-                                    -- Đợi cho đến khi vào map hoặc hết delay
-                                    local t = 0
-                                    while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5 end
-                                    
-                                    -- Đợi delay giữa các lần join (nếu còn bật)
-                                    -- Chuyển wait(rangerTimeDelay) xuống dưới cùng của vòng lặp act
-                                else
-                                    -- Nếu đang ở trong map thì đợi ra khỏi map
-                                    print("Đang ở trong map khác, đợi thoát để check " .. map .. "_" .. act)
-                                    while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.5) end
-                                    print("Đã thoát map.")
-                                    -- Sau khi thoát, kiểm tra lại cooldown và join nếu cần (nếu không thì vòng lặp sẽ tự xử lý)
-                                    if not isRangerStageOnCooldown(map, act) and autoJoinAllRangerEnabled then
-                                         print("Thử join " .. map .. "_" .. act .. " ngay sau khi thoát map.")
-                                         joinRangerStage(map, act)
-                                         local t = 0
-                                         while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5 end
-                                    end
-                                end
+                                -- Nếu đang ở trong map thì đợi ra khỏi map
+                                while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.5) end
                             end
-                            -- >>> HẾT LOGIC JOIN HIỆN TẠI <<<
-
-                            -- Thêm delay nhỏ giữa các lần kiểm tra/join để tránh spam
-                            if autoJoinAllRangerEnabled then wait(0.5) end 
+                            -- Thêm delay nhỏ để tránh spam quá nhanh nếu lỗi join
+                            if not isPlayerInMap() and autoJoinAllRangerEnabled then wait(0.5) end 
                         end
                     end
                     -- Lặp lại từ đầu sau khi hết các map/act
@@ -4268,32 +4258,3 @@ FPSBoostSection:AddToggle("BoostFPSToggle", {
     end
 })
 
--- Hàm kiểm tra xem Ranger Stage có đang cooldown không
-local function isRangerStageOnCooldown(mapName, actName)
-    local player = game:GetService("Players").LocalPlayer
-    if not player then return false end -- Không tìm thấy player, coi như không cooldown
-    
-    local playerName = player.Name
-    local stageName = mapName .. "_" .. actName
-    
-    -- Đường dẫn đến folder cooldown
-    local rangerStageFolder = safeGetPath(game:GetService("ReplicatedStorage"), {"Player_Data", playerName, "RangerStage"}, 0.1) -- Thời gian chờ ngắn
-    
-    if rangerStageFolder then
-        -- Sử dụng pcall để bắt lỗi nếu có
-        local success, result = pcall(function()
-            return rangerStageFolder:FindFirstChild(stageName)
-        end)
-        
-        if not success then
-            warn("Error calling FindFirstChild on", rangerStageFolder, "with name", stageName, ":", result)
-            return false -- Coi như không cooldown nếu có lỗi
-        end
-        
-        local cooldownIndicator = result
-        return cooldownIndicator ~= nil -- Trả về true nếu tìm thấy (đang cooldown), false nếu không
-    end
-    
-    -- Không tìm thấy folder RangerStage, coi như không cooldown
-    return false 
-end

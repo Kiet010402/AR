@@ -4068,28 +4068,31 @@ FPSBoostSection:AddToggle("DeleteMapToggle", {
             -- Kiểm tra ngay nếu đang trong map
             if isPlayerInMap() then
                 deleteMap()
+                print("Delete Map đã được bật - Map đã được xóa để tăng FPS")
                 
-                -- Tạo vòng lặp để xóa map mỗi khi vào map mới
-                spawn(function()
-                    while deleteMapEnabled and wait(3) do
-                        if isPlayerInMap() and not deleteMapActive then
+                -- Thêm một event handler để xóa map mỗi khi vào map mới
+                if not game:GetService("Players").LocalPlayer.CharacterAdded:IsA("RBXScriptConnection") then
+                    game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function()
+                        -- Chờ một chút để map load xong
+                        wait(2)
+                        if deleteMapEnabled and isPlayerInMap() and not deleteMapActive then
                             deleteMap()
                         end
-                    end
-                end)
-                
-                print("Delete Map đã được bật - Map sẽ bị xóa để tăng FPS")
+                    end)
+                end
             else
                 print("Delete Map đã được bật - Map sẽ bị xóa khi bạn vào map")
                 
-                -- Tạo vòng lặp để kiểm tra khi nào vào map
-                spawn(function()
-                    while deleteMapEnabled and wait(3) do
-                        if isPlayerInMap() and not deleteMapActive then
+                -- Thêm một event handler để xóa map khi vào map
+                if not game:GetService("Players").LocalPlayer.CharacterAdded:IsA("RBXScriptConnection") then
+                    game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function()
+                        -- Chờ một chút để map load xong
+                        wait(2)
+                        if deleteMapEnabled and isPlayerInMap() and not deleteMapActive then
                             deleteMap()
                         end
-                    end
-                end)
+                    end)
+                end
             end
         else
             print("Delete Map đã được tắt")
@@ -4097,15 +4100,141 @@ FPSBoostSection:AddToggle("DeleteMapToggle", {
     end
 })
 
--- Thêm nút Delete Map Now
-FPSBoostSection:AddButton({
-    Title = "Delete Map Now",
-    Callback = function()
-        if isPlayerInMap() then
-            deleteMap()
-            print("Đã xóa map bây giờ")
+-- Biến lưu trạng thái Boost FPS
+local boostFPSEnabled = ConfigSystem.CurrentConfig.BoostFPS or false
+local boostFPSActive = false
+local fpsBoostScriptLoaded = false
+
+-- Toggle Boost FPS
+FPSBoostSection:AddToggle("BoostFPSToggle", {
+    Title = "Boost FPS (Trong map)",
+    Default = boostFPSEnabled,
+    Callback = function(Value)
+        boostFPSEnabled = Value
+        ConfigSystem.CurrentConfig.BoostFPS = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Kiểm tra ngay nếu đang trong map
+            if isPlayerInMap() then
+                -- Thực hiện Boost FPS một lần duy nhất nếu chưa load
+                if not fpsBoostScriptLoaded then
+                    local success, err = pcall(function()
+                        boostFPSActive = true
+                        
+                        -- Thiết lập cấu hình FPS Boost
+                        _G.Settings = {
+                            Players = {
+                                ["Ignore Me"] = true, -- Ignore your Character
+                                ["Ignore Others"] = true -- Ignore other Characters
+                            },
+                            Meshes = {
+                                Destroy = false, -- Destroy Meshes
+                                LowDetail = true -- Low detail meshes (NOT SURE IT DOES ANYTHING)
+                            },
+                            Images = {
+                                Invisible = true, -- Invisible Images
+                                LowDetail = false, -- Low detail images (NOT SURE IT DOES ANYTHING)
+                                Destroy = false, -- Destroy Images
+                            },
+                            ["No Particles"] = true, -- Disables all ParticleEmitter, Trail, Smoke, Fire and Sparkles
+                            ["No Camera Effects"] = true, -- Disables all PostEffect's (Camera/Lighting Effects)
+                            ["No Explosions"] = true, -- Makes Explosion's invisible
+                            ["No Clothes"] = true, -- Removes Clothing from the game
+                            ["Low Water Graphics"] = true, -- Removes Water Quality
+                            ["No Shadows"] = true, -- Remove Shadows
+                            ["Low Rendering"] = true, -- Lower Rendering
+                            ["Low Quality Parts"] = true -- Lower quality parts
+                        }
+                        
+                        -- Load FPS Boost script
+                        loadstring(game:HttpGet("https://raw.githubusercontent.com/Kiet010402/FPS-BOOST/refs/heads/main/FPSBOOTS.lua"))()
+                        
+                        fpsBoostScriptLoaded = true
+                        print("FPS Boost đã được kích hoạt thành công!")
+                        
+                        -- Hiển thị thông báo
+                        Fluent:Notify({
+                            Title = "FPS Boost",
+                            Content = "FPS Boost đã được kích hoạt thành công!",
+                            Duration = 3
+                        })
+                    end)
+                    
+                    if not success then
+                        warn("Lỗi khi Boost FPS: " .. tostring(err))
+                        boostFPSActive = false
+                        fpsBoostScriptLoaded = false
+                        
+                        -- Hiển thị thông báo lỗi
+                        Fluent:Notify({
+                            Title = "Lỗi FPS Boost",
+                            Content = "Không thể kích hoạt FPS Boost: " .. tostring(err),
+                            Duration = 3
+                        })
+                    end
+                else
+                    print("FPS Boost đã được kích hoạt trước đó, không cần kích hoạt lại")
+                    Fluent:Notify({
+                        Title = "FPS Boost",
+                        Content = "FPS Boost đã được kích hoạt trước đó",
+                        Duration = 3
+                    })
+                end
+                
+                print("Boost FPS đã được bật - Đã tối ưu hóa FPS")
+            else
+                print("Boost FPS đã được bật - Sẽ tối ưu hóa FPS khi vào map")
+                
+                -- Thêm một event handler để Boost FPS khi vào map
+                if not game:GetService("Players").LocalPlayer.CharacterAdded:IsA("RBXScriptConnection") then
+                    game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function()
+                        -- Chờ một chút để map load xong
+                        wait(2)
+                        if boostFPSEnabled and isPlayerInMap() and not fpsBoostScriptLoaded then
+                            -- Thiết lập cấu hình FPS Boost
+                            _G.Settings = {
+                                Players = {
+                                    ["Ignore Me"] = true,
+                                    ["Ignore Others"] = true
+                                },
+                                Meshes = {
+                                    Destroy = false,
+                                    LowDetail = true
+                                },
+                                Images = {
+                                    Invisible = true,
+                                    LowDetail = false,
+                                    Destroy = false,
+                                },
+                                ["No Particles"] = true,
+                                ["No Camera Effects"] = true,
+                                ["No Explosions"] = true,
+                                ["No Clothes"] = true,
+                                ["Low Water Graphics"] = true,
+                                ["No Shadows"] = true,
+                                ["Low Rendering"] = true,
+                                ["Low Quality Parts"] = true
+                            }
+                            
+                            -- Load FPS Boost script
+                            pcall(function()
+                                loadstring(game:HttpGet("https://raw.githubusercontent.com/Kiet010402/FPS-BOOST/refs/heads/main/FPSBOOTS.lua"))()
+                                fpsBoostScriptLoaded = true
+                                print("FPS Boost đã được kích hoạt thành công khi vào map!")
+                            end)
+                        end
+                    end)
+                end
+            end
         else
-            print("Bạn phải ở trong map để sử dụng nút này")
+            print("Boost FPS đã được tắt (Lưu ý: Thay đổi đã áp dụng vẫn sẽ có hiệu lực)")
+            Fluent:Notify({
+                Title = "Boost FPS",
+                Content = "Đã tắt tính năng Boost FPS (cần reload game để khôi phục)",
+                Duration = 3
+            })
         end
     end
 })
+

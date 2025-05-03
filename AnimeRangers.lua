@@ -4280,14 +4280,20 @@ local function isRangerStageOnCooldown(mapName, actName)
     local rangerStageFolder = safeGetPath(game:GetService("ReplicatedStorage"), {"Player_Data", playerName, "RangerStage"}, 0.1) -- Thời gian chờ ngắn
     
     if rangerStageFolder then
-        -- Kiểm tra sự tồn tại của StringValue tương ứng
-        local cooldownIndicator = rangerStageFolder:FindFirstChild(stageName)
+        -- Sử dụng pcall để bắt lỗi nếu có
+        local success, result = pcall(function()
+            return rangerStageFolder:FindFirstChild(stageName)
+        end)
+        
+        if not success then
+            warn("Error calling FindFirstChild on", rangerStageFolder, "with name", stageName, ":", result)
+            return false -- Coi như không cooldown nếu có lỗi
+        end
+        
+        local cooldownIndicator = result
         return cooldownIndicator ~= nil -- Trả về true nếu tìm thấy (đang cooldown), false nếu không
     end
     
     -- Không tìm thấy folder RangerStage, coi như không cooldown
     return false 
 end
-
--- Thêm section FPS Boost vào tab Settings
-

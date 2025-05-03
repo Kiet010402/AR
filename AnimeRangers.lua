@@ -462,6 +462,7 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Webhook
     WebhookURL = "",
     AutoSendWebhook = false,
+    DeleteMap = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -3732,22 +3733,38 @@ WebhookSection:AddToggle("AutoSendWebhookToggle", {
             -- Kiểm tra URL webhook
             if webhookURL == "" then
                 print("URL webhook trống! Vui lòng nhập URL webhook trước khi bật tính năng này.")
+                Fluent:Notify({
+                    Title = "Auto Send Webhook",
+                    Content = "URL webhook trống! Vui lòng nhập URL webhook trước.",
+                    Duration = 3
+                })
+                -- Trả về toggle về trạng thái tắt
+                WebhookSection:GetComponent("AutoSendWebhookToggle"):Set(false)
                 return
             end
-            -- Kiểm tra có đang ở trong map không
-            if not isPlayerInMap() then
-                print("Bạn chỉ có thể bật Auto Send Webhook khi đang ở trong map!")
-                return
-            end
+            
+            -- Loại bỏ kiểm tra đang ở trong map không, cho phép bật ở lobby
             autoSendWebhookEnabled = true
             ConfigSystem.CurrentConfig.AutoSendWebhook = true
             ConfigSystem.SaveConfig()
+            
             print("Auto Send Webhook đã được bật. Thông tin trận đấu sẽ tự động gửi khi game kết thúc.")
+            Fluent:Notify({
+                Title = "Auto Send Webhook",
+                Content = "Đã bật Auto Send Webhook. Hoạt động khi game kết thúc.",
+                Duration = 3
+            })
         else
             autoSendWebhookEnabled = false
             ConfigSystem.CurrentConfig.AutoSendWebhook = false
             ConfigSystem.SaveConfig()
+            
             print("Auto Send Webhook đã được tắt")
+            Fluent:Notify({
+                Title = "Auto Send Webhook",
+                Content = "Đã tắt Auto Send Webhook.",
+                Duration = 3
+            })
         end
     end
 })
@@ -3934,6 +3951,161 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                 autoJoinAllRangerLoop:Disconnect()
                 autoJoinAllRangerLoop = nil
             end
+        end
+    end
+})
+
+-- Thêm section FPS Boost vào tab Settings
+local FPSBoostSection = SettingsTab:AddSection("FPS Boost")
+
+-- Biến lưu trạng thái Delete Map
+local deleteMapEnabled = ConfigSystem.CurrentConfig.DeleteMap or false
+local deleteMapActive = false
+
+-- Hàm để xóa map
+local function deleteMap()
+    -- Kiểm tra nếu đang ở trong map
+    if not isPlayerInMap() then
+        print("Bạn phải ở trong map để sử dụng tính năng này")
+        return false
+    end
+    
+    -- Đã xóa map và đang chờ vòng xóa tiếp theo
+    if deleteMapActive then
+        return true
+    end
+    
+    local success, err = pcall(function()
+        deleteMapActive = true
+        
+        -- Tìm workspace.Building
+        local building = workspace:FindFirstChild("Building")
+        if not building then
+            warn("Không tìm thấy Building trong workspace")
+            return
+        end
+        
+        -- Hàm để giữ lại các object đặc biệt
+        local function preserveSpecialObjects(parent)
+            local map = parent:FindFirstChild("Map")
+            if map then
+                local objectsToPreserve = {}
+                for _, child in pairs(map:GetDescendants()) do
+                    if child.Name == "Baseplate" or child.Name == "Part" then
+                        table.insert(objectsToPreserve, child)
+                        -- Di chuyển đến nơi an toàn
+                        child.Parent = game:GetService("ReplicatedStorage")
+                    end
+                end
+                return objectsToPreserve
+            end
+            return {}
+        end
+        
+        -- Hàm để khôi phục các object đã giữ lại
+        local function restoreObjects(preservedObjects)
+            local map = building:FindFirstChild("Map")
+            if not map then
+                map = Instance.new("Folder")
+                map.Name = "Map"
+                map.Parent = building
+            end
+            
+            for _, obj in pairs(preservedObjects) do
+                obj.Parent = map
+            end
+        end
+        
+        -- Bước 1: Tìm và tạm thời di chuyển các object đặc biệt
+        local preservedObjects = preserveSpecialObjects(building)
+        
+        -- Bước 2: Xóa tất cả trong Building
+        for _, child in pairs(building:GetChildren()) do
+            child:Destroy()
+        end
+        
+        -- Bước 3: Tạo lại Map folder và khôi phục các object đã giữ lại
+        local map = Instance.new("Folder")
+        map.Name = "Map"
+        map.Parent = building
+        
+        restoreObjects(preservedObjects)
+        
+        -- Xóa tất cả trong Lighting
+        local lighting = game:GetService("Lighting")
+        for _, child in pairs(lighting:GetChildren()) do
+            child:Destroy()
+        end
+        
+        print("Đã xóa map để tăng FPS")
+        
+        -- Đặt lại trạng thái sau 5 giây
+        spawn(function()
+            wait(5)
+            deleteMapActive = false
+        end)
+    end)
+    
+    if not success then
+        warn("Lỗi khi xóa map: " .. tostring(err))
+        deleteMapActive = false
+        return false
+    end
+    
+    return true
+end
+
+-- Toggle Delete Map
+FPSBoostSection:AddToggle("DeleteMapToggle", {
+    Title = "Delete Map (Trong map)",
+    Default = deleteMapEnabled,
+    Callback = function(Value)
+        deleteMapEnabled = Value
+        ConfigSystem.CurrentConfig.DeleteMap = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Kiểm tra ngay nếu đang trong map
+            if isPlayerInMap() then
+                deleteMap()
+                
+                -- Tạo vòng lặp để xóa map mỗi khi vào map mới
+                spawn(function()
+                    while deleteMapEnabled and wait(3) do
+                        if isPlayerInMap() and not deleteMapActive then
+                            deleteMap()
+                        end
+                    end
+                end)
+                
+                print("Delete Map đã được bật - Map sẽ bị xóa để tăng FPS")
+            else
+                print("Delete Map đã được bật - Map sẽ bị xóa khi bạn vào map")
+                
+                -- Tạo vòng lặp để kiểm tra khi nào vào map
+                spawn(function()
+                    while deleteMapEnabled and wait(3) do
+                        if isPlayerInMap() and not deleteMapActive then
+                            deleteMap()
+                        end
+                    end
+                end)
+            end
+        else
+            print("Delete Map đã được tắt")
+        end
+    end
+})
+
+-- Thêm nút Delete Map Now
+FPSBoostSection:AddButton({
+    Title = "Delete Map Now",
+    Callback = function()
+        if isPlayerInMap() then
+            deleteMap()
+            print("Đã xóa map bây giờ")
+        else
+            print("Bạn phải ở trong map để sử dụng nút này")
         end
     end
 })

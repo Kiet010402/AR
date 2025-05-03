@@ -3733,11 +3733,6 @@ WebhookSection:AddToggle("AutoSendWebhookToggle", {
             -- Kiểm tra URL webhook
             if webhookURL == "" then
                 print("URL webhook trống! Vui lòng nhập URL webhook trước khi bật tính năng này.")
-                Fluent:Notify({
-                    Title = "Auto Send Webhook",
-                    Content = "URL webhook trống! Vui lòng nhập URL webhook trước.",
-                    Duration = 3
-                })
                 -- Trả về toggle về trạng thái tắt
                 WebhookSection:GetComponent("AutoSendWebhookToggle"):Set(false)
                 return
@@ -3749,22 +3744,12 @@ WebhookSection:AddToggle("AutoSendWebhookToggle", {
             ConfigSystem.SaveConfig()
             
             print("Auto Send Webhook đã được bật. Thông tin trận đấu sẽ tự động gửi khi game kết thúc.")
-            Fluent:Notify({
-                Title = "Auto Send Webhook",
-                Content = "Đã bật Auto Send Webhook. Hoạt động khi game kết thúc.",
-                Duration = 3
-            })
         else
             autoSendWebhookEnabled = false
             ConfigSystem.CurrentConfig.AutoSendWebhook = false
             ConfigSystem.SaveConfig()
             
             print("Auto Send Webhook đã được tắt")
-            Fluent:Notify({
-                Title = "Auto Send Webhook",
-                Content = "Đã tắt Auto Send Webhook.",
-                Duration = 3
-            })
         end
     end
 })
@@ -4057,7 +4042,7 @@ end
 
 -- Toggle Delete Map
 FPSBoostSection:AddToggle("DeleteMapToggle", {
-    Title = "Delete Map (Trong map)",
+    Title = "Delete Map",
     Default = deleteMapEnabled,
     Callback = function(Value)
         deleteMapEnabled = Value
@@ -4107,7 +4092,7 @@ local fpsBoostScriptLoaded = false
 
 -- Toggle Boost FPS
 FPSBoostSection:AddToggle("BoostFPSToggle", {
-    Title = "Boost FPS (Trong map)",
+    Title = "Boost FPS",
     Default = boostFPSEnabled,
     Callback = function(Value)
         boostFPSEnabled = Value
@@ -4152,34 +4137,15 @@ FPSBoostSection:AddToggle("BoostFPSToggle", {
                         
                         fpsBoostScriptLoaded = true
                         print("FPS Boost đã được kích hoạt thành công!")
-                        
-                        -- Hiển thị thông báo
-                        Fluent:Notify({
-                            Title = "FPS Boost",
-                            Content = "FPS Boost đã được kích hoạt thành công!",
-                            Duration = 3
-                        })
                     end)
                     
                     if not success then
                         warn("Lỗi khi Boost FPS: " .. tostring(err))
                         boostFPSActive = false
                         fpsBoostScriptLoaded = false
-                        
-                        -- Hiển thị thông báo lỗi
-                        Fluent:Notify({
-                            Title = "Lỗi FPS Boost",
-                            Content = "Không thể kích hoạt FPS Boost: " .. tostring(err),
-                            Duration = 3
-                        })
                     end
                 else
                     print("FPS Boost đã được kích hoạt trước đó, không cần kích hoạt lại")
-                    Fluent:Notify({
-                        Title = "FPS Boost",
-                        Content = "FPS Boost đã được kích hoạt trước đó",
-                        Duration = 3
-                    })
                 end
                 
                 print("Boost FPS đã được bật - Đã tối ưu hóa FPS")
@@ -4228,12 +4194,7 @@ FPSBoostSection:AddToggle("BoostFPSToggle", {
                 end
             end
         else
-            print("Boost FPS đã được tắt (Lưu ý: Thay đổi đã áp dụng vẫn sẽ có hiệu lực)")
-            Fluent:Notify({
-                Title = "Boost FPS",
-                Content = "Đã tắt tính năng Boost FPS (cần reload game để khôi phục)",
-                Duration = 3
-            })
+            print("Boost FPS đã được tắt (Lưu ý: Thay đổi đã áp dụng vẫn sẽ có hiệu lực, cần reload game để khôi phục)")
         end
     end
 })

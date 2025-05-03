@@ -3937,78 +3937,6 @@ EggEventSection:AddToggle("AutoOpenEggToggle", {
 local autoJoinAllRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinAllRanger or false
 local autoJoinAllRangerLoop = nil
 
--- Hàm kiểm tra stage nào đã hết countdown và stage nào chưa đi
-local function checkRangerStagesCooldown()
-    local player = game:GetService("Players").LocalPlayer
-    if not player then return {}, {} end
-    local playerName = player.Name
-    
-    -- Kiểm tra RangerStage trong Player_Data
-    local playerData = safeGetPath(game:GetService("ReplicatedStorage"), {"Player_Data", playerName}, 1)
-    if not playerData then return {}, {} end
-    
-    local rangerStageFolder = playerData:FindFirstChild("RangerStage")
-    
-    -- Kết quả: map nào đã hết countdown và map nào chưa đi
-    local availableMaps = {}
-    local mapsInCooldown = {}
-    local visitedMaps = {}
-    
-    -- Kiểm tra folder RangerStage nếu có
-    if rangerStageFolder then
-        for _, stageData in pairs(rangerStageFolder:GetChildren()) do
-            local mapInfo = stageData.Name:split("_")
-            if #mapInfo >= 2 then
-                local map = mapInfo[1]
-                local stage = mapInfo[2]
-                
-                -- Đánh dấu map này đã được thăm
-                if not visitedMaps[map] then visitedMaps[map] = {} end
-                visitedMaps[map][stage] = true
-                
-                -- Kiểm tra countdown
-                local countdown = stageData:FindFirstChild("Countdown")
-                if not countdown or countdown.Value <= 0 then
-                    -- Map này đã hết countdown
-                    if not availableMaps[map] then availableMaps[map] = {} end
-                    table.insert(availableMaps[map], stage)
-                    print("Map có sẵn: " .. map .. "_" .. stage)
-                else
-                    -- Map này đang countdown
-                    if not mapsInCooldown[map] then mapsInCooldown[map] = {} end
-                    table.insert(mapsInCooldown[map], {stage = stage, time = countdown.Value})
-                    print("Map đang countdown: " .. map .. "_" .. stage .. " (" .. countdown.Value .. "s)")
-                end
-            end
-        end
-    end
-    
-    -- Xác định các map chưa đi (chưa có trong folder RangerStage)
-    local unvisitedMaps = {}
-    local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
-    local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
-    
-    for _, map in ipairs(allMaps) do
-        if not visitedMaps[map] or not next(visitedMaps[map]) then
-            -- Map chưa được thăm lần nào
-            unvisitedMaps[map] = allActs
-            print("Map chưa đi: " .. map .. " (tất cả stage)")
-        else
-            -- Kiểm tra các stage chưa đi trong map
-            unvisitedMaps[map] = {}
-            for _, act in ipairs(allActs) do
-                if not visitedMaps[map][act] then
-                    table.insert(unvisitedMaps[map], act)
-                    print("Stage chưa đi: " .. map .. "_" .. act)
-                end
-            end
-        end
-    end
-    
-    return availableMaps, unvisitedMaps, mapsInCooldown
-end
-
--- Cải thiện Auto Join All (Ranger)
 RangerSection:AddToggle("AutoJoinAllRangerToggle", {
     Title = "Auto Join All",
     Default = autoJoinAllRangerEnabled,
@@ -4025,97 +3953,50 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
             spawn(function()
                 local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
                 local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
-                local currentMapIndex = 1
-                local currentActIndex = 1
-                
                 while autoJoinAllRangerEnabled do
-                    if isPlayerInMap() then
-                        -- Nếu đang trong map, đợi ra map
-                        print("Đang trong map, đợi ra map...")
-                        while isPlayerInMap() and autoJoinAllRangerEnabled do wait(1) end
-                    else
-                        -- Kiểm tra map nào đã hết countdown và map nào chưa đi
-                        local availableMaps, unvisitedMaps, mapsInCooldown = checkRangerStagesCooldown()
-                        local joinedMap = false
-                        
-                        -- THỨ TỰ ƯU TIÊN:
-                        -- 1. Map chưa đi (chưa có trong folder RangerStage)
-                        local joinedUnvisitedMap = false
-                        for map, stages in pairs(unvisitedMaps) do
-                            if #stages > 0 and autoJoinAllRangerEnabled and not isPlayerInMap() then
-                                -- Chọn stage đầu tiên trong map này
-                                local stage = stages[1]
-                                print("Tham gia map chưa đi: " .. map .. "_" .. stage)
-                                joinRangerStage(map, stage)
-                                joinedMap = true
-                                joinedUnvisitedMap = true
-                                
-                                -- Đợi vào map hoặc timeout
-                                local t = 0
-                                while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5; end
-                                
-                                -- Nếu vào map thành công, thoát vòng lặp
-                                if isPlayerInMap() then break end
-                            end
-                        end
-                        
-                        -- 2. Map đã hết countdown (nếu không join được map chưa đi)
-                        if not joinedUnvisitedMap then
-                            for map, stages in pairs(availableMaps) do
-                                if #stages > 0 and autoJoinAllRangerEnabled and not isPlayerInMap() then
-                                    -- Chọn stage đầu tiên trong map này
-                                    local stage = stages[1]
-                                    print("Tham gia map đã hết countdown: " .. map .. "_" .. stage)
-                                    joinRangerStage(map, stage)
-                                    joinedMap = true
+                    for _, map in ipairs(allMaps) do
+                        for _, act in ipairs(allActs) do
+                            if not autoJoinAllRangerEnabled then return end -- Thoát nếu bị tắt
+
+                            -- >>> KIỂM TRA COOLDOWN <<< --
+                            if isRangerStageOnCooldown(map, act) then
+                                print("Skipping " .. map .. "_" .. act .. " (On Cooldown)")
+                            else
+                                -- >>> LOGIC JOIN HIỆN TẠI <<< --
+                                if not isPlayerInMap() then
+                                    -- Join Ranger Stage với map và act cụ thể
+                                    joinRangerStage(map, act)
+                                    print("Đã yêu cầu join: " .. map .. " - " .. act)
                                     
-                                    -- Đợi vào map hoặc timeout
+                                    -- Đợi cho đến khi vào map hoặc hết delay
                                     local t = 0
-                                    while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5; end
+                                    while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5 end
                                     
-                                    -- Nếu vào map thành công, thoát vòng lặp
-                                    if isPlayerInMap() then break end
+                                    -- Đợi delay giữa các lần join (nếu còn bật)
+                                    -- Chuyển wait(rangerTimeDelay) xuống dưới cùng của vòng lặp act
+                                else
+                                    -- Nếu đang ở trong map thì đợi ra khỏi map
+                                    print("Đang ở trong map khác, đợi thoát để check " .. map .. "_" .. act)
+                                    while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.5) end
+                                    print("Đã thoát map.")
+                                    -- Sau khi thoát, kiểm tra lại cooldown và join nếu cần (nếu không thì vòng lặp sẽ tự xử lý)
+                                    if not isRangerStageOnCooldown(map, act) and autoJoinAllRangerEnabled then
+                                         print("Thử join " .. map .. "_" .. act .. " ngay sau khi thoát map.")
+                                         joinRangerStage(map, act)
+                                         local t = 0
+                                         while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5 end
+                                    end
                                 end
                             end
-                        end
-                        
-                        -- 3. Nếu tất cả map đều đang countdown, hiển thị thời gian và đi theo thứ tự
-                        if not joinedMap and not isPlayerInMap() and autoJoinAllRangerEnabled then
-                            -- Hiển thị thông tin countdown
-                            print("Tất cả map đều đang countdown:")
-                            for map, stages in pairs(mapsInCooldown) do
-                                for _, info in ipairs(stages) do
-                                    print("- " .. map .. "_" .. info.stage .. ": còn " .. info.time .. "s")
-                                end
-                            end
-                            
-                            -- Thử theo thứ tự thông thường
-                            local map = allMaps[currentMapIndex] 
-                            local act = allActs[currentActIndex]
-                            
-                            print("Thử map theo thứ tự: " .. map .. "_" .. act)
-                            joinRangerStage(map, act)
-                            
-                            -- Đợi vào map hoặc timeout
-                            local t = 0
-                            while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5; end
-                            
-                            -- Cập nhật index cho lần tiếp theo
-                            currentActIndex = currentActIndex + 1
-                            if currentActIndex > #allActs then
-                                currentActIndex = 1
-                                currentMapIndex = currentMapIndex + 1
-                                if currentMapIndex > #allMaps then
-                                    currentMapIndex = 1
-                                end
-                            end
-                        end
-                        
-                        -- Đợi một khoảng thời gian trước khi kiểm tra lại
-                        if autoJoinAllRangerEnabled then
-                            wait(1)
+                            -- >>> HẾT LOGIC JOIN HIỆN TẠI <<<
+
+                            -- Thêm delay nhỏ giữa các lần kiểm tra/join để tránh spam
+                            if autoJoinAllRangerEnabled then wait(0.5) end 
                         end
                     end
+                    -- Lặp lại từ đầu sau khi hết các map/act
+                    print("Đã hoàn thành vòng lặp Auto Join All, bắt đầu lại...")
+                    wait(0.5)
                 end
             end)
         else
@@ -4386,4 +4267,27 @@ FPSBoostSection:AddToggle("BoostFPSToggle", {
         end
     end
 })
+
+-- Hàm kiểm tra xem Ranger Stage có đang cooldown không
+local function isRangerStageOnCooldown(mapName, actName)
+    local player = game:GetService("Players").LocalPlayer
+    if not player then return false end -- Không tìm thấy player, coi như không cooldown
+    
+    local playerName = player.Name
+    local stageName = mapName .. "_" .. actName
+    
+    -- Đường dẫn đến folder cooldown
+    local rangerStageFolder = safeGetPath(game:GetService("ReplicatedStorage"), {"Player_Data", playerName, "RangerStage"}, 0.1) -- Thời gian chờ ngắn
+    
+    if rangerStageFolder then
+        -- Kiểm tra sự tồn tại của StringValue tương ứng
+        local cooldownIndicator = rangerStageFolder:FindFirstChild(stageName)
+        return cooldownIndicator ~= nil -- Trả về true nếu tìm thấy (đang cooldown), false nếu không
+    end
+    
+    -- Không tìm thấy folder RangerStage, coi như không cooldown
+    return false 
+end
+
+-- Thêm section FPS Boost vào tab Settings
 

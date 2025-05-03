@@ -2542,29 +2542,48 @@ InGameSection:AddToggle("AutoVoteToggle", {
 
 -- Hàm để scan unit trong UnitsFolder
 local function scanUnits()
-        -- Lấy UnitsFolder
-        local player = game:GetService("Players").LocalPlayer
-        if not player then
+    -- Lấy UnitsFolder
+    local player = game:GetService("Players").LocalPlayer
+    if not player then
         return false
-        end
-        
-        local unitsFolder = player:FindFirstChild("UnitsFolder")
-        if not unitsFolder then
-        return false
-        end
-        
-        -- Lấy danh sách unit theo thứ tự
-        unitSlots = {}
-    local children = unitsFolder:GetChildren()
-    for i, unit in ipairs(children) do
-        if (unit:IsA("Folder") or unit:IsA("Model")) and i <= 6 then -- Giới hạn 6 slot
-                unitSlots[i] = unit
-            -- Không in log để giảm spam
-            end
-        end
-        
-        return #unitSlots > 0
     end
+    
+    local unitsFolder = player:FindFirstChild("UnitsFolder")
+    if not unitsFolder then
+        return false
+    end
+    
+    -- Tạo mapping giữa vị trí game và vị trí thực tế theo pattern đã mô tả
+    local slotMapping = {
+        [1] = 1, -- Slot 1 vẫn đúng là slot 1
+        [2] = 6, -- Slot 2 thực tế là slot 6
+        [3] = 5, -- Slot 3 thực tế là slot 5
+        [4] = 4, -- Slot 4 vẫn đúng là slot 4
+        [5] = 3, -- Slot 5 thực tế là slot 3
+        [6] = 2  -- Slot 6 thực tế là slot 2
+    }
+    
+    -- Lấy danh sách unit theo thứ tự
+    unitSlots = {}
+    local children = unitsFolder:GetChildren()
+    
+    -- Xây dựng danh sách tạm
+    local tempSlots = {}
+    for i, unit in ipairs(children) do
+        if (unit:IsA("Folder") or unit:IsA("Model")) and i <= 6 then
+            tempSlots[i] = unit
+        end
+    end
+    
+    -- Áp dụng mapping để đặt unit vào đúng vị trí
+    for displaySlot, actualSlot in pairs(slotMapping) do
+        if tempSlots[actualSlot] then
+            unitSlots[displaySlot] = tempSlots[actualSlot]
+        end
+    end
+    
+    return #unitSlots > 0
+end
     
 -- Hàm để nâng cấp unit tối ưu
 local function upgradeUnit(unit)
@@ -2606,6 +2625,46 @@ for i = 1, 6 do
         end
     })
 end
+
+-- Thêm nút Debug Unit Slots
+UnitsUpdateSection:AddButton({
+    Title = "Debug Unit Slots",
+    Callback = function()
+        local player = game:GetService("Players").LocalPlayer
+        if not player then return end
+        
+        local unitsFolder = player:FindFirstChild("UnitsFolder")
+        if not unitsFolder then 
+            print("Không tìm thấy UnitsFolder (cần vào map trước)")
+            return 
+        end
+        
+        print("===== DEBUG UNIT SLOTS =====")
+        local children = unitsFolder:GetChildren()
+        for i, unit in ipairs(children) do
+            if i <= 6 then
+                local slotInfo = "Game Slot "..i..": "
+                if unit:FindFirstChild("Name") then
+                    slotInfo = slotInfo .. unit.Name.Value
+                else
+                    slotInfo = slotInfo .. unit.Name
+                end
+                print(slotInfo)
+            end
+        end
+        
+        print("===== MAPPED UNIT SLOTS =====")
+        for i, unit in pairs(unitSlots) do
+            local slotInfo = "UI Slot "..i.." → Game Unit: "
+            if unit:FindFirstChild("Name") then
+                slotInfo = slotInfo .. unit.Name.Value
+            else
+                slotInfo = slotInfo .. unit.Name
+            end
+            print(slotInfo)
+        end
+    end
+})
 
 -- Toggle Auto Update
 UnitsUpdateSection:AddToggle("AutoUpdateToggle", {

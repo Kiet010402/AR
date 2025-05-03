@@ -3937,6 +3937,46 @@ EggEventSection:AddToggle("AutoOpenEggToggle", {
 local autoJoinAllRangerEnabled = ConfigSystem.CurrentConfig.AutoJoinAllRanger or false
 local autoJoinAllRangerLoop = nil
 
+-- Hàm kiểm tra stage nào đã hết countdown
+local function checkRangerStagesCooldown()
+    local player = game:GetService("Players").LocalPlayer
+    if not player then return {} end
+    local playerName = player.Name
+    
+    -- Kiểm tra RangerStage trong Player_Data
+    local playerData = safeGetPath(game:GetService("ReplicatedStorage"), {"Player_Data", playerName}, 1)
+    if not playerData then return {} end
+    
+    local rangerStageFolder = playerData:FindFirstChild("RangerStage")
+    if not rangerStageFolder then return {} end
+    
+    -- Kết quả: map nào đã hết countdown
+    local availableMaps = {}
+    
+    -- Kiểm tra từng map trong RangerStage
+    for _, stageData in pairs(rangerStageFolder:GetChildren()) do
+        local mapInfo = stageData.Name:split("_")
+        if #mapInfo >= 2 then
+            local map = mapInfo[1]
+            local stage = mapInfo[2]
+            
+            -- Kiểm tra countdown
+            local countdown = stageData:FindFirstChild("Countdown")
+            if not countdown or countdown.Value <= 0 then
+                -- Map này đã hết countdown
+                if not availableMaps[map] then availableMaps[map] = {} end
+                table.insert(availableMaps[map], stage)
+                print("Map có sẵn: " .. map .. "_" .. stage)
+            else
+                print("Map đang countdown: " .. map .. "_" .. stage .. " (" .. countdown.Value .. "s)")
+            end
+        end
+    end
+    
+    return availableMaps
+end
+
+-- Cải thiện Auto Join All (Ranger)
 RangerSection:AddToggle("AutoJoinAllRangerToggle", {
     Title = "Auto Join All",
     Default = autoJoinAllRangerEnabled,
@@ -3953,40 +3993,64 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
             spawn(function()
                 local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
                 local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
+                local currentMapIndex = 1
+                local currentActIndex = 1
+                
                 while autoJoinAllRangerEnabled do
-                    for _, map in ipairs(allMaps) do
-                        for _, act in ipairs(allActs) do
-                            if not autoJoinAllRangerEnabled then return end
-                            if not isPlayerInMap() then
-                                -- Đổi map và act không cần thiết nữa vì joinRangerStage đã xử lý
-                                -- local displayMap = reverseMapNameMapping[map] or map
-                                -- changeWorld(displayMap)
-                                -- wait(0.5)
-                                -- changeAct(map, act)
-                                -- wait(0.5)
+                    if isPlayerInMap() then
+                        -- Nếu đang trong map, đợi ra map
+                        print("Đang trong map, đợi ra map...")
+                        while isPlayerInMap() and autoJoinAllRangerEnabled do wait(1) end
+                    else
+                        -- Kiểm tra có map nào đã hết countdown
+                        local availableMaps = checkRangerStagesCooldown()
+                        local joinedMap = false
+                        
+                        -- Ưu tiên map đã hết countdown
+                        for map, stages in pairs(availableMaps) do
+                            if #stages > 0 and autoJoinAllRangerEnabled and not isPlayerInMap() then
+                                -- Chọn stage đầu tiên trong map này
+                                print("Tham gia map đã hết countdown: " .. map .. "_" .. stages[1])
+                                joinRangerStage(map, stages[1])
+                                joinedMap = true
                                 
-                                -- Join Ranger Stage với map và act cụ thể
-                                joinRangerStage(map, act) -- << Truyền map và act vào đây
-                                
-                                print("Đã yêu cầu join: " .. map .. " - " .. act)
-                                
-                                -- Đợi cho đến khi vào map hoặc hết delay
+                                -- Đợi vào map hoặc timeout
                                 local t = 0
-                                while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5) t = t + 0.5 end
+                                while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5; end
                                 
-                                -- Đợi delay giữa các lần join (nếu còn bật)
-                                if autoJoinAllRangerEnabled then wait(rangerTimeDelay) end
-                            else
-                                -- Nếu đang ở trong map thì đợi ra khỏi map
-                                while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.5) end
+                                -- Nếu vào map thành công, thoát vòng lặp
+                                if isPlayerInMap() then break end
                             end
-                            -- Thêm delay nhỏ để tránh spam quá nhanh nếu lỗi join
-                            if not isPlayerInMap() and autoJoinAllRangerEnabled then wait(0.5) end 
+                        end
+                        
+                        -- Nếu không có map nào hết countdown, thử theo thứ tự
+                        if not joinedMap and not isPlayerInMap() and autoJoinAllRangerEnabled then
+                            local map = allMaps[currentMapIndex] 
+                            local act = allActs[currentActIndex]
+                            
+                            print("Không có map hết countdown, thử map: " .. map .. "_" .. act)
+                            joinRangerStage(map, act)
+                            
+                            -- Đợi vào map hoặc timeout
+                            local t = 0
+                            while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do wait(0.5); t = t + 0.5; end
+                            
+                            -- Cập nhật index cho lần tiếp theo
+                            currentActIndex = currentActIndex + 1
+                            if currentActIndex > #allActs then
+                                currentActIndex = 1
+                                currentMapIndex = currentMapIndex + 1
+                                if currentMapIndex > #allMaps then
+                                    currentMapIndex = 1
+                                end
+                            end
+                        end
+                        
+                        -- Đợi một khoảng thời gian trước khi kiểm tra lại
+                        if autoJoinAllRangerEnabled then
+                            wait(1)
                         end
                     end
-                    -- Lặp lại từ đầu sau khi hết các map/act
-                    print("Đã hoàn thành vòng lặp Auto Join All, bắt đầu lại...")
-                    wait(0.5)
                 end
             end)
         else

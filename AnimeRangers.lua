@@ -4035,7 +4035,7 @@ local function deleteMap()
             if map then
                 local objectsToPreserve = {}
                 for _, child in pairs(map:GetDescendants()) do
-                    if child.Name == "Baseplate" or child.Name == "Part" then
+                    if child.Name == "Baseplate" or child.Name == "Part" or child.Name == "Road02" then
                         table.insert(objectsToPreserve, child)
                         -- Di chuyển đến nơi an toàn
                         child.Parent = game:GetService("ReplicatedStorage")

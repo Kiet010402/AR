@@ -1741,7 +1741,36 @@ rangerTimeDelayInput = RangerSection:AddInput("RangerTimeDelayInput", {
     end
 })
 
--- Toggle Auto Join Ranger Stage
+-- Hàm kiểm tra cooldown của map và act
+local function isMapActOnCooldown(mapName, actName)
+    local success, result = pcall(function()
+        local player = game:GetService("Players").LocalPlayer
+        if not player then return false end
+        
+        local playerName = player.Name
+        local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
+        if not playerData then return false end
+        
+        local playerFolder = playerData:FindFirstChild(playerName)
+        if not playerFolder then return false end
+        
+        local rangerStageFolder = playerFolder:FindFirstChild("RangerStage")
+        if not rangerStageFolder then return false end
+        
+        -- Kiểm tra xem map_act này có đang trong cooldown không
+        local mapActKey = mapName .. "_" .. actName
+        return rangerStageFolder:FindFirstChild(mapActKey) ~= nil
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra cooldown cho "..mapName.."_"..actName..": "..tostring(result))
+        return false
+    end
+    
+    return result
+end
+
+-- Cải tiến hàm Auto Join Ranger Stage để thông minh hơn với việc xử lý cooldown
 RangerSection:AddToggle("AutoJoinRangerToggle", {
     Title = "Auto Join Selected Stage", -- Đổi tên cho rõ nghĩa
     Default = ConfigSystem.CurrentConfig.AutoJoinRanger or false,
@@ -1767,43 +1796,61 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
             autoJoinRangerLoop = spawn(function()
                 while autoJoinRangerEnabled do
                     local didJoin = false
-                    -- Lặp qua các map đã chọn
+                    
+                    -- Kiểm tra nếu đang ở trong map, đợi ra khỏi map trước
+                    if isPlayerInMap() then
+                        print("Đang ở trong map, đợi thoát...")
+                        while isPlayerInMap() and autoJoinRangerEnabled do wait(0.1) end
+                        if not autoJoinRangerEnabled then return end
+                        wait(0.5) -- Đợi một chút giữa các lần kiểm tra
+                    end
+                    
+                    -- Tìm map và act không bị cooldown để join
+                    local availableMaps = {}
+                    
+                    -- Thu thập tất cả map+act không bị cooldown
                     for map, mapSelected in pairs(selectedRangerMaps) do
                         if mapSelected then
-                            -- Lặp qua các act đã chọn
                             for act, actSelected in pairs(selectedActs) do
                                 if actSelected then
-                                    if not autoJoinRangerEnabled then return end -- Thoát nếu bị tắt giữa chừng
-                                    if not isPlayerInMap() then
-                                        print("Chuẩn bị join: " .. map .. " - " .. act)
-                                        joinRangerStage(map, act) -- Gọi join với map và act cụ thể
-                                        didJoin = true
-                                        -- Đợi vào map hoặc timeout
-                                        local t = 0
-                                        while not isPlayerInMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
-                                        -- Nếu đã vào map, đợi delay
-                                        if isPlayerInMap() and autoJoinRangerEnabled then
-                                             print("Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
-                                             wait(rangerTimeDelay)
-                                        end
+                                    if not isMapActOnCooldown(map, act) then
+                                        table.insert(availableMaps, {map = map, act = act})
                                     else
-                                        -- Nếu đang trong map, đợi ra khỏi map
-                                        print("Đang ở trong map, đợi thoát...")
-                                        while isPlayerInMap() and autoJoinRangerEnabled do wait(0.1) end
+                                        print(map .. "_" .. act .. " đang trong cooldown, sẽ bỏ qua")
                                     end
-                                    -- Thêm delay nhỏ nếu join lỗi/không vào map và vẫn đang bật
-                                    if not isPlayerInMap() and autoJoinRangerEnabled then wait(0.1) end
                                 end
                             end
                         end
                     end
-                    -- Nếu không join được map nào trong vòng lặp (ví dụ: đang ở trong map suốt), thì đợi 1 chút
-                    if not didJoin and autoJoinRangerEnabled then
-                         print("Không thể join map nào, kiểm tra lại sau 5 giây...")
-                         wait(0.1)
+                    
+                    -- Nếu có map nào available, join map đó
+                    if #availableMaps > 0 then
+                        -- Ưu tiên map theo thứ tự (có thể tùy chỉnh logic sắp xếp nếu muốn)
+                        local mapToJoin = availableMaps[1]
+                        print("Chuẩn bị join map không có cooldown: " .. mapToJoin.map .. " - " .. mapToJoin.act)
+                        
+                        -- Join map
+                        joinRangerStage(mapToJoin.map, mapToJoin.act)
+                        didJoin = true
+                        
+                        -- Đợi vào map hoặc timeout
+                        local t = 0
+                        while not isPlayerInMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
+                        
+                        -- Nếu đã vào map, đợi delay
+                        if isPlayerInMap() and autoJoinRangerEnabled then
+                            print("Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
+                            wait(rangerTimeDelay)
+                        end
+                    else
+                        print("Tất cả map đã chọn đều đang trong cooldown, đợi 5 giây và kiểm tra lại...")
+                        wait(5)
                     end
-                    -- Lặp lại nếu vẫn đang bật
-                    if autoJoinRangerEnabled then print("Hoàn thành vòng lặp Auto Join Selected, bắt đầu lại..."); wait(1); end
+                    
+                    -- Nếu không join được map nào, đợi một chút
+                    if not didJoin and autoJoinRangerEnabled then
+                        wait(1)
+                    end
                 end
             end)
         else

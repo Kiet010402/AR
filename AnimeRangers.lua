@@ -2736,7 +2736,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateEnabled and wait(1) do -- Cập nhật mỗi 0.1 giây
+                while autoUpdateEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() then
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
@@ -2744,7 +2744,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
                             if unitSlots[i] and unitSlotLevels[i] > 0 then
                                 for j = 1, unitSlotLevels[i] do
                                     upgradeUnit(unitSlots[i])
-                                    wait(1) -- Chờ một chút giữa các lần nâng cấp
+                                    wait(0.1) -- Chờ một chút giữa các lần nâng cấp
                                 end
                             end
                         end
@@ -2789,7 +2789,7 @@ UnitsUpdateSection:AddToggle("AutoUpdateRandomToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateRandomEnabled and wait(1) do -- Cập nhật mỗi 0.1 giây
+                while autoUpdateRandomEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() and #unitSlots > 0 then
                         -- Chọn ngẫu nhiên một slot để nâng cấp
@@ -3687,7 +3687,7 @@ local function createEmbed(rewards, gameInfo)
     
     -- Thêm tên người chơi
     local playerName = game:GetService("Players").LocalPlayer.Name
-    statsText = "- Name: " .. playerName .. "\n"
+    statsText = "- Name: " .. "||" .. playerName .. "||\n"
     
     -- Luôn hiển thị các tài nguyên chính: Level, Gem, Gold, Egg
     local mainResources = {"Level", "Gem", "Gold", "Egg"}
@@ -3802,7 +3802,7 @@ local function setupWebhookMonitor()
                         if #rewards > 0 then
                             sendWebhook(rewards)
                             -- Đợi một thời gian để không gửi lặp lại
-                            wait(10)
+                            wait(0.5)
                         end
                     end
                 end

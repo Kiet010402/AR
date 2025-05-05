@@ -2609,7 +2609,7 @@ local function scanUnits()
     
     print("🔍 Bắt đầu scan UnitsFolder...")
     
-    -- Tạo mapping giữa vị trí game và vị trí thực tế theo pattern đã mô tả
+    -- Mapping tiêu chuẩn cho 6/6 unit
     local slotMapping = {
         [1] = 1, -- Slot 1 vẫn đúng là slot 1
         [2] = 6, -- Slot 2 thực tế là slot 6
@@ -2619,8 +2619,30 @@ local function scanUnits()
         [6] = 2  -- Slot 6 thực tế là slot 2
     }
     
-    -- Mapping theo thứ tự ưu tiên khi số lượng unit không đủ 6
-    local priorityOrder = {1, 6, 5, 4, 3, 2} -- Thứ tự ưu tiên map UI slots
+    -- Mapping cụ thể theo số lượng unit
+    local customMappings = {
+        -- Mapping cho 3/6 unit
+        [3] = {
+            [1] = 1, -- Slot 1 giữ nguyên
+            [2] = 3, -- Slot 2 → update slot 3
+            [3] = 2  -- Slot 3 → update slot 2
+        },
+        -- Mapping cho 4/6 unit
+        [4] = {
+            [1] = 1, -- Slot 1 giữ nguyên
+            [2] = 4, -- Slot 2 → update slot 4
+            [3] = 3, -- Slot 3 giữ nguyên
+            [4] = 2  -- Slot 4 → update slot 2
+        },
+        -- Mapping cho 5/6 unit
+        [5] = {
+            [1] = 1, -- Slot 1 giữ nguyên
+            [2] = 5, -- Slot 2 → update slot 5
+            [3] = 4, -- Slot 3 → update slot 4
+            [4] = 3, -- Slot 4 → update slot 3
+            [5] = 2  -- Slot 5 → update slot 2
+        }
+    }
     
     -- Reset unitSlots
     unitSlots = {}
@@ -2637,34 +2659,39 @@ local function scanUnits()
         end
     end
     
-    -- Trường hợp đặc biệt: Nếu số lượng unit dưới 6, áp dụng mapping ưu tiên
-    if unitCount < 6 then
-        for i, unit in ipairs(children) do
-            if i <= unitCount then
-                -- Áp dụng mapping ưu tiên theo số lượng unit thực tế
-                local uiSlot = i -- Map theo thứ tự tự nhiên
-                unitSlots[uiSlot] = unit
-                
-                local unitName = unit:FindFirstChild("Name") and unit.Name.Value or unit.Name
-                print("🔄 Mapped (Ưu tiên): Game Slot " .. i .. " → UI Slot " .. uiSlot .. " (" .. unitName .. ")")
-            end
+    -- Tạo danh sách tạm
+    local tempSlots = {}
+    for i, unit in ipairs(children) do
+        if i <= unitCount then
+            tempSlots[i] = unit
         end
-    else
-        -- Trường hợp đủ 6 unit: Áp dụng mapping tiêu chuẩn
-        local tempSlots = {}
-        for i, unit in ipairs(children) do
-            if i <= 6 then
-                tempSlots[i] = unit
-            end
-        end
-        
-        -- Áp dụng mapping để đặt unit vào đúng vị trí
+    end
+    
+    -- Áp dụng mapping dựa trên số lượng unit
+    if unitCount == 6 then
+        -- Case 6/6: Dùng mapping tiêu chuẩn
         for displaySlot, actualSlot in pairs(slotMapping) do
             if tempSlots[actualSlot] then
                 unitSlots[displaySlot] = tempSlots[actualSlot]
                 local unitName = tempSlots[actualSlot]:FindFirstChild("Name") and tempSlots[actualSlot].Name.Value or tempSlots[actualSlot].Name
-                print("🔄 Mapped (Tiêu chuẩn): Game Slot " .. actualSlot .. " → UI Slot " .. displaySlot .. " (" .. unitName .. ")")
+                print("🔄 Mapped (6/6): Game Slot " .. actualSlot .. " → UI Slot " .. displaySlot .. " (" .. unitName .. ")")
             end
+        end
+    elseif customMappings[unitCount] then
+        -- Case 3/6, 4/6, 5/6: Dùng custom mapping
+        for displaySlot, actualSlot in pairs(customMappings[unitCount]) do
+            if tempSlots[actualSlot] then
+                unitSlots[displaySlot] = tempSlots[actualSlot]
+                local unitName = tempSlots[actualSlot]:FindFirstChild("Name") and tempSlots[actualSlot].Name.Value or tempSlots[actualSlot].Name
+                print("🔄 Mapped (" .. unitCount .. "/6): Game Slot " .. actualSlot .. " → UI Slot " .. displaySlot .. " (" .. unitName .. ")")
+            end
+        end
+    else
+        -- Trường hợp khác (1/6, 2/6): Map theo thứ tự tự nhiên
+        for i, unit in ipairs(tempSlots) do
+            unitSlots[i] = unit
+            local unitName = unit:FindFirstChild("Name") and unit.Name.Value or unit.Name
+            print("🔄 Mapped (Mặc định): Game Slot " .. i .. " → UI Slot " .. i .. " (" .. unitName .. ")")
         end
     end
     

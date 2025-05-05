@@ -2804,21 +2804,36 @@ UnitsUpdateSection:AddToggle("AutoUpdateToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoUpdateEnabled and wait(0.1) do -- Cập nhật mỗi 0.1 giây
+                while autoUpdateEnabled and wait(0.5) do -- Cập nhật mỗi 0.1 giây
                     -- Kiểm tra xem có trong map không
                     if isPlayerInMap() then
                         -- Lặp qua từng slot và nâng cấp theo cấp độ đã chọn
                         for i = 1, 6 do
                             if unitSlots[i] and unitSlotLevels[i] > 0 then
-                                for j = 1, unitSlotLevels[i] do
-                                    upgradeUnit(unitSlots[i])
-                                    wait(0.1) -- Chờ một chút giữa các lần nâng cấp
+                                -- Lấy unit và kiểm tra level hiện tại
+                                local unit = unitSlots[i]
+                                local upgradeFolder = unit:FindFirstChild("Upgrade_Folder")
+                                
+                                if upgradeFolder then
+                                    local levelValue = upgradeFolder:FindFirstChild("Level")
+                                    if levelValue and levelValue:IsA("NumberValue") then
+                                        local currentLevel = levelValue.Value
+                                        local targetLevel = unitSlotLevels[i]
+                                        
+                                        -- Chỉ nâng cấp nếu level hiện tại thấp hơn level mục tiêu
+                                        if currentLevel < targetLevel then
+                                            print("⬆️ Slot " .. i .. ": Nâng cấp từ Lv " .. currentLevel .. " lên Lv " .. targetLevel)
+                                            upgradeUnit(unit)
+                                            wait(0.3) -- Thêm chờ nhẹ giữa các lần nâng cấp để tránh spam
+                                        end
+                                    end
                                 end
                             end
                         end
                     else
                         -- Người chơi không ở trong map, thử scan lại
                         scanUnits()
+                        wait(1) -- Chờ sau khi scan nếu không ở trong map
                     end
                 end
             end)

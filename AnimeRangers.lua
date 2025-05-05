@@ -1,249 +1,32 @@
 -- Anime Rangers X Script
 
--- HỆ THỐNG ANTI-BAN CỰC MẠNH V2.5
-print("Đang khởi tạo hệ thống anti-ban...")
-
--- Cờ toàn cục để kiểm soát log
-_G.showAntiBanLogs = false -- Mặc định tắt log
-
--- Hàm để bật/tắt log
-_G.toggleAntiBanLogs = function(enable)
-    _G.showAntiBanLogs = enable
-    print("[Anti-Ban] " .. (enable and "Đã BẬT" or "Đã TẮT") .. " hiển thị log")
-end
-
--- Hàm log an toàn
-local function safePrint(message)
-    if _G.showAntiBanLogs then
-        print(message)
-    end
-end
-
--- Thiết lập môi trường bảo vệ script
-local function setupProtection()
-    -- Lưu trữ các hàm gốc trước khi hook
-    local oldnamecall
-    local oldindex
-    local oldnewindex
-    
-    -- Tạo danh sách các module cần block
-    local blacklistedModules = {
-        "Security", "Anti", "Detect", "Monitor", "Check", "Verification",
-        "Logger", "Analytics", "Ban", "Report", "Script", "Kick"
-    }
-    
-    -- Chặn remote events dùng để báo cáo
-    oldnamecall = hookmetamethod(game, "__namecall", function(self, ...)
-        local method = getnamecallmethod()
-        local args = {...}
-        
-        -- Block các RemoteEvent/RemoteFunction liên quan đến bảo mật/phát hiện
-        if (method == "FireServer" or method == "InvokeServer") then
-            local remoteName = self.Name:lower()
-            for _, blocked in pairs(blacklistedModules) do
-                if remoteName:find(blocked:lower()) then
-                    safePrint("[Anti-Ban] Đã chặn remote: " .. self.Name)
-                    return nil
-                end
-            end
-            
-            -- Chặn các báo cáo script injection hoặc trạng thái bất thường
-            if method == "FireServer" and args[1] == "CheckInjection" or 
-               (type(args[1]) == "string" and args[1]:find("hack")) then
-                safePrint("[Anti-Ban] Đã chặn báo cáo hack: " .. tostring(args[1]))
-                return nil
-            end
-        end
-        
-        -- Chặn HTTP requests đến các endpoint phát hiện hack
-        if method == "HttpGet" or method == "HttpPost" or method == "HttpGetAsync" or method == "HttpPostAsync" then
-            local url = args[1]
-            if type(url) == "string" and (url:match("report") or url:match("detect") or url:match("log")) then
-                safePrint("[Anti-Ban] Đã chặn HTTP request: " .. url)
-                return nil
-            end
-        end
-        
-        return oldnamecall(self, ...)
-    end)
-    
-    -- Chặn đọc các thuộc tính liên quan đến xác minh
-    oldindex = hookmetamethod(game, "__index", function(self, key)
-        local keyLower = type(key) == "string" and key:lower() or ""
-        
-        -- Chặn đọc các thuộc tính nhạy cảm
-        if keyLower:find("security") or keyLower:find("exploit") or keyLower:find("ban") then
-            if self and typeof(self) == "Instance" and (self:IsA("Script") or self:IsA("ModuleScript") or self:IsA("LocalScript")) then
-                return nil
-            end
-        end
-        
-        return oldindex(self, key)
-    end)
-    
-    -- Chặn việc ghi giá trị vào các thuộc tính liên quan đến bảo mật
-    oldnewindex = hookmetamethod(game, "__newindex", function(self, key, value)
-        local keyLower = type(key) == "string" and key:lower() or ""
-        
-        -- Ngăn chặn việc ghi vào các thuộc tính liên quan đến phát hiện
-        if keyLower:find("report") or keyLower:find("detect") or keyLower:find("flag") then
-            if self and typeof(self) == "Instance" then
-                safePrint("[Anti-Ban] Đã chặn ghi vào: " .. self:GetFullName() .. "." .. tostring(key))
-                return nil
-            end
-        end
-        
-        return oldnewindex(self, key, value)
-    end)
-    
-    print("[Anti-Ban] Đã hook các phương thức meta thành công!")
-end
-
--- Giả lập môi trường Roblox Studio để tránh phát hiện
-local function spoofExecutor()
-    -- Dùng gethidden nếu có hỗ trợ
-    local hidden = gethidden or getgenv()
-    
-    -- Giả mạo các hàm kiểm tra executor
-    local spoofedFunctions = {
-        ["identifyexecutor"] = function() return "Roblox Studio" end,
-        ["getexecutorname"] = function() return "Roblox Studio" end,
-        ["is_synapse_function"] = function() return false end,
-        ["is_krnl_closure"] = function() return false end,
-        ["is_sirhurt_closure"] = function() return false end,
-        ["is_fluxus_function"] = function() return false end,
-        ["isourclosure"] = function() return false end,
-        ["checkclosure"] = function() return false end,
-        ["is_exploit_function"] = function() return false end
-    }
-    
-    -- Áp dụng tất cả các hàm giả mạo
-    local spoofedCount = 0
-    for name, func in pairs(spoofedFunctions) do
-        if hidden[name] then
-            hidden[name] = func
-            spoofedCount = spoofedCount + 1
-        end
-    end
-    
-    -- Giả mạo các thuộc tính và flags
-    hidden.syn = {
-        is_cached = function() return false end,
-        cache_replace = function() return true end,
-        cache_invalidate = function() return true end
-    }
-    
-    print("[Anti-Ban] Đã giả mạo " .. spoofedCount .. " hàm kiểm tra môi trường!")
-end
-
--- Vô hiệu hóa các module phát hiện script
-local function disableDetectionModules()
-    -- Cờ để kiểm soát việc hiển thị logs
-    _G.showAntiBanLogs = false -- Mặc định tắt log để không gây lag
-    
-    -- Danh sách các module đã xử lý để tránh lặp lại
-    local processedModules = {}
-    
-    spawn(function()
-        while wait(15) do -- Tăng thời gian chờ lên 15 giây thay vì 5 giây
-            -- Xóa hoặc vô hiệu hóa các module phát hiện
-            for _, service in pairs(game:GetChildren()) do
-                for _, module in pairs(service:GetDescendants()) do
-                    if module:IsA("ModuleScript") and not processedModules[module] then
-                        local name = module.Name:lower()
-                        if name:find("security") or name:find("anti") or name:find("detect") or name:find("check") then
-                            pcall(function() 
-                                processedModules[module] = true
-                                module.Disabled = true
-                                
-                                -- Chỉ log nếu cờ được bật
-                                if _G.showAntiBanLogs then
-                                    print("[Anti-Ban] Đã tìm thấy module: " .. module:GetFullName())
-                                end
-                                
-                                -- Không xóa module để tránh lỗi, chỉ vô hiệu hóa
-                                -- module:Destroy()
-                            end)
-                        end
-                    end
-                end
-            end
-            
-            -- Xóa remote events dùng để phát hiện
-            for _, remote in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-                if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) and not processedModules[remote] then
-                    local name = remote.Name:lower()
-                    if name:find("report") or name:find("detect") or name:find("ban") or name:find("check") then
-                        pcall(function()
-                            processedModules[remote] = true
-                            
-                            -- Chỉ log nếu cờ được bật
-                            if _G.showAntiBanLogs then
-                                print("[Anti-Ban] Đã tìm thấy remote: " .. remote:GetFullName())
-                            end
-                            
-                            -- Thay vì xóa, ta vô hiệu hóa nó bằng cách thay thế bằng một hàm trống
-                            if remote:IsA("RemoteEvent") then
-                                local old = remote.FireServer
-                                remote.FireServer = function(...) return nil end
-                            elseif remote:IsA("RemoteFunction") then
-                                local old = remote.InvokeServer
-                                remote.InvokeServer = function(...) return nil end
-                            end
-                        end)
-                    end
-                end
-            end
-        end
-    end)
-    
-    print("[Anti-Ban] Đã thiết lập bảo vệ module tự động (chế độ im lặng)!")
-end
-
--- Thêm độ trễ ngẫu nhiên để mô phỏng người thật
-local function setupHumanSimulation()
-    -- Tạo các biến độ trễ mặc định
-    _G.humanDelays = true
-    _G.clickDelayMin = 0.05  -- 50ms
-    _G.clickDelayMax = 0.15  -- 150ms
-    _G.actionDelayMin = 0.3  -- 300ms
-    _G.actionDelayMax = 0.8  -- 800ms
-    
-    -- Hàm tạo độ trễ ngẫu nhiên khi thực hiện các hành động
-    _G.randomDelay = function(min, max)
-        if _G.humanDelays then
-            local delay = min + math.random() * (max - min)
-            wait(delay)
-        end
-    end
-    
-    -- Áp dụng độ trễ cho các hàm tương tác
-    local oldFireServer = nil
-    oldFireServer = hookfunction(Instance.new("RemoteEvent").FireServer, function(self, ...)
-        _G.randomDelay(_G.clickDelayMin, _G.clickDelayMax)
-        return oldFireServer(self, ...)
-    end)
-    
-    print("[Anti-Ban] Đã thiết lập độ trễ mô phỏng người thật!")
-end
-
--- Kích hoạt hệ thống anti-ban
-pcall(setupProtection)
-pcall(spoofExecutor)
-pcall(disableDetectionModules)
-pcall(setupHumanSimulation)
-
--- Xử lý lỗi Place ID
-local safePlaceIdCheck = true -- Bỏ qua việc kiểm tra Place ID
-
-print("[Anti-Ban] Hệ thống anti-ban V2.5 đã được kích hoạt trong chế độ im lặng!")
--- KẾT THÚC HỆ THỐNG ANTI-BAN
-
 -- Kiểm tra Place ID
 local currentPlaceId = game.PlaceId
 local allowedPlaceId = 72829404259339
 
-if currentPlaceId ~= allowedPlaceId and not safePlaceIdCheck then
+-- Hệ thống kiểm soát logs
+local LogSystem = {
+    Enabled = false, -- Mặc định tắt logs
+    WarningsEnabled = false -- Mặc định tắt cả warnings
+}
+
+-- Ghi đè hàm print để kiểm soát logs
+local originalPrint = print
+print = function(...)
+    if LogSystem.Enabled then
+        originalPrint(...)
+    end
+end
+
+-- Ghi đè hàm warn để kiểm soát warnings
+local originalWarn = warn
+warn = function(...)
+    if LogSystem.WarningsEnabled then
+        originalWarn(...)
+    end
+end
+
+if currentPlaceId ~= allowedPlaceId then
     warn("Script này chỉ hoạt động trên game Anime Rangers X (Place ID: " .. tostring(allowedPlaceId) .. ")")
     return
 end
@@ -622,6 +405,10 @@ ConfigSystem.DefaultConfig = {
     -- Các cài đặt mặc định
     UITheme = "Amethyst",
     
+    -- Cài đặt log
+    LogsEnabled = false,
+    WarningsEnabled = false,
+    
     -- Cài đặt Shop/Summon
     SummonAmount = "x1",
     SummonBanner = "Standard",
@@ -761,6 +548,16 @@ ConfigSystem.LoadConfig = function()
             end
             
         ConfigSystem.CurrentConfig = data
+        
+        -- Cập nhật cài đặt log
+        if data.LogsEnabled ~= nil then
+            LogSystem.Enabled = data.LogsEnabled
+        end
+        
+        if data.WarningsEnabled ~= nil then
+            LogSystem.WarningsEnabled = data.WarningsEnabled
+        end
+        
         return true
         end
     end
@@ -1525,6 +1322,42 @@ SettingsSection:AddDropdown("ThemeDropdown", {
         ConfigSystem.CurrentConfig.UITheme = Value
         ConfigSystem.SaveConfig()
         print("Đã chọn theme: " .. Value)
+    end
+})
+
+-- Thêm toggle cho hệ thống log
+SettingsSection:AddToggle("LogToggle", {
+    Title = "Hiển thị Logs (Console)",
+    Default = LogSystem.Enabled,
+    Callback = function(Value)
+        LogSystem.Enabled = Value
+        ConfigSystem.CurrentConfig.LogsEnabled = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Sử dụng originalPrint thay vì print để tránh bị lọc
+        if Value then
+            originalPrint("Đã bật hiển thị logs")
+        else
+            originalPrint("Đã tắt hiển thị logs")
+        end
+    end
+})
+
+-- Thêm toggle cho hệ thống cảnh báo
+SettingsSection:AddToggle("WarningToggle", {
+    Title = "Hiển thị Cảnh báo (Warnings)",
+    Default = LogSystem.WarningsEnabled,
+    Callback = function(Value)
+        LogSystem.WarningsEnabled = Value
+        ConfigSystem.CurrentConfig.WarningsEnabled = Value
+        ConfigSystem.SaveConfig()
+        
+        -- Sử dụng originalPrint thay vì print để tránh bị lọc
+        if Value then
+            originalPrint("Đã bật hiển thị cảnh báo")
+        else
+            originalPrint("Đã tắt hiển thị cảnh báo")
+        end
     end
 })
 
@@ -3873,10 +3706,13 @@ Fluent:Notify({
     Duration = 3
 })
 
-print("Anime Rangers X Script has been loaded and optimized!")
+-- Thông báo về chế độ logs (sử dụng originalPrint vì print bị ghi đè)
+originalPrint("================================================================")
+originalPrint("HT Hub | Anime Rangers X - Logs đã được tắt để tối ưu hiệu suất")
+originalPrint("Để bật lại logs, vào tab Settings -> Hiển thị Logs (Console)")
+originalPrint("================================================================")
 
--- Thông báo về công cụ anti-ban
-print("Anti-Ban đang chạy trong chế độ im lặng. Để xem logs, gõ: _G.toggleAntiBanLogs(true)")
+print("Anime Rangers X Script has been loaded and optimized!")
 
 -- Biến lưu trạng thái Webhook
 local webhookURL = ConfigSystem.CurrentConfig.WebhookURL or ""
@@ -4670,7 +4506,7 @@ local function performRandomMovement()
     humanoid.WalkSpeed = walkSpeed
     
     -- Tạo hướng di chuyển ngẫu nhiên với khoảng cách xa hơn
-    local moveDistance = math.random(5, 10) -- Khoảng cách di chuyển (đơn vị)
+    local moveDistance = math.random(5, 12) -- Khoảng cách di chuyển (đơn vị)
     
     -- Các hướng di chuyển cơ bản
     local directions = {
@@ -4774,10 +4610,3 @@ MovementSection:AddToggle("AutoMovementToggle", {
         end
     end
 })
-
--- Thêm giải thích về tính năng
-MovementSection:AddParagraph({
-    Title = "Auto Movement",
-    Content = "Tính năng này giúp nhân vật di chuyển ngẫu nhiên để tránh bị phát hiện AFK. Nhân vật sẽ di chuyển ngẫu nhiên theo các hướng và thỉnh thoảng nhảy."
-})
-

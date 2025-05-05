@@ -463,6 +463,9 @@ ConfigSystem.DefaultConfig = {
     WebhookURL = "",
     AutoSendWebhook = false,
     DeleteMap = false,
+    
+    -- Cài đặt Auto Movement
+    AutoMovement = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -3802,7 +3805,7 @@ local function setupWebhookMonitor()
                         if #rewards > 0 then
                             sendWebhook(rewards)
                             -- Đợi một thời gian để không gửi lặp lại
-                            wait(0.5)
+                            wait(10)
                         end
                     end
                 end
@@ -4318,5 +4321,104 @@ FPSBoostSection:AddToggle("BoostFPSToggle", {
             print("Boost FPS đã được tắt (Lưu ý: Thay đổi đã áp dụng vẫn sẽ có hiệu lực, cần reload game để khôi phục)")
         end
     end
+})
+
+-- Biến lưu trạng thái Auto Movement
+local autoMovementEnabled = ConfigSystem.CurrentConfig.AutoMovement or false
+local autoMovementLoop = nil
+
+-- Cập nhật ConfigSystem.DefaultConfig bằng cách thêm thuộc tính AutoMovement
+ConfigSystem.DefaultConfig.AutoMovement = false
+
+-- Thêm section Auto Movement vào tab Settings
+local MovementSection = SettingsTab:AddSection("Auto Movement")
+
+-- Hàm thực hiện di chuyển ngẫu nhiên
+local function performRandomMovement()
+    local humanoid = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then return end
+    
+    -- Hướng di chuyển ngẫu nhiên
+    local directions = {
+        Vector3.new(1, 0, 0),   -- Phải
+        Vector3.new(-1, 0, 0),  -- Trái
+        Vector3.new(0, 0, 1),   -- Lên
+        Vector3.new(0, 0, -1),  -- Xuống
+        Vector3.new(1, 0, 1),   -- Phải-Lên
+        Vector3.new(-1, 0, 1),  -- Trái-Lên
+        Vector3.new(1, 0, -1),  -- Phải-Xuống
+        Vector3.new(-1, 0, -1)  -- Trái-Xuống
+    }
+    
+    -- Chọn hướng ngẫu nhiên
+    local randomDir = directions[math.random(1, #directions)]
+    
+    -- Đặt tốc độ di chuyển
+    local walkSpeed = math.random(12, 16)
+    humanoid.WalkSpeed = walkSpeed
+    
+    -- Di chuyển ngẫu nhiên
+    humanoid:Move(randomDir)
+    
+    -- Nhảy ngẫu nhiên (20% cơ hội)
+    if math.random(1, 5) == 1 then
+        humanoid.Jump = true
+    end
+end
+
+-- Toggle Auto Movement
+MovementSection:AddToggle("AutoMovementToggle", {
+    Title = "Auto Movement",
+    Default = autoMovementEnabled,
+    Callback = function(Value)
+        autoMovementEnabled = Value
+        ConfigSystem.CurrentConfig.AutoMovement = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            print("Auto Movement đã được bật")
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoMovementLoop then
+                autoMovementLoop:Disconnect()
+                autoMovementLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoMovementEnabled and wait(math.random(1, 3)) do
+                    -- Chỉ thực hiện khi nhân vật tồn tại
+                    if game:GetService("Players").LocalPlayer.Character then
+                        pcall(function()
+                            performRandomMovement()
+                        end)
+                    end
+                end
+            end)
+        else
+            print("Auto Movement đã được tắt")
+            
+            -- Hủy vòng lặp nếu có
+            if autoMovementLoop then
+                autoMovementLoop:Disconnect()
+                autoMovementLoop = nil
+            end
+            
+            -- Dừng nhân vật
+            pcall(function()
+                local humanoid = game:GetService("Players").LocalPlayer.Character and 
+                                 game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid:Move(Vector3.new(0, 0, 0))
+                end
+            end)
+        end
+    end
+})
+
+-- Thêm giải thích về tính năng
+MovementSection:AddParagraph({
+    Title = "Auto Movement",
+    Content = "Tính năng này giúp nhân vật di chuyển ngẫu nhiên để tránh bị phát hiện AFK. Nhân vật sẽ di chuyển ngẫu nhiên theo các hướng và thỉnh thoảng nhảy."
 })
 

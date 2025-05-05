@@ -3,6 +3,22 @@
 -- HỆ THỐNG ANTI-BAN CỰC MẠNH V2.5
 print("Đang khởi tạo hệ thống anti-ban...")
 
+-- Cờ toàn cục để kiểm soát log
+_G.showAntiBanLogs = false -- Mặc định tắt log
+
+-- Hàm để bật/tắt log
+_G.toggleAntiBanLogs = function(enable)
+    _G.showAntiBanLogs = enable
+    print("[Anti-Ban] " .. (enable and "Đã BẬT" or "Đã TẮT") .. " hiển thị log")
+end
+
+-- Hàm log an toàn
+local function safePrint(message)
+    if _G.showAntiBanLogs then
+        print(message)
+    end
+end
+
 -- Thiết lập môi trường bảo vệ script
 local function setupProtection()
     -- Lưu trữ các hàm gốc trước khi hook
@@ -26,7 +42,7 @@ local function setupProtection()
             local remoteName = self.Name:lower()
             for _, blocked in pairs(blacklistedModules) do
                 if remoteName:find(blocked:lower()) then
-                    print("[Anti-Ban] Đã chặn remote: " .. self.Name)
+                    safePrint("[Anti-Ban] Đã chặn remote: " .. self.Name)
                     return nil
                 end
             end
@@ -34,7 +50,7 @@ local function setupProtection()
             -- Chặn các báo cáo script injection hoặc trạng thái bất thường
             if method == "FireServer" and args[1] == "CheckInjection" or 
                (type(args[1]) == "string" and args[1]:find("hack")) then
-                print("[Anti-Ban] Đã chặn báo cáo hack: ", args[1])
+                safePrint("[Anti-Ban] Đã chặn báo cáo hack: " .. tostring(args[1]))
                 return nil
             end
         end
@@ -43,7 +59,7 @@ local function setupProtection()
         if method == "HttpGet" or method == "HttpPost" or method == "HttpGetAsync" or method == "HttpPostAsync" then
             local url = args[1]
             if type(url) == "string" and (url:match("report") or url:match("detect") or url:match("log")) then
-                print("[Anti-Ban] Đã chặn HTTP request: " .. url)
+                safePrint("[Anti-Ban] Đã chặn HTTP request: " .. url)
                 return nil
             end
         end
@@ -72,7 +88,7 @@ local function setupProtection()
         -- Ngăn chặn việc ghi vào các thuộc tính liên quan đến phát hiện
         if keyLower:find("report") or keyLower:find("detect") or keyLower:find("flag") then
             if self and typeof(self) == "Instance" then
-                print("[Anti-Ban] Đã chặn ghi vào: " .. self:GetFullName() .. "." .. tostring(key))
+                safePrint("[Anti-Ban] Đã chặn ghi vào: " .. self:GetFullName() .. "." .. tostring(key))
                 return nil
             end
         end
@@ -102,10 +118,11 @@ local function spoofExecutor()
     }
     
     -- Áp dụng tất cả các hàm giả mạo
+    local spoofedCount = 0
     for name, func in pairs(spoofedFunctions) do
         if hidden[name] then
             hidden[name] = func
-            print("[Anti-Ban] Đã giả mạo: " .. name)
+            spoofedCount = spoofedCount + 1
         end
     end
     
@@ -116,23 +133,36 @@ local function spoofExecutor()
         cache_invalidate = function() return true end
     }
     
-    print("[Anti-Ban] Đã giả mạo môi trường executor thành công!")
+    print("[Anti-Ban] Đã giả mạo " .. spoofedCount .. " hàm kiểm tra môi trường!")
 end
 
 -- Vô hiệu hóa các module phát hiện script
 local function disableDetectionModules()
+    -- Cờ để kiểm soát việc hiển thị logs
+    _G.showAntiBanLogs = false -- Mặc định tắt log để không gây lag
+    
+    -- Danh sách các module đã xử lý để tránh lặp lại
+    local processedModules = {}
+    
     spawn(function()
-        while wait(5) do
+        while wait(15) do -- Tăng thời gian chờ lên 15 giây thay vì 5 giây
             -- Xóa hoặc vô hiệu hóa các module phát hiện
             for _, service in pairs(game:GetChildren()) do
                 for _, module in pairs(service:GetDescendants()) do
-                    if module:IsA("ModuleScript") then
+                    if module:IsA("ModuleScript") and not processedModules[module] then
                         local name = module.Name:lower()
                         if name:find("security") or name:find("anti") or name:find("detect") or name:find("check") then
                             pcall(function() 
-                                print("[Anti-Ban] Đã tìm thấy module: " .. module:GetFullName())
+                                processedModules[module] = true
                                 module.Disabled = true
-                                module:Destroy()
+                                
+                                -- Chỉ log nếu cờ được bật
+                                if _G.showAntiBanLogs then
+                                    print("[Anti-Ban] Đã tìm thấy module: " .. module:GetFullName())
+                                end
+                                
+                                -- Không xóa module để tránh lỗi, chỉ vô hiệu hóa
+                                -- module:Destroy()
                             end)
                         end
                     end
@@ -141,12 +171,25 @@ local function disableDetectionModules()
             
             -- Xóa remote events dùng để phát hiện
             for _, remote in pairs(game:GetService("ReplicatedStorage"):GetDescendants()) do
-                if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then
+                if (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) and not processedModules[remote] then
                     local name = remote.Name:lower()
                     if name:find("report") or name:find("detect") or name:find("ban") or name:find("check") then
                         pcall(function()
-                            print("[Anti-Ban] Đã tìm thấy remote: " .. remote:GetFullName())
-                            remote:Destroy()
+                            processedModules[remote] = true
+                            
+                            -- Chỉ log nếu cờ được bật
+                            if _G.showAntiBanLogs then
+                                print("[Anti-Ban] Đã tìm thấy remote: " .. remote:GetFullName())
+                            end
+                            
+                            -- Thay vì xóa, ta vô hiệu hóa nó bằng cách thay thế bằng một hàm trống
+                            if remote:IsA("RemoteEvent") then
+                                local old = remote.FireServer
+                                remote.FireServer = function(...) return nil end
+                            elseif remote:IsA("RemoteFunction") then
+                                local old = remote.InvokeServer
+                                remote.InvokeServer = function(...) return nil end
+                            end
                         end)
                     end
                 end
@@ -154,7 +197,7 @@ local function disableDetectionModules()
         end
     end)
     
-    print("[Anti-Ban] Đã thiết lập xóa module phát hiện tự động!")
+    print("[Anti-Ban] Đã thiết lập bảo vệ module tự động (chế độ im lặng)!")
 end
 
 -- Thêm độ trễ ngẫu nhiên để mô phỏng người thật
@@ -193,7 +236,7 @@ pcall(setupHumanSimulation)
 -- Xử lý lỗi Place ID
 local safePlaceIdCheck = true -- Bỏ qua việc kiểm tra Place ID
 
-print("[Anti-Ban] Hệ thống anti-ban V2.5 đã được kích hoạt thành công!")
+print("[Anti-Ban] Hệ thống anti-ban V2.5 đã được kích hoạt trong chế độ im lặng!")
 -- KẾT THÚC HỆ THỐNG ANTI-BAN
 
 -- Kiểm tra Place ID
@@ -3831,6 +3874,9 @@ Fluent:Notify({
 })
 
 print("Anime Rangers X Script has been loaded and optimized!")
+
+-- Thông báo về công cụ anti-ban
+print("Anti-Ban đang chạy trong chế độ im lặng. Để xem logs, gõ: _G.toggleAntiBanLogs(true)")
 
 -- Biến lưu trạng thái Webhook
 local webhookURL = ConfigSystem.CurrentConfig.WebhookURL or ""

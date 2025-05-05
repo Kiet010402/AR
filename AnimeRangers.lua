@@ -1,7 +1,78 @@
 -- Anime Rangers X Script
 
 -- HỆ THỐNG ANTI-BAN CỰC MẠNH V2.5
-print("Đang khởi tạo hệ thống anti-ban...")
+-- Hoàn toàn tắt log để tránh lag
+
+-- Hệ thống quản lý log tổng thể
+do
+    -- Lưu lại hàm print gốc
+    local originalPrint = print
+    
+    -- Danh sách các từ khóa quan trọng cần giữ lại
+    local importantKeywords = {
+        "Đã tải script",
+        "Lỗi nghiêm trọng",
+        "Không thể kết nối",
+        "Kết quả summon"
+    }
+    
+    -- Ghi đè hàm print để lọc các thông báo
+    function print(...)
+        -- Kiểm tra nếu đây là thông báo quan trọng
+        local args = {...}
+        local messageStr = tostring(args[1] or "")
+        
+        local isImportant = false
+        for _, keyword in ipairs(importantKeywords) do
+            if messageStr:find(keyword) then
+                isImportant = true
+                break
+            end
+        end
+        
+        -- Chỉ hiển thị log quan trọng
+        if isImportant then
+            originalPrint(...)
+        end
+        -- Các log khác sẽ bị bỏ qua hoàn toàn
+    end
+    
+    -- Tắt luôn warn 
+    local originalWarn = warn
+    function warn(...)
+        -- Không làm gì cả, bỏ qua tất cả cảnh báo
+    end
+    
+    -- Tạo biến global để tắt/bật log khi cần
+    _G.enableAllLogs = function(enable)
+        if enable then
+            print = originalPrint
+            warn = originalWarn
+            originalPrint("[System] Đã bật tất cả log")
+        else
+            -- Khôi phục lại hàm print đã override
+            print = function(...)
+                local args = {...}
+                local messageStr = tostring(args[1] or "")
+                
+                local isImportant = false
+                for _, keyword in ipairs(importantKeywords) do
+                    if messageStr:find(keyword) then
+                        isImportant = true
+                        break
+                    end
+                end
+                
+                if isImportant then
+                    originalPrint(...)
+                end
+            end
+            
+            warn = function(...) end
+            originalPrint("[System] Đã tắt tất cả log")
+        end
+    end
+end
 
 -- Cờ toàn cục để kiểm soát log
 _G.showAntiBanLogs = false -- Mặc định tắt log
@@ -9,14 +80,12 @@ _G.showAntiBanLogs = false -- Mặc định tắt log
 -- Hàm để bật/tắt log
 _G.toggleAntiBanLogs = function(enable)
     _G.showAntiBanLogs = enable
-    print("[Anti-Ban] " .. (enable and "Đã BẬT" or "Đã TẮT") .. " hiển thị log")
+    -- Không hiển thị thông báo nữa
 end
 
 -- Hàm log an toàn
 local function safePrint(message)
-    if _G.showAntiBanLogs then
-        print(message)
-    end
+    -- Không làm gì cả để tắt tất cả log
 end
 
 -- Thiết lập môi trường bảo vệ script
@@ -96,7 +165,8 @@ local function setupProtection()
         return oldnewindex(self, key, value)
     end)
     
-    print("[Anti-Ban] Đã hook các phương thức meta thành công!")
+    -- Xóa thông báo này
+    -- print("[Anti-Ban] Đã hook các phương thức meta thành công!")
 end
 
 -- Giả lập môi trường Roblox Studio để tránh phát hiện
@@ -133,7 +203,8 @@ local function spoofExecutor()
         cache_invalidate = function() return true end
     }
     
-    print("[Anti-Ban] Đã giả mạo " .. spoofedCount .. " hàm kiểm tra môi trường!")
+    -- Xóa thông báo này
+    -- print("[Anti-Ban] Đã giả mạo " .. spoofedCount .. " hàm kiểm tra môi trường!")
 end
 
 -- Vô hiệu hóa các module phát hiện script
@@ -197,7 +268,8 @@ local function disableDetectionModules()
         end
     end)
     
-    print("[Anti-Ban] Đã thiết lập bảo vệ module tự động (chế độ im lặng)!")
+    -- Xóa thông báo này
+    -- print("[Anti-Ban] Đã thiết lập bảo vệ module tự động (chế độ im lặng)!")
 end
 
 -- Thêm độ trễ ngẫu nhiên để mô phỏng người thật
@@ -224,7 +296,8 @@ local function setupHumanSimulation()
         return oldFireServer(self, ...)
     end)
     
-    print("[Anti-Ban] Đã thiết lập độ trễ mô phỏng người thật!")
+    -- Xóa thông báo này
+    -- print("[Anti-Ban] Đã thiết lập độ trễ mô phỏng người thật!")
 end
 
 -- Kích hoạt hệ thống anti-ban
@@ -236,7 +309,8 @@ pcall(setupHumanSimulation)
 -- Xử lý lỗi Place ID
 local safePlaceIdCheck = true -- Bỏ qua việc kiểm tra Place ID
 
-print("[Anti-Ban] Hệ thống anti-ban V2.5 đã được kích hoạt trong chế độ im lặng!")
+-- Xóa thông báo này
+-- print("[Anti-Ban] Hệ thống anti-ban V2.5 đã được kích hoạt trong chế độ im lặng!")
 -- KẾT THÚC HỆ THỐNG ANTI-BAN
 
 -- Kiểm tra Place ID
@@ -3875,8 +3949,11 @@ Fluent:Notify({
 
 print("Anime Rangers X Script has been loaded and optimized!")
 
--- Thông báo về công cụ anti-ban
-print("Anti-Ban đang chạy trong chế độ im lặng. Để xem logs, gõ: _G.toggleAntiBanLogs(true)")
+-- Xóa thông báo này
+-- print("Anti-Ban đang chạy trong chế độ im lặng. Để xem logs, gõ: _G.toggleAntiBanLogs(true)")
+
+-- Tự động tắt log khi khởi động
+_G.enableAllLogs(false)
 
 -- Biến lưu trạng thái Webhook
 local webhookURL = ConfigSystem.CurrentConfig.WebhookURL or ""

@@ -2592,16 +2592,22 @@ InGameSection:AddToggle("AutoVoteToggle", {
 
 -- Hàm để scan unit trong UnitsFolder
 local function scanUnits()
-    -- Lấy UnitsFolder
-    local player = game:GetService("Players").LocalPlayer
+    -- Lấy player
+    local Players = game:GetService("Players")
+    local player = Players.LocalPlayer
     if not player then
+        print("❌ Không tìm thấy LocalPlayer")
         return false
     end
     
+    -- Đợi/kiểm tra UnitsFolder
     local unitsFolder = player:FindFirstChild("UnitsFolder")
     if not unitsFolder then
+        print("❌ Không tìm thấy UnitsFolder")
         return false
     end
+    
+    print("🔍 Bắt đầu scan UnitsFolder...")
     
     -- Tạo mapping giữa vị trí game và vị trí thực tế theo pattern đã mô tả
     local slotMapping = {
@@ -2613,14 +2619,19 @@ local function scanUnits()
         [6] = 2  -- Slot 6 thực tế là slot 2
     }
     
-    -- Lấy danh sách unit theo thứ tự
+    -- Reset unitSlots
     unitSlots = {}
-    local children = unitsFolder:GetChildren()
-    
-    -- Xây dựng danh sách tạm
     local tempSlots = {}
+    
+    -- Duyệt qua từng unit trong UnitsFolder
+    local children = unitsFolder:GetChildren()
+    local unitCount = #children
+    
+    -- Hiển thị các unit tìm thấy trực tiếp
     for i, unit in ipairs(children) do
-        if (unit:IsA("Folder") or unit:IsA("Model")) and i <= 6 then
+        if i <= 6 then
+            local unitName = unit:FindFirstChild("Name") and unit.Name.Value or unit.Name
+            print("➡️ Unit tìm thấy #" .. i .. ": " .. unitName)
             tempSlots[i] = unit
         end
     end
@@ -2629,8 +2640,12 @@ local function scanUnits()
     for displaySlot, actualSlot in pairs(slotMapping) do
         if tempSlots[actualSlot] then
             unitSlots[displaySlot] = tempSlots[actualSlot]
+            local unitName = tempSlots[actualSlot]:FindFirstChild("Name") and tempSlots[actualSlot].Name.Value or tempSlots[actualSlot].Name
+            print("🔄 Mapped: Game Slot " .. actualSlot .. " → UI Slot " .. displaySlot .. " (" .. unitName .. ")")
         end
     end
+    
+    print("✅ Đã tìm thấy " .. unitCount .. " unit trong UnitsFolder, " .. #unitSlots .. " unit được map")
     
     return #unitSlots > 0
 end

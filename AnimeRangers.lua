@@ -4335,10 +4335,22 @@ local MovementSection = SettingsTab:AddSection("Auto Movement")
 
 -- Hàm thực hiện di chuyển ngẫu nhiên
 local function performRandomMovement()
-    local humanoid = game:GetService("Players").LocalPlayer.Character and game:GetService("Players").LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if not humanoid then return end
+    local player = game:GetService("Players").LocalPlayer
+    local character = player.Character
+    if not character then return end
     
-    -- Hướng di chuyển ngẫu nhiên
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not humanoid or not rootPart then return end
+    
+    -- Đặt tốc độ di chuyển cao hơn
+    local walkSpeed = math.random(18, 24)
+    humanoid.WalkSpeed = walkSpeed
+    
+    -- Tạo hướng di chuyển ngẫu nhiên với khoảng cách xa hơn
+    local moveDistance = math.random(10, 30) -- Khoảng cách di chuyển (đơn vị)
+    
+    -- Các hướng di chuyển cơ bản
     local directions = {
         Vector3.new(1, 0, 0),   -- Phải
         Vector3.new(-1, 0, 0),  -- Trái
@@ -4353,17 +4365,42 @@ local function performRandomMovement()
     -- Chọn hướng ngẫu nhiên
     local randomDir = directions[math.random(1, #directions)]
     
-    -- Đặt tốc độ di chuyển
-    local walkSpeed = math.random(12, 16)
-    humanoid.WalkSpeed = walkSpeed
+    -- Điểm đích đến (vị trí hiện tại + hướng * khoảng cách)
+    local targetPosition = rootPart.Position + (randomDir * moveDistance)
     
-    -- Di chuyển ngẫu nhiên
-    humanoid:Move(randomDir)
+    -- Tạo một path finding để di chuyển
+    local pathService = game:GetService("PathfindingService")
+    local path = pathService:CreatePath({
+        AgentRadius = 2,
+        AgentHeight = 5,
+        AgentCanJump = true
+    })
     
-    -- Nhảy ngẫu nhiên (20% cơ hội)
-    if math.random(1, 5) == 1 then
-        humanoid.Jump = true
-    end
+    -- Sử dụng CFrame để di chuyển trực tiếp
+    local movementDuration = math.random(3, 6) -- Thời gian di chuyển (giây)
+    local startTime = tick()
+    
+    -- Di chuyển liên tục đến điểm đích
+    spawn(function()
+        while tick() - startTime < movementDuration and autoMovementEnabled do
+            if not character or not character:FindFirstChild("HumanoidRootPart") or not character:FindFirstChildOfClass("Humanoid") then
+                break
+            end
+            
+            -- Tính vectơ di chuyển tới điểm đích
+            local direction = (targetPosition - rootPart.Position).Unit
+            
+            -- Sử dụng MoveTo để di chuyển tới điểm đích
+            humanoid:MoveTo(targetPosition)
+            
+            -- Nhảy ngẫu nhiên (15% cơ hội)
+            if math.random(1, 20) == 1 then
+                humanoid.Jump = true
+            end
+            
+            wait(0.1) -- Đợi một chút trước khi tiếp tục di chuyển
+        end
+    end)
 end
 
 -- Toggle Auto Movement
@@ -4386,7 +4423,7 @@ MovementSection:AddToggle("AutoMovementToggle", {
             
             -- Tạo vòng lặp mới
             spawn(function()
-                while autoMovementEnabled and wait(math.random(1, 3)) do
+                while autoMovementEnabled and wait(math.random(4, 8)) do -- Tăng thời gian giữa các lần di chuyển
                     -- Chỉ thực hiện khi nhân vật tồn tại
                     if game:GetService("Players").LocalPlayer.Character then
                         pcall(function()

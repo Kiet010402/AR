@@ -643,7 +643,7 @@ local autoPlayEnabled = ConfigSystem.CurrentConfig.AutoPlay or false
 local autoRetryEnabled = ConfigSystem.CurrentConfig.AutoRetry or false
 local autoNextEnabled = ConfigSystem.CurrentConfig.AutoNext or false
 local autoVoteEnabled = ConfigSystem.CurrentConfig.AutoVote or false
-local removeAnimationEnabled = ConfigSystem.CurrentConfig.RemoveAnimation or true
+local removeAnimationEnabled = ConfigSystem.CurrentConfig.RemoveAnimation or false
 local autoRetryLoop = nil
 local autoNextLoop = nil
 local autoVoteLoop = nil
@@ -3718,23 +3718,11 @@ local function getCurrentResources()
     return resources
 end
 
--- Hàm tính tổng tài nguyên sau khi nhận phần thưởng
-local function calculateTotalResources(rewards)
-    local currentResources = getCurrentResources()
-    local totalResources = {}
-    
-    -- Tính tổng cho mỗi loại tài nguyên
-    for _, reward in ipairs(rewards) do
-        local resourceName = reward.Name
-        local currentAmount = currentResources[resourceName] or 0
-        totalResources[resourceName] = currentAmount + reward.Amount
-    end
-    
-    return totalResources
-end
-
 -- Hàm lấy thông tin trận đấu
 local function getGameInfoText()
+    -- Thêm delay 1 giây trước khi lấy thông tin
+    wait(1)
+    
     local player = game:GetService("Players").LocalPlayer
     local rewardsUI = player:WaitForChild("PlayerGui", 1):FindFirstChild("RewardsUI")
     local infoLines = {}
@@ -3848,6 +3836,9 @@ local function sendWebhook(rewards)
     
     -- Lấy thông tin trận đấu
     local gameInfo = getGameInfoText()
+    
+    -- Đợi thêm 1 giây để đảm bảo thông tin đã được cập nhật đầy đủ
+    wait(1)
     
     -- Sử dụng embed
     local embed = createEmbed(rewards, gameInfo)

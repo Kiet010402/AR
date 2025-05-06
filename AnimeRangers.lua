@@ -6,8 +6,8 @@ local allowedPlaceId = 72829404259339
 
 -- Hệ thống kiểm soát logs
 local LogSystem = {
-    Enabled = false, -- Mặc định tắt logs
-    WarningsEnabled = false -- Mặc định tắt cả warnings
+    Enabled = true, -- Mặc định tắt logs
+    WarningsEnabled = true -- Mặc định tắt cả warnings
 }
 
 -- Ghi đè hàm print để kiểm soát logs
@@ -1111,30 +1111,6 @@ StorySection:AddToggle("AutoJoinMapToggle", {
     end
 })
 
-
--- Hiển thị trạng thái trong game
-StorySection:AddParagraph({
-    Title = "Trạng thái",
-    Content = "Nhấn nút bên dưới để cập nhật trạng thái"
-})
-
--- Thêm nút cập nhật trạng thái
-StorySection:AddButton({
-    Title = "Cập nhật trạng thái",
-    Callback = function()
-        local statusText = isPlayerInMap() and "Đang ở trong map" or "Đang ở sảnh chờ"
-        
-        -- Hiển thị thông báo với trạng thái hiện tại
-        Fluent:Notify({
-            Title = "Trạng thái hiện tại",
-            Content = statusText,
-            Duration = 3
-        })
-        
-        print("Trạng thái: " .. statusText)
-    end
-})
-
 -- Thêm section Summon trong tab Shop
 local SummonSection = ShopTab:AddSection("Summon")
 
@@ -1321,42 +1297,6 @@ SettingsSection:AddDropdown("ThemeDropdown", {
         ConfigSystem.CurrentConfig.UITheme = Value
         ConfigSystem.SaveConfig()
         print("Đã chọn theme: " .. Value)
-    end
-})
-
--- Thêm toggle cho hệ thống log
-SettingsSection:AddToggle("LogToggle", {
-    Title = "Hiển thị Logs (Console)",
-    Default = LogSystem.Enabled,
-    Callback = function(Value)
-        LogSystem.Enabled = Value
-        ConfigSystem.CurrentConfig.LogsEnabled = Value
-        ConfigSystem.SaveConfig()
-        
-        -- Sử dụng originalPrint thay vì print để tránh bị lọc
-        if Value then
-            originalPrint("Đã bật hiển thị logs")
-        else
-            originalPrint("Đã tắt hiển thị logs")
-        end
-    end
-})
-
--- Thêm toggle cho hệ thống cảnh báo
-SettingsSection:AddToggle("WarningToggle", {
-    Title = "Hiển thị Cảnh báo (Warnings)",
-    Default = LogSystem.WarningsEnabled,
-    Callback = function(Value)
-        LogSystem.WarningsEnabled = Value
-        ConfigSystem.CurrentConfig.WarningsEnabled = Value
-        ConfigSystem.SaveConfig()
-        
-        -- Sử dụng originalPrint thay vì print để tránh bị lọc
-        if Value then
-            originalPrint("Đã bật hiển thị cảnh báo")
-        else
-            originalPrint("Đã tắt hiển thị cảnh báo")
-        end
     end
 })
 
@@ -3945,25 +3885,82 @@ end
 
 -- Thiết lập vòng lặp kiểm tra game kết thúc và gửi webhook
 local function setupWebhookMonitor()
+    -- Biến để theo dõi trạng thái explosion đã được phát hiện chưa
+    local explosionDetected = false
+    
+    -- Tạo một kết nối để theo dõi khi Base_Explosion2 xuất hiện
     spawn(function()
-        while wait(2) do
+        while wait(0.5) do
             if not autoSendWebhookEnabled then
                 wait(1)
+                explosionDetected = false -- Reset trạng thái khi tắt
             else
                 -- Chỉ kiểm tra nếu đang ở trong map
                 if isPlayerInMap() then
-                    local player = game:GetService("Players").LocalPlayer
-                    local agentFolder = workspace:FindFirstChild("Agent") and workspace.Agent:FindFirstChild("Agent")
-                    local rewardsShow = player:FindFirstChild("RewardsShow")
-                    
-                    -- Kiểm tra điều kiện kết thúc game
-                    if agentFolder and #agentFolder:GetChildren() == 0 and rewardsShow then
-                        local rewards = getRewards()
-                        if #rewards > 0 then
-                            sendWebhook(rewards)
-                            -- Đợi một thời gian để không gửi lặp lại
-                            wait(10)
+                    -- Kiểm tra Visual folder và Base_Explosion2
+                    local visualFolder = workspace:FindFirstChild("Visual")
+                    if visualFolder then
+                        local explosion = visualFolder:FindFirstChild("Base_Explosion2")
+                        if explosion and not explosionDetected then
+                            explosionDetected = true
+                            print("Phát hiện Base_Explosion2, đang gửi webhook...")
+                            
+                            -- Đợi một chút để đảm bảo rewards đã được cập nhật
+                            wait(1)
+                            
+                            -- Lấy phần thưởng và gửi webhook
+                            local player = game:GetService("Players").LocalPlayer
+                            local rewards = getRewards()
+                            
+                            if #rewards > 0 then
+                                sendWebhook(rewards)
+                                -- Đợi một thời gian để không gửi lặp lại
+                                wait(10)
+                                explosionDetected = false -- Reset trạng thái sau khi gửi
+                            end
                         end
+                    end
+                else
+                    explosionDetected = false -- Reset trạng thái khi không ở trong map
+                end
+            end
+        end
+    end)
+    
+    -- Thêm một kết nối để theo dõi khi Visual folder thay đổi
+    spawn(function()
+        while wait(2) do
+            if autoSendWebhookEnabled and isPlayerInMap() then
+                local visualFolder = workspace:FindFirstChild("Visual")
+                if visualFolder then
+                    local connection
+                    connection = visualFolder.ChildAdded:Connect(function(child)
+                        if child.Name == "Base_Explosion2" and not explosionDetected then
+                            explosionDetected = true
+                            print("Phát hiện Base_Explosion2 mới, đang gửi webhook...")
+                            
+                            -- Đợi một chút để đảm bảo rewards đã được cập nhật
+                            wait(1)
+                            
+                            -- Lấy phần thưởng và gửi webhook
+                            local player = game:GetService("Players").LocalPlayer
+                            local rewards = getRewards()
+                            
+                            if #rewards > 0 then
+                                sendWebhook(rewards)
+                                -- Đợi một thời gian để không gửi lặp lại
+                                wait(10)
+                                explosionDetected = false -- Reset trạng thái sau khi gửi
+                            end
+                            
+                            connection:Disconnect()
+                        end
+                    end)
+                    
+                    -- Đợi một khoảng thời gian trước khi thiết lập lại kết nối
+                    wait(5)
+                    if connection then
+                        connection:Disconnect()
                     end
                 end
             end

@@ -3731,7 +3731,6 @@ local function getGameInfoText()
         local leftSide = rewardsUI:FindFirstChild("Main") and rewardsUI.Main:FindFirstChild("LeftSide")
         if leftSide then
             local labels = {
-                "GameStatus",
                 "Mode",
                 "World",
                 "Chapter",
@@ -3801,7 +3800,7 @@ local function createEmbed(rewards, gameInfo)
     
     -- Tạo embed
     local embed = {
-        title = "Anime Rangers X - Kết quả trận đấu",
+        title = "Anime Rangers X - HT Hub",
         description = "Thông tin về trận đấu vừa kết thúc",
         color = 5793266, -- Màu tím
         fields = fields,
@@ -3843,7 +3842,7 @@ local function sendWebhook(rewards)
     -- Khởi tạo rewards nếu chưa có (trường hợp thua)
     if not rewards or #rewards == 0 then
         rewards = {
-            {Name = "Kết quả", Amount = "Thất bại"}
+            {Name = "", Amount = ""}
         }
     end
     

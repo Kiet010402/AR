@@ -3840,6 +3840,13 @@ local function sendWebhook(rewards)
     -- Đợi thêm 1 giây để đảm bảo thông tin đã được cập nhật đầy đủ
     wait(1)
     
+    -- Khởi tạo rewards nếu chưa có (trường hợp thua)
+    if not rewards or #rewards == 0 then
+        rewards = {
+            {Name = "Kết quả", Amount = "Thất bại"}
+        }
+    end
+    
     -- Sử dụng embed
     local embed = createEmbed(rewards, gameInfo)
     local payload = game:GetService("HttpService"):JSONEncode({
@@ -3865,7 +3872,7 @@ local function sendWebhook(rewards)
     end)
     
     if success then
-        print("Đã gửi phần thưởng và thông tin game qua webhook!")
+        print("Đã gửi thông tin game qua webhook!")
         webhookSentLog[gameId] = true
         return true
     else
@@ -3878,17 +3885,20 @@ end
 local function setupWebhookMonitor()
     -- Biến để theo dõi trạng thái explosion đã được phát hiện chưa
     local explosionDetected = false
+    -- Biến để theo dõi trạng thái UI kết thúc trận đã xuất hiện
+    local gameEndUIDetected = false
     
-    -- Tạo một kết nối để theo dõi khi Base_Explosion2 xuất hiện
+    -- Tạo một kết nối để theo dõi khi Base_Explosion2 xuất hiện (thắng)
     spawn(function()
         while wait(0.5) do
             if not autoSendWebhookEnabled then
                 wait(1)
                 explosionDetected = false -- Reset trạng thái khi tắt
+                gameEndUIDetected = false
             else
                 -- Chỉ kiểm tra nếu đang ở trong map
                 if isPlayerInMap() then
-                    -- Kiểm tra Visual folder và Base_Explosion2
+                    -- Kiểm tra Visual folder và Base_Explosion2 (thắng)
                     local visualFolder = workspace:FindFirstChild("Visual")
                     if visualFolder then
                         local explosion = visualFolder:FindFirstChild("Base_Explosion2")
@@ -3903,16 +3913,55 @@ local function setupWebhookMonitor()
                             local player = game:GetService("Players").LocalPlayer
                             local rewards = getRewards()
                             
-                            if #rewards > 0 then
-                                sendWebhook(rewards)
+                            -- Gửi webhook ngay cả khi không có phần thưởng
+                            sendWebhook(rewards)
+                            -- Đợi một thời gian để không gửi lặp lại
+                            wait(10)
+                            explosionDetected = false -- Reset trạng thái sau khi gửi
+                        end
+                    end
+                    
+                    -- Kiểm tra UI thất bại
+                    local player = game:GetService("Players").LocalPlayer
+                    if player and player:FindFirstChild("PlayerGui") then
+                        local rewardsUI = player.PlayerGui:FindFirstChild("RewardsUI")
+                        if rewardsUI and not gameEndUIDetected then
+                            local failText = false
+                            
+                            -- Tìm các text cho kết quả thất bại
+                            for _, v in pairs(rewardsUI:GetDescendants()) do
+                                if v:IsA("TextLabel") and (v.Text:find("Thất bại") or v.Text:find("Fail") or v.Text == "Lose") then
+                                    failText = true
+                                    break
+                                end
+                                
+                                -- Kiểm tra bổ sung trong GameStatus
+                                if v.Name == "GameStatus" and v:IsA("TextLabel") and (v.Text:find("Defeat") or v.Text:find("Game Over")) then
+                                    failText = true
+                                    break
+                                end
+                            end
+                            
+                            if failText and not gameEndUIDetected then
+                                gameEndUIDetected = true
+                                print("Phát hiện UI thất bại, đang gửi webhook...")
+                                
+                                -- Đợi một chút để đảm bảo UI đã được cập nhật đầy đủ
+                                wait(1)
+                                
+                                -- Gửi webhook với thông báo thất bại
+                                local failRewards = { {Name = "Kết quả", Amount = "Thất bại"} }
+                                sendWebhook(failRewards)
+                                
                                 -- Đợi một thời gian để không gửi lặp lại
                                 wait(10)
-                                explosionDetected = false -- Reset trạng thái sau khi gửi
+                                gameEndUIDetected = false -- Reset trạng thái sau khi gửi
                             end
                         end
                     end
                 else
                     explosionDetected = false -- Reset trạng thái khi không ở trong map
+                    gameEndUIDetected = false
                 end
             end
         end
@@ -3937,12 +3986,67 @@ local function setupWebhookMonitor()
                             local player = game:GetService("Players").LocalPlayer
                             local rewards = getRewards()
                             
-                            if #rewards > 0 then
-                                sendWebhook(rewards)
-                                -- Đợi một thời gian để không gửi lặp lại
-                                wait(10)
-                                explosionDetected = false -- Reset trạng thái sau khi gửi
+                            -- Gửi webhook ngay cả khi không có phần thưởng
+                            sendWebhook(rewards)
+                            -- Đợi một thời gian để không gửi lặp lại
+                            wait(10)
+                            explosionDetected = false -- Reset trạng thái sau khi gửi
+                            
+                            connection:Disconnect()
+                        end
+                    end)
+                    
+                    -- Đợi một khoảng thời gian trước khi thiết lập lại kết nối
+                    wait(5)
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            end
+        end
+    end)
+    
+    -- Thêm một kết nối để theo dõi khi RewardsUI xuất hiện (bao gồm cả thắng và thua)
+    spawn(function()
+        while wait(2) do
+            if autoSendWebhookEnabled and isPlayerInMap() then
+                local player = game:GetService("Players").LocalPlayer
+                if player and player:FindFirstChild("PlayerGui") then
+                    local connection
+                    connection = player.PlayerGui.ChildAdded:Connect(function(child)
+                        if child.Name == "RewardsUI" and not gameEndUIDetected then
+                            -- Đợi một chút để UI được tải đầy đủ
+                            wait(1.5)
+                            
+                            gameEndUIDetected = true
+                            print("Phát hiện RewardsUI, đang kiểm tra kết quả trận đấu...")
+                            
+                            -- Phát hiện xem là thắng hay thua
+                            local isDefeat = false
+                            for _, v in pairs(child:GetDescendants()) do
+                                if v:IsA("TextLabel") and (v.Text:find("Thất bại") or v.Text:find("Fail") or v.Text == "Lose" or 
+                                                         v.Text:find("Defeat") or v.Text:find("Game Over")) then
+                                    isDefeat = true
+                                    break
+                                end
                             end
+                            
+                            -- Lấy phần thưởng nếu có
+                            local rewards = getRewards()
+                            
+                            -- Nếu không có phần thưởng hoặc là thua, gửi thông báo thua
+                            if #rewards == 0 or isDefeat then
+                                local defeatRewards = { {Name = "Kết quả", Amount = "Thất bại"} }
+                                print("Trận đấu kết thúc: Thất bại")
+                                sendWebhook(defeatRewards)
+                            else
+                                print("Trận đấu kết thúc: Thắng lợi")
+                                sendWebhook(rewards)
+                            end
+                            
+                            -- Đợi một thời gian để không gửi lặp lại
+                            wait(10)
+                            gameEndUIDetected = false
                             
                             connection:Disconnect()
                         end

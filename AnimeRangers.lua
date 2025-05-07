@@ -4762,4 +4762,423 @@ EvolveTierSection:AddButton({
     end
 })
 
+-- Thêm section Stats Potential trong tab Unit
+local StatsPotentialSection = UnitTab:AddSection("Stats Potential")
+
+-- Biến lưu trạng thái Stats Potential
+local availableUnits = {}
+local selectedUnit = nil
+local selectedUnitTag = nil
+local selectedDamageValues = {}
+local selectedHealthValues = {}
+local selectedSpeedValues = {}
+local selectedRangeValues = {}
+local selectedCooldownValues = {}
+local autoRollStatsEnabled = ConfigSystem.CurrentConfig.AutoRollStats or false
+local autoRollStatsLoop = nil
+
+-- Hàm để quét và lấy danh sách units từ Collection
+local function scanAvailableUnits()
+    local success, result = pcall(function()
+        local player = game:GetService("Players").LocalPlayer
+        local playerName = player.Name
+        local playerData = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data")
+        local playerCollection = playerData:FindFirstChild(playerName) and playerData[playerName]:FindFirstChild("Collection")
+        
+        if not playerCollection then
+            return {}
+        end
+        
+        local units = {}
+        for _, unit in pairs(playerCollection:GetChildren()) do
+            if unit:IsA("Folder") and unit:FindFirstChild("Tag") and unit:FindFirstChild("Level") then
+                local unitName = unit.Name
+                local unitLevel = unit.Level.Value
+                local unitTag = unit.Tag.Value
+                table.insert(units, {
+                    name = unitName,
+                    displayName = unitName .. " (Lv: " .. unitLevel .. ")",
+                    tag = unitTag,
+                    ref = unit
+                })
+            end
+        end
+        
+        -- Sắp xếp theo tên
+        table.sort(units, function(a, b)
+            return a.name < b.name
+        end)
+        
+        return units
+    end)
+    
+    if success then
+        return result
+    else
+        warn("Lỗi khi quét units: " .. tostring(result))
+        return {}
+    end
+end
+
+-- Hàm để lấy danh sách tên hiển thị của các unit
+local function getUnitDisplayNames()
+    local displayNames = {}
+    for _, unit in ipairs(availableUnits) do
+        table.insert(displayNames, unit.displayName)
+    end
+    return displayNames
+end
+
+-- Hàm để lấy thông tin chi tiết về unit đã chọn
+local function getUnitDetailsByDisplayName(displayName)
+    for _, unit in ipairs(availableUnits) do
+        if unit.displayName == displayName then
+            return unit
+        end
+    end
+    return nil
+end
+
+-- Hàm để kiểm tra xem giá trị potential hiện tại có nằm trong danh sách mong muốn không
+local function isPotentialValueInTargetList(currentValue, targetValues)
+    -- Nếu không có giá trị nào được chọn, không cần roll
+    if not targetValues or next(targetValues) == nil then
+        return true
+    end
+    
+    -- Kiểm tra xem giá trị hiện tại có nằm trong danh sách mong muốn không
+    return targetValues[currentValue] == true
+end
+
+-- Hàm để roll stats potential
+local function rollStatsPotential()
+    if not selectedUnit or not selectedUnitTag then
+        print("Không có unit nào được chọn để roll stats.")
+        return
+    end
+    
+    local unitRef = selectedUnit.ref
+    if not unitRef then
+        print("Không tìm thấy thông tin unit.")
+        return
+    end
+    
+    local stats = {
+        { name = "Damage", potential = "DamagePotential", selected = selectedDamageValues },
+        { name = "Health", potential = "HealthPotential", selected = selectedHealthValues },
+        { name = "Speed", potential = "SpeedPotential", selected = selectedSpeedValues },
+        { name = "Range", potential = "RangePotential", selected = selectedRangeValues },
+        { name = "AttackCooldown", potential = "AttackCooldownPotential", selected = selectedCooldownValues }
+    }
+    
+    local rollCount = 0
+    
+    for _, stat in ipairs(stats) do
+        -- Kiểm tra xem có giá trị nào được chọn không
+        if next(stat.selected) ~= nil then
+            local potentialValue = unitRef:FindFirstChild(stat.potential) and unitRef[stat.potential].Value or ""
+            
+            -- Kiểm tra xem giá trị hiện tại có nằm trong danh sách mong muốn không
+            if not isPotentialValueInTargetList(potentialValue, stat.selected) then
+                -- Thực hiện roll cho stat này
+                local statArgName = stat.name
+                if statArgName == "AttackCooldown" then
+                    statArgName = "AttackCooldown"
+                end
+                
+                local args = {
+                    statArgName,
+                    selectedUnitTag,
+                    "Selective"
+                }
+                
+                local rerollRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gambling"):WaitForChild("RerollPotential")
+                rerollRemote:FireServer(unpack(args))
+                
+                print("Đã roll " .. stat.name .. " cho " .. selectedUnit.name .. " - Giá trị hiện tại: " .. potentialValue)
+                rollCount = rollCount + 1
+                wait(1) -- Đợi 1 giây giữa các lần roll
+            else
+                print(stat.name .. " đã đạt giá trị mong muốn: " .. potentialValue)
+            end
+        end
+    end
+    
+    if rollCount == 0 then
+        print("Không có stat nào cần roll cho " .. selectedUnit.name)
+    else
+        print("Đã roll " .. rollCount .. " stats cho " .. selectedUnit.name)
+    end
+end
+
+-- Quét danh sách các unit có sẵn
+availableUnits = scanAvailableUnits()
+
+-- Dropdown để chọn Unit
+local unitDropdown = StatsPotentialSection:AddDropdown("UnitDropdown", {
+    Title = "Choose Unit",
+    Values = getUnitDisplayNames(),
+    Multi = false,
+    Default = "",
+    Callback = function(Value)
+        local unit = getUnitDetailsByDisplayName(Value)
+        if unit then
+            selectedUnit = unit
+            selectedUnitTag = unit.tag
+            print("Đã chọn unit: " .. unit.name .. " (Tag: " .. unit.tag .. ")")
+            
+            -- Hiển thị thông tin chi tiết về potential hiện tại
+            local unitRef = unit.ref
+            if unitRef then
+                local damageValue = unitRef:FindFirstChild("DamagePotential") and unitRef.DamagePotential.Value or "N/A"
+                local healthValue = unitRef:FindFirstChild("HealthPotential") and unitRef.HealthPotential.Value or "N/A"
+                local speedValue = unitRef:FindFirstChild("SpeedPotential") and unitRef.SpeedPotential.Value or "N/A"
+                local rangeValue = unitRef:FindFirstChild("RangePotential") and unitRef.RangePotential.Value or "N/A"
+                local cooldownValue = unitRef:FindFirstChild("AttackCooldownPotential") and unitRef.AttackCooldownPotential.Value or "N/A"
+                
+                print("Stats Potential hiện tại:")
+                print("- Damage: " .. damageValue)
+                print("- Health: " .. healthValue)
+                print("- Speed: " .. speedValue)
+                print("- Range: " .. rangeValue)
+                print("- Cooldown: " .. cooldownValue)
+            end
+        else
+            selectedUnit = nil
+            selectedUnitTag = nil
+            print("Không tìm thấy thông tin unit")
+        end
+    end
+})
+
+-- Nút Refresh Units
+StatsPotentialSection:AddButton({
+    Title = "Refresh Units List",
+    Callback = function()
+        print("Đang cập nhật danh sách units...")
+        availableUnits = scanAvailableUnits()
+        
+        if #availableUnits > 0 then
+            if unitDropdown and unitDropdown.SetValues then
+                unitDropdown:SetValues(getUnitDisplayNames())
+                print("Đã cập nhật danh sách với " .. #availableUnits .. " units")
+            end
+        else
+            print("Không tìm thấy unit nào trong Collection")
+        end
+    end
+})
+
+-- Định nghĩa các giá trị potential
+local potentialValues = {"S", "S-", "S+", "SS", "SSS", "O", "O-", "O+"}
+
+-- Dropdown để chọn giá trị Damage Potential
+StatsPotentialSection:AddDropdown("DamageDropdown", {
+    Title = "Damage",
+    Values = potentialValues,
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedDamageValues = Values
+        ConfigSystem.CurrentConfig.SelectedDamageValues = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedText = ""
+        for value, isSelected in pairs(Values) do
+            if isSelected then
+                selectedText = selectedText .. value .. ", "
+            end
+        end
+        
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
+            print("Mục tiêu Damage: " .. selectedText)
+        else
+            print("Không có mục tiêu Damage nào được chọn")
+        end
+    end
+})
+
+-- Dropdown để chọn giá trị Health Potential
+StatsPotentialSection:AddDropdown("HealthDropdown", {
+    Title = "Health",
+    Values = potentialValues,
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedHealthValues = Values
+        ConfigSystem.CurrentConfig.SelectedHealthValues = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedText = ""
+        for value, isSelected in pairs(Values) do
+            if isSelected then
+                selectedText = selectedText .. value .. ", "
+            end
+        end
+        
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3)
+            print("Mục tiêu Health: " .. selectedText)
+        else
+            print("Không có mục tiêu Health nào được chọn")
+        end
+    end
+})
+
+-- Dropdown để chọn giá trị Speed Potential
+StatsPotentialSection:AddDropdown("SpeedDropdown", {
+    Title = "Speed",
+    Values = potentialValues,
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedSpeedValues = Values
+        ConfigSystem.CurrentConfig.SelectedSpeedValues = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedText = ""
+        for value, isSelected in pairs(Values) do
+            if isSelected then
+                selectedText = selectedText .. value .. ", "
+            end
+        end
+        
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3)
+            print("Mục tiêu Speed: " .. selectedText)
+        else
+            print("Không có mục tiêu Speed nào được chọn")
+        end
+    end
+})
+
+-- Dropdown để chọn giá trị Range Potential
+StatsPotentialSection:AddDropdown("RangeDropdown", {
+    Title = "Range",
+    Values = potentialValues,
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedRangeValues = Values
+        ConfigSystem.CurrentConfig.SelectedRangeValues = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedText = ""
+        for value, isSelected in pairs(Values) do
+            if isSelected then
+                selectedText = selectedText .. value .. ", "
+            end
+        end
+        
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3)
+            print("Mục tiêu Range: " .. selectedText)
+        else
+            print("Không có mục tiêu Range nào được chọn")
+        end
+    end
+})
+
+-- Dropdown để chọn giá trị Cooldown Potential
+StatsPotentialSection:AddDropdown("CooldownDropdown", {
+    Title = "Cooldown",
+    Values = potentialValues,
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedCooldownValues = Values
+        ConfigSystem.CurrentConfig.SelectedCooldownValues = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedText = ""
+        for value, isSelected in pairs(Values) do
+            if isSelected then
+                selectedText = selectedText .. value .. ", "
+            end
+        end
+        
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3)
+            print("Mục tiêu Cooldown: " .. selectedText)
+        else
+            print("Không có mục tiêu Cooldown nào được chọn")
+        end
+    end
+})
+
+-- Toggle Roll Stats Potential
+StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
+    Title = "Roll Stats Potential",
+    Default = autoRollStatsEnabled,
+    Callback = function(Value)
+        autoRollStatsEnabled = Value
+        ConfigSystem.CurrentConfig.AutoRollStats = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            if not selectedUnit then
+                print("Vui lòng chọn unit trước khi bật Roll Stats Potential")
+                -- Trả về toggle về trạng thái tắt
+                StatsPotentialSection:GetComponent("RollStatsPotentialToggle"):Set(false)
+                return
+            end
+            
+            print("Roll Stats Potential đã được bật cho unit: " .. selectedUnit.name)
+            
+            -- Thực hiện roll ngay lập tức
+            rollStatsPotential()
+            
+            -- Tạo vòng lặp để kiểm tra và roll nếu cần
+            if autoRollStatsLoop then
+                autoRollStatsLoop:Disconnect()
+                autoRollStatsLoop = nil
+            end
+            
+            spawn(function()
+                while autoRollStatsEnabled and wait(2) do
+                    if selectedUnit then
+                        -- Quét lại thông tin unit để lấy potential hiện tại
+                        local currentUnits = scanAvailableUnits()
+                        for _, unit in ipairs(currentUnits) do
+                            if unit.tag == selectedUnitTag then
+                                selectedUnit = unit
+                                break
+                            end
+                        end
+                        
+                        rollStatsPotential()
+                    else
+                        print("Không có unit nào được chọn để roll stats")
+                        autoRollStatsEnabled = false
+                        StatsPotentialSection:GetComponent("RollStatsPotentialToggle"):Set(false)
+                        break
+                    end
+                end
+            end)
+        else
+            print("Roll Stats Potential đã được tắt")
+            
+            if autoRollStatsLoop then
+                autoRollStatsLoop:Disconnect()
+                autoRollStatsLoop = nil
+            end
+        end
+    end
+})
+
+-- Nút Roll Now
+StatsPotentialSection:AddButton({
+    Title = "Roll Stats Now",
+    Callback = function()
+        if not selectedUnit then
+            print("Vui lòng chọn unit trước khi roll stats")
+            return
+        end
+        
+        print("Đang roll stats cho " .. selectedUnit.name .. "...")
+        rollStatsPotential()
+    end
+})
+
 print("Anime Rangers X Script has been loaded and optimized!")

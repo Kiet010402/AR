@@ -4,28 +4,6 @@
 local currentPlaceId = game.PlaceId
 local allowedPlaceId = 72829404259339
 
--- Hệ thống kiểm soát logs
-local LogSystem = {
-    Enabled = false, -- Mặc định tắt logs
-    WarningsEnabled = false -- Mặc định tắt cả warnings
-}
-
--- Ghi đè hàm print để kiểm soát logs
-local originalPrint = print
-print = function(...)
-    if LogSystem.Enabled then
-        originalPrint(...)
-    end
-end
-
--- Ghi đè hàm warn để kiểm soát warnings
-local originalWarn = warn
-warn = function(...)
-    if LogSystem.WarningsEnabled then
-        originalWarn(...)
-    end
-end
-
 if currentPlaceId ~= allowedPlaceId then
     warn("Script này chỉ hoạt động trên game Anime Rangers X (Place ID: " .. tostring(allowedPlaceId) .. ")")
     return

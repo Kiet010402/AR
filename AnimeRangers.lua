@@ -4636,6 +4636,16 @@ local function evolveSelectedUnits()
             return
         end
         
+        print("Bắt đầu quét và nâng cấp units...")
+        
+        -- Đếm số lượng unit được xử lý
+        local totalUnits = 0
+        local evolvedUnits = 0
+        local skippedUnits = 0
+        
+        -- Tạo danh sách các unit cần nâng cấp
+        local unitsToEvolve = {}
+        
         -- Lặp qua từng unit trong Collection
         for _, unit in pairs(unitSpace:GetChildren()) do
             -- Kiểm tra rank của unit
@@ -4653,6 +4663,7 @@ local function evolveSelectedUnits()
             if unitRank then
                 local unitName = unit.Name
                 local unitData = playerCollection:FindFirstChild(unitName)
+                totalUnits = totalUnits + 1
                 
                 -- Kiểm tra EvolveTier hiện tại
                 if unitData and unitData:FindFirstChild("EvolveTier") then
@@ -4663,23 +4674,41 @@ local function evolveSelectedUnits()
                         -- Lấy Tag để evolve
                         if unitData:FindFirstChild("Tag") then
                             local tag = unitData.Tag.Value
-                            
-                            -- Thực hiện evolve
-                            local args = {
-                                tag,
-                                selectedTier
-                            }
-                            
-                            game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Units"):WaitForChild("EvolveTier"):FireServer(unpack(args))
-                            print("Đã evolve " .. unitName .. " lên " .. selectedTier)
-                            wait(0.5) -- Đợi một chút giữa các lần evolve
+                            table.insert(unitsToEvolve, {
+                                name = unitName,
+                                tag = tag,
+                                rank = unitRank
+                            })
                         end
                     else
-                        print(unitName .. " đã có tier: " .. currentTier .. ", bỏ qua")
+                        skippedUnits = skippedUnits + 1
+                        print(unitName .. " [" .. unitRank .. "] đã có tier: " .. currentTier .. ", bỏ qua")
                     end
                 end
             end
         end
+        
+        print("Đã tìm thấy " .. #unitsToEvolve .. "/" .. totalUnits .. " unit phù hợp để evolve")
+        
+        -- Tiến hành evolve từng unit một với thời gian chờ dài hơn
+        for i, unit in ipairs(unitsToEvolve) do
+            local args = {
+                unit.tag,
+                selectedTier
+            }
+            
+            print("Đang evolve (" .. i .. "/" .. #unitsToEvolve .. "): " .. unit.name .. " [" .. unit.rank .. "] lên " .. selectedTier)
+            
+            -- Thực hiện evolve
+            local evolveRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Units"):WaitForChild("EvolveTier")
+            evolveRemote:FireServer(unpack(args))
+            evolvedUnits = evolvedUnits + 1
+            
+            -- Đợi lâu hơn giữa các lần evolve để đảm bảo game kịp xử lý
+            wait(1) -- Tăng từ 0.5s lên 1.5s
+        end
+        
+        print("Hoàn thành! Đã evolve " .. evolvedUnits .. " unit lên " .. selectedTier .. ", bỏ qua " .. skippedUnits .. " unit đã có tier.")
     end)
     
     if not success then

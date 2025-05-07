@@ -6,8 +6,8 @@ local allowedPlaceId = 72829404259339
 
 -- Hệ thống kiểm soát logs
 local LogSystem = {
-    Enabled = true, -- Mặc định tắt logs
-    WarningsEnabled = true -- Mặc định tắt cả warnings
+    Enabled = false, -- Mặc định tắt logs
+    WarningsEnabled = false -- Mặc định tắt cả warnings
 }
 
 -- Ghi đè hàm print để kiểm soát logs

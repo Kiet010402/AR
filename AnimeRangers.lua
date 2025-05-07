@@ -4579,6 +4579,9 @@ local selectedTier = ConfigSystem.CurrentConfig.SelectedTier or "Ultra"
 local autoEvolveEnabled = ConfigSystem.CurrentConfig.AutoEvolveEnabled or false
 local unitCollection = {}
 
+-- Biến để lưu trữ dropdown unit để cập nhật sau
+local unitDropdownObject = nil
+
 -- Hàm để scan các unit có thể evolve
 local function scanEvolvableUnits()
     local evolvableUnits = {}
@@ -4630,17 +4633,6 @@ local function scanEvolvableUnits()
     return result
 end
 
--- Scan unit khi script khởi động
-spawn(function()
-    wait(3) -- Đợi game load
-    local units = scanEvolvableUnits()
-    print("Đã tìm thấy " .. #units .. " unit có thể evolve")
-    
-    -- Cập nhật dropdown nếu có - Xóa đoạn lỗi GetComponent
-    -- Lưu ý: Chỉ cập nhật sau khi khởi động script là không cần thiết
-    -- vì dropdown sẽ tự có giá trị từ hàm scanEvolvableUnits ban đầu
-end)
-
 -- Hàm để evolve unit được chọn
 local function evolveSelectedUnits()
     local evolvedCount = 0
@@ -4686,8 +4678,8 @@ local function evolveSelectedUnits()
     return evolvedCount
 end
 
--- Dropdown để chọn unit
-EvolveTierSection:AddDropdown("UnitDropdown", {
+-- Tạo dropdown để chọn unit
+unitDropdownObject = EvolveTierSection:AddDropdown({
     Title = "Choose Unit",
     Values = scanEvolvableUnits(),
     Multi = true,
@@ -4717,11 +4709,11 @@ EvolveTierSection:AddDropdown("UnitDropdown", {
 })
 
 -- Dropdown để chọn tier
-EvolveTierSection:AddDropdown("TierDropdown", {
+EvolveTierSection:AddDropdown({
     Title = "Select Tier",
     Values = {"Hyper", "Ultra"},
     Multi = false,
-    Default = "Ultra",
+    Default = selectedTier,
     Callback = function(Value)
         selectedTier = Value
         ConfigSystem.CurrentConfig.SelectedTier = Value
@@ -4738,19 +4730,21 @@ EvolveTierSection:AddButton({
         local units = scanEvolvableUnits()
         print("Đã tìm thấy " .. #units .. " unit có thể evolve")
         
-        -- Cập nhật dropdown
-        local unitDropdown = EvolveTierSection:GetComponent("UnitDropdown")
-        if unitDropdown and unitDropdown.Update then
-            unitDropdown:Update(units)
-            print("Đã cập nhật danh sách unit")
-        end
+        -- Thử cập nhật dropdown trực tiếp với đúng cú pháp
+        pcall(function()
+            if unitDropdownObject and unitDropdownObject.Options then
+                unitDropdownObject.Options = units
+                unitDropdownObject:Refresh()
+                print("Đã làm mới danh sách unit")
+            end
+        end)
     end
 })
 
 -- Toggle Auto Evolve
-EvolveTierSection:AddToggle("AutoEvolveToggle", {
+EvolveTierSection:AddToggle({
     Title = "Evolve Selected Units",
-    Default = false,
+    Default = autoEvolveEnabled,
     Callback = function(Value)
         autoEvolveEnabled = Value
         ConfigSystem.CurrentConfig.AutoEvolveEnabled = Value
@@ -4771,22 +4765,18 @@ EvolveTierSection:AddToggle("AutoEvolveToggle", {
                 local evolvedCount = evolveSelectedUnits()
                 print("Đã evolve " .. evolvedCount .. " unit lên " .. selectedTier)
                 
-                -- Sau khi evolve, đợi 1 giây và scan lại danh sách unit
-                spawn(function()
-                    wait(1)
-                    
-                    -- Scan lại các unit
-                    scanEvolvableUnits()
-                    print("Đã cập nhật lại danh sách unit sau khi evolve")
+                -- Tự động tắt toggle sau khi hoàn thành - cách an toàn
+                task.spawn(function()
+                    wait(0.5)
+                    pcall(function()
+                        autoEvolveEnabled = false
+                        ConfigSystem.CurrentConfig.AutoEvolveEnabled = false
+                        ConfigSystem.SaveConfig()
+                    end)
                 end)
-                
-                -- Tự động tắt toggle sau khi hoàn thành - không dùng GetComponent
-                autoEvolveEnabled = false
-                ConfigSystem.CurrentConfig.AutoEvolveEnabled = false
-                ConfigSystem.SaveConfig()
             else
                 print("Không có unit nào được chọn để evolve")
-                -- Tự động tắt toggle nếu không có unit được chọn
+                -- Tự động tắt toggle
                 autoEvolveEnabled = false
                 ConfigSystem.CurrentConfig.AutoEvolveEnabled = false
                 ConfigSystem.SaveConfig()
@@ -4795,7 +4785,7 @@ EvolveTierSection:AddToggle("AutoEvolveToggle", {
     end
 })
 
--- Nút Auto Evolve & Refresh
+-- Nút Evolve & Refresh
 EvolveTierSection:AddButton({
     Title = "Evolve & Refresh",
     Callback = function()
@@ -4816,20 +4806,17 @@ EvolveTierSection:AddButton({
             -- Đợi một chút để server xử lý
             wait(1.5)
             
-            -- Scan lại các unit và cập nhật dropdown không dùng GetComponent
-            EvolveTierSection:AddDropdown("UnitDropdown", {
-                Title = "Choose Unit",
-                Values = scanEvolvableUnits(),
-                Multi = true,
-                Default = {},
-                Callback = function(Values)
-                    selectedUnits = Values
-                    ConfigSystem.CurrentConfig.SelectedUnits = Values
-                    ConfigSystem.SaveConfig()
-                end
-            })
+            -- Scan lại danh sách unit
+            local units = scanEvolvableUnits()
             
-            print("Đã cập nhật lại danh sách unit sau khi evolve")
+            -- Thử cập nhật dropdown trực tiếp
+            pcall(function()
+                if unitDropdownObject and unitDropdownObject.Options then
+                    unitDropdownObject.Options = units
+                    unitDropdownObject:Refresh()
+                    print("Đã làm mới danh sách unit sau khi evolve")
+                end
+            end)
         else
             print("Không có unit nào được chọn để evolve!")
         end

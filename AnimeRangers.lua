@@ -5136,7 +5136,7 @@ StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
             end
             
             spawn(function()
-                while autoRollStatsEnabled and wait(2) do
+                while autoRollStatsEnabled and wait(0.5) do
                     if selectedUnit then
                         -- Quét lại thông tin unit để lấy potential hiện tại
                         local currentUnits = scanAvailableUnits()

@@ -4792,25 +4792,56 @@ local function scanAvailableUnits()
             return {}
         end
         
-        local units = {}
+        -- Tạo bảng tạm để nhóm các unit theo tên và level
+        local unitGroups = {}
+        
         for _, unit in pairs(playerCollection:GetChildren()) do
             if unit:IsA("Folder") and unit:FindFirstChild("Tag") and unit:FindFirstChild("Level") then
                 local unitName = unit.Name
                 local unitLevel = unit.Level.Value
                 local unitTag = unit.Tag.Value
                 
-                -- Tạo tagID ngắn từ tag để hiển thị - lấy 4 ký tự cuối
-                local shortTagID = string.sub(unitTag, -4)
+                -- Tạo key để nhóm theo tên và level
+                local groupKey = unitName .. "_" .. unitLevel
                 
-                -- Thêm ID ngắn vào tên hiển thị để phân biệt các unit cùng tên và level
-                local displayName = unitName .. " (Lv: " .. unitLevel .. " - ID: " .. shortTagID .. ")"
+                -- Tạo nhóm nếu chưa tồn tại
+                if not unitGroups[groupKey] then
+                    unitGroups[groupKey] = {}
+                end
                 
-                table.insert(units, {
+                -- Thêm unit vào nhóm
+                table.insert(unitGroups[groupKey], {
                     name = unitName,
-                    displayName = displayName,
+                    level = unitLevel,
                     tag = unitTag,
                     ref = unit
                 })
+            end
+        end
+        
+        -- Tạo danh sách kết quả với displayName đã được đánh số
+        local units = {}
+        
+        for groupKey, groupUnits in pairs(unitGroups) do
+            -- Nếu chỉ có 1 unit trong nhóm, không cần đánh số
+            if #groupUnits == 1 then
+                local unit = groupUnits[1]
+                table.insert(units, {
+                    name = unit.name,
+                    displayName = unit.name .. " (Lv: " .. unit.level .. ")",
+                    tag = unit.tag,
+                    ref = unit.ref
+                })
+            else
+                -- Nếu có nhiều unit trong nhóm, đánh số để phân biệt
+                for i, unit in ipairs(groupUnits) do
+                    table.insert(units, {
+                        name = unit.name,
+                        displayName = unit.name .. " (Lv: " .. unit.level .. " #" .. i .. ")",
+                        tag = unit.tag,
+                        ref = unit.ref
+                    })
+                end
             end
         end
         

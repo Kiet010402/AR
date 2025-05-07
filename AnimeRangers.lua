@@ -4,6 +4,28 @@
 local currentPlaceId = game.PlaceId
 local allowedPlaceId = 72829404259339
 
+-- Hệ thống kiểm soát logs
+local LogSystem = {
+    Enabled = true, -- Mặc định tắt logs
+    WarningsEnabled = true -- Mặc định tắt cả warnings
+}
+
+-- Ghi đè hàm print để kiểm soát logs
+local originalPrint = print
+print = function(...)
+    if LogSystem.Enabled then
+        originalPrint(...)
+    end
+end
+
+-- Ghi đè hàm warn để kiểm soát warnings
+local originalWarn = warn
+warn = function(...)
+    if LogSystem.WarningsEnabled then
+        originalWarn(...)
+    end
+end
+
 if currentPlaceId ~= allowedPlaceId then
     warn("Script này chỉ hoạt động trên game Anime Rangers X (Place ID: " .. tostring(allowedPlaceId) .. ")")
     return
@@ -384,8 +406,8 @@ ConfigSystem.DefaultConfig = {
     UITheme = "Amethyst",
     
     -- Cài đặt log
-    LogsEnabled = false,
-    WarningsEnabled = false,
+    LogsEnabled = true,
+    WarningsEnabled = true,
     
     -- Cài đặt Shop/Summon
     SummonAmount = "x1",

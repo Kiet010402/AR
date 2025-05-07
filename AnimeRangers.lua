@@ -706,7 +706,7 @@ local PlayTab = Window:AddTab({
 -- Tạo tab Event
 local EventTab = Window:AddTab({
     Title = "Event",
-    Icon = "rbxassetid://8997385940"
+    Icon = "rbxassetid://7734068321"
 })
 
 -- Tạo tab In-Game
@@ -715,10 +715,22 @@ local InGameTab = Window:AddTab({
     Icon = "rbxassetid://7733799901"
 })
 
+-- Tạo tab Unit
+local UnitTab = Window:AddTab({
+    Title = "Unit",
+    Icon = "rbxassetid://7743866529"
+})
+
 -- Tạo tab Shop
 local ShopTab = Window:AddTab({
     Title = "Shop",
     Icon = "rbxassetid://7734056747"
+})
+
+-- Tạo tab Webhook
+local WebhookTab = Window:AddTab({
+    Title = "Webhook",
+    Icon = "rbxassetid://7734058803"
 })
 
 -- Tạo tab Settings
@@ -727,11 +739,6 @@ local SettingsTab = Window:AddTab({
     Icon = "rbxassetid://6031280882"
 })
 
--- Tạo tab Webhook
-local WebhookTab = Window:AddTab({
-    Title = "Webhook",
-    Icon = "rbxassetid://7734058803"
-})
 
 -- Thêm hỗ trợ Logo khi minimize
 repeat task.wait(0.25) until game:IsLoaded()
@@ -4450,11 +4457,11 @@ local function performRandomMovement()
     if not humanoid or not rootPart then return end
     
     -- Đặt tốc độ di chuyển cao hơn
-    local walkSpeed = math.random(18, 24)
+    local walkSpeed = math.random(10, 15)
     humanoid.WalkSpeed = walkSpeed
     
     -- Tạo hướng di chuyển ngẫu nhiên với khoảng cách xa hơn
-    local moveDistance = math.random(5, 12) -- Khoảng cách di chuyển (đơn vị)
+    local moveDistance = math.random(3, 5) -- Khoảng cách di chuyển (đơn vị)
     
     -- Các hướng di chuyển cơ bản
     local directions = {
@@ -4559,11 +4566,7 @@ MovementSection:AddToggle("AutoMovementToggle", {
     end
 })
 
--- Thêm tab Unit
-local UnitTab = Window:AddTab({
-    Title = "Unit",
-    Icon = "rbxassetid://7743866529" -- Icon for character/unit
-})
+
 
 -- Thêm section Evolve Tier trong tab Unit
 local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
@@ -5164,20 +5167,6 @@ StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
                 autoRollStatsLoop = nil
             end
         end
-    end
-})
-
--- Nút Roll Now
-StatsPotentialSection:AddButton({
-    Title = "Roll Stats Now",
-    Callback = function()
-        if not selectedUnit then
-            print("Vui lòng chọn unit trước khi roll stats")
-            return
-        end
-        
-        print("Đang roll stats cho " .. selectedUnit.name .. "...")
-        rollStatsPotential()
     end
 })
 

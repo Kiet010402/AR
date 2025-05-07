@@ -446,7 +446,7 @@ ConfigSystem.DefaultConfig = {
     AutoRetry = false,
     AutoNext = false,
     AutoVote = false,
-    RemoveAnimation = true,
+    RemoveAnimation = false,
     
     -- Cài đặt Update Units
     AutoUpdate = false,
@@ -457,6 +457,11 @@ ConfigSystem.DefaultConfig = {
     Slot4Level = 0,
     Slot5Level = 0,
     Slot6Level = 0,
+    
+    -- Cài đặt Unit Evolve Tier
+    SelectedUnits = {},
+    SelectedTier = "Ultra",
+    AutoEvolveEnabled = false,
     
     -- Cài đặt AFK
     AutoJoinAFK = false,
@@ -695,6 +700,12 @@ local Window = Fluent:CreateWindow({
 local InfoTab = Window:AddTab({
     Title = "Info",
     Icon = "rbxassetid://7733964719"
+})
+
+-- Tạo tab Unit
+local UnitTab = Window:AddTab({
+    Title = "Unit",
+    Icon = "rbxassetid://7743959718"
 })
 
 -- Tạo tab Play
@@ -4555,6 +4566,256 @@ MovementSection:AddToggle("AutoMovementToggle", {
                     humanoid:Move(Vector3.new(0, 0, 0))
                 end
             end)
+        end
+    end
+})
+
+-- Thêm section Evolve Tier trong tab Unit
+local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
+
+-- Biến lưu trạng thái Evolve Tier
+local selectedUnits = {}
+local selectedTier = ConfigSystem.CurrentConfig.SelectedTier or "Ultra"
+local autoEvolveEnabled = ConfigSystem.CurrentConfig.AutoEvolveEnabled or false
+local unitCollection = {}
+
+-- Hàm để scan các unit có thể evolve
+local function scanEvolvableUnits()
+    local evolvableUnits = {}
+    
+    -- Thận trọng với pcall để tránh lỗi
+    local success, result = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        print("Đang scan unit của player: " .. playerName)
+        
+        local collection = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data", 2):WaitForChild(playerName, 2):WaitForChild("Collection", 2)
+        
+        if not collection then 
+            print("Không tìm thấy Collection folder") 
+            return {} 
+        end
+        
+        print("Bắt đầu scan Collection folder với " .. #collection:GetChildren() .. " unit")
+        local count = 0
+        
+        for _, unit in pairs(collection:GetChildren()) do
+            -- Kiểm tra xem unit có EvolveTier không và Value có trống không
+            local evolveTier = unit:FindFirstChild("EvolveTier")
+            if evolveTier and (evolveTier.Value == "" or evolveTier.Value == nil) then
+                -- Lấy tên hiển thị của unit
+                local unitName = unit.Name
+                table.insert(evolvableUnits, unitName)
+                
+                -- Lưu tag để sử dụng khi evolve
+                local tag = unit:FindFirstChild("Tag")
+                if tag then
+                    unitCollection[unitName] = tag.Value
+                    print("Đã thêm unit: " .. unitName .. " (Tag: " .. tag.Value .. ")")
+                    count = count + 1
+                else
+                    print("Đã thêm unit: " .. unitName .. " (Không có Tag)")
+                end
+            end
+        end
+        
+        print("Đã tìm thấy " .. count .. " unit có thể evolve")
+        return evolvableUnits
+    end)
+    
+    if not success then
+        warn("Lỗi khi scan unit: " .. tostring(result))
+        return {}
+    end
+    
+    return result
+end
+
+-- Scan unit khi script khởi động
+spawn(function()
+    wait(3) -- Đợi game load
+    local units = scanEvolvableUnits()
+    print("Đã tìm thấy " .. #units .. " unit có thể evolve")
+    
+    -- Cập nhật dropdown nếu có
+    local unitDropdown = EvolveTierSection:GetComponent("UnitDropdown")
+    if unitDropdown and unitDropdown.Update then
+        unitDropdown:Update(units)
+    end
+end)
+
+-- Hàm để evolve unit được chọn
+local function evolveSelectedUnits()
+    local evolvedCount = 0
+    local failedCount = 0
+    local logMessages = {}
+    
+    for unitName, isSelected in pairs(selectedUnits) do
+        if isSelected then
+            local tag = unitCollection[unitName]
+            
+            if tag then
+                local args = {
+                    tag, 
+                    selectedTier -- "Hyper" hoặc "Ultra"
+                }
+                
+                -- Gọi remote
+                local success, error = pcall(function()
+                    game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Units"):WaitForChild("EvolveTier"):FireServer(unpack(args))
+                    wait(0.5) -- Đợi 0.5 giây giữa các lần evolve
+                end)
+                
+                if success then
+                    table.insert(logMessages, "✅ Evolve: " .. unitName .. " → " .. selectedTier .. " (Tag: " .. tag .. ")")
+                    evolvedCount = evolvedCount + 1
+                else
+                    table.insert(logMessages, "❌ Lỗi evolve " .. unitName .. ": " .. tostring(error))
+                    failedCount = failedCount + 1
+                end
+            else
+                table.insert(logMessages, "❌ Không tìm thấy tag cho unit: " .. unitName)
+                failedCount = failedCount + 1
+            end
+        end
+    end
+    
+    -- In tất cả các log
+    for _, msg in ipairs(logMessages) do
+        print(msg)
+    end
+    
+    print("Tổng kết: " .. evolvedCount .. " unit thành công, " .. failedCount .. " unit thất bại")
+    return evolvedCount
+end
+
+-- Dropdown để chọn unit
+EvolveTierSection:AddDropdown("UnitDropdown", {
+    Title = "Choose Unit",
+    Values = scanEvolvableUnits(),
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedUnits = Values
+        
+        local selectedText = ""
+        local selectedCount = 0
+        for unit, isSelected in pairs(Values) do
+            if isSelected then
+                selectedText = selectedText .. unit .. ", "
+                selectedCount = selectedCount + 1
+            end
+        end
+        
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
+            print("Đã chọn " .. selectedCount .. " unit: " .. selectedText)
+        else
+            print("Không có unit nào được chọn")
+        end
+        
+        ConfigSystem.CurrentConfig.SelectedUnits = Values
+        ConfigSystem.SaveConfig()
+    end
+})
+
+-- Dropdown để chọn tier
+EvolveTierSection:AddDropdown("TierDropdown", {
+    Title = "Select Tier",
+    Values = {"Hyper", "Ultra"},
+    Multi = false,
+    Default = "Ultra",
+    Callback = function(Value)
+        selectedTier = Value
+        ConfigSystem.CurrentConfig.SelectedTier = Value
+        ConfigSystem.SaveConfig()
+        print("Đã chọn tier: " .. Value)
+    end
+})
+
+-- Nút Reload Units (để refresh danh sách unit)
+EvolveTierSection:AddButton({
+    Title = "Reload Units",
+    Callback = function()
+        -- Scan lại các unit
+        local units = scanEvolvableUnits()
+        print("Đã tìm thấy " .. #units .. " unit có thể evolve")
+        
+        -- Cập nhật dropdown
+        local unitDropdown = EvolveTierSection:GetComponent("UnitDropdown")
+        if unitDropdown and unitDropdown.Update then
+            unitDropdown:Update(units)
+            print("Đã cập nhật danh sách unit")
+        end
+    end
+})
+
+-- Toggle Auto Evolve
+EvolveTierSection:AddToggle("AutoEvolveToggle", {
+    Title = "Evolve Selected Units",
+    Default = false,
+    Callback = function(Value)
+        autoEvolveEnabled = Value
+        ConfigSystem.CurrentConfig.AutoEvolveEnabled = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Kiểm tra xem có unit nào được chọn không
+            local hasSelectedUnit = false
+            for _, isSelected in pairs(selectedUnits) do
+                if isSelected then
+                    hasSelectedUnit = true
+                    break
+                end
+            end
+            
+            if hasSelectedUnit then
+                print("Bắt đầu evolve các unit đã chọn...")
+                local evolvedCount = evolveSelectedUnits()
+                print("Đã evolve " .. evolvedCount .. " unit lên " .. selectedTier)
+                
+                -- Tự động tắt toggle sau khi hoàn thành
+                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
+            else
+                print("Không có unit nào được chọn để evolve")
+                -- Tự động tắt toggle nếu không có unit được chọn
+                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
+            end
+        end
+    end
+})
+
+-- Nút Auto Evolve & Refresh
+EvolveTierSection:AddButton({
+    Title = "Evolve & Refresh",
+    Callback = function()
+        -- Kiểm tra xem có unit nào được chọn không
+        local hasSelectedUnit = false
+        for _, isSelected in pairs(selectedUnits) do
+            if isSelected then
+                hasSelectedUnit = true
+                break
+            end
+        end
+        
+        if hasSelectedUnit then
+            print("Bắt đầu evolve các unit đã chọn lên tier " .. selectedTier .. "...")
+            local evolvedCount = evolveSelectedUnits()
+            print("Đã evolve " .. evolvedCount .. " unit lên " .. selectedTier)
+            
+            -- Đợi một chút để server xử lý
+            wait(1.5)
+            
+            -- Scan lại các unit
+            local units = scanEvolvableUnits()
+            
+            -- Cập nhật dropdown
+            local unitDropdown = EvolveTierSection:GetComponent("UnitDropdown")
+            if unitDropdown and unitDropdown.Update then
+                unitDropdown:Update(units)
+                print("Đã cập nhật lại danh sách unit sau khi evolve")
+            end
+        else
+            print("Không có unit nào được chọn để evolve!")
         end
     end
 })

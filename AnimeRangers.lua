@@ -4798,9 +4798,16 @@ local function scanAvailableUnits()
                 local unitName = unit.Name
                 local unitLevel = unit.Level.Value
                 local unitTag = unit.Tag.Value
+                
+                -- Tạo tagID ngắn từ tag để hiển thị - lấy 4 ký tự cuối
+                local shortTagID = string.sub(unitTag, -4)
+                
+                -- Thêm ID ngắn vào tên hiển thị để phân biệt các unit cùng tên và level
+                local displayName = unitName .. " (Lv: " .. unitLevel .. " - ID: " .. shortTagID .. ")"
+                
                 table.insert(units, {
                     name = unitName,
-                    displayName = unitName .. " (Lv: " .. unitLevel .. ")",
+                    displayName = displayName,
                     tag = unitTag,
                     ref = unit
                 })
@@ -5143,10 +5150,35 @@ StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
                     if selectedUnit then
                         -- Quét lại thông tin unit để lấy potential hiện tại
                         local currentUnits = scanAvailableUnits()
+                        local updatedUnit = nil
+                        
+                        -- Tìm unit có cùng tag với unit đang chọn
                         for _, unit in ipairs(currentUnits) do
                             if unit.tag == selectedUnitTag then
-                                selectedUnit = unit
+                                updatedUnit = unit
                                 break
+                            end
+                        end
+                        
+                        -- Cập nhật unit nếu tìm thấy
+                        if updatedUnit then
+                            selectedUnit = updatedUnit
+                            
+                            -- Hiển thị thông tin chi tiết về potential hiện tại sau mỗi lần roll
+                            local unitRef = selectedUnit.ref
+                            if unitRef then
+                                local damageValue = unitRef:FindFirstChild("DamagePotential") and unitRef.DamagePotential.Value or "N/A"
+                                local healthValue = unitRef:FindFirstChild("HealthPotential") and unitRef.HealthPotential.Value or "N/A"
+                                local speedValue = unitRef:FindFirstChild("SpeedPotential") and unitRef.SpeedPotential.Value or "N/A"
+                                local rangeValue = unitRef:FindFirstChild("RangePotential") and unitRef.RangePotential.Value or "N/A"
+                                local cooldownValue = unitRef:FindFirstChild("AttackCooldownPotential") and unitRef.AttackCooldownPotential.Value or "N/A"
+                                
+                                print("Stats Potential hiện tại của " .. selectedUnit.name .. ":")
+                                print("- Damage: " .. damageValue)
+                                print("- Health: " .. healthValue)
+                                print("- Speed: " .. speedValue)
+                                print("- Range: " .. rangeValue)
+                                print("- Cooldown: " .. cooldownValue)
                             end
                         end
                         
@@ -5165,6 +5197,47 @@ StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
             if autoRollStatsLoop then
                 autoRollStatsLoop:Disconnect()
                 autoRollStatsLoop = nil
+            end
+        end
+    end
+})
+
+-- Nút Roll Now
+StatsPotentialSection:AddButton({
+    Title = "Roll Stats Now",
+    Callback = function()
+        if not selectedUnit then
+            print("Vui lòng chọn unit trước khi roll stats")
+            return
+        end
+        
+        print("Đang roll stats cho " .. selectedUnit.name .. "...")
+        rollStatsPotential()
+        
+        -- Làm mới thông tin unit sau khi roll
+        wait(0.5)
+        local currentUnits = scanAvailableUnits()
+        for _, unit in ipairs(currentUnits) do
+            if unit.tag == selectedUnitTag then
+                selectedUnit = unit
+                
+                -- Hiển thị thông tin stats sau khi roll
+                local unitRef = unit.ref
+                if unitRef then
+                    local damageValue = unitRef:FindFirstChild("DamagePotential") and unitRef.DamagePotential.Value or "N/A"
+                    local healthValue = unitRef:FindFirstChild("HealthPotential") and unitRef.HealthPotential.Value or "N/A"
+                    local speedValue = unitRef:FindFirstChild("SpeedPotential") and unitRef.SpeedPotential.Value or "N/A"
+                    local rangeValue = unitRef:FindFirstChild("RangePotential") and unitRef.RangePotential.Value or "N/A"
+                    local cooldownValue = unitRef:FindFirstChild("AttackCooldownPotential") and unitRef.AttackCooldownPotential.Value or "N/A"
+                    
+                    print("Stats Potential sau khi roll:")
+                    print("- Damage: " .. damageValue)
+                    print("- Health: " .. healthValue)
+                    print("- Speed: " .. speedValue)
+                    print("- Range: " .. rangeValue)
+                    print("- Cooldown: " .. cooldownValue)
+                end
+                break
             end
         end
     end

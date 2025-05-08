@@ -4572,182 +4572,128 @@ MovementSection:AddToggle("AutoMovementToggle", {
 local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
 
 -- Biến lưu trạng thái Evolve Tier
-local selectedRanks = ConfigSystem.CurrentConfig.SelectedRanks or {}
-local selectedTier = ConfigSystem.CurrentConfig.SelectedTier or "Hyper"
-local autoEvolveTierEnabled = ConfigSystem.CurrentConfig.AutoEvolveTier or false
+local selectedRank = "Rare" -- Rank mặc định
+local autoEvolveTierEnabled = false
 local autoEvolveTierLoop = nil
+
+-- Hàm kiểm tra số lượng Ranger Crystal
+local function checkRangerCrystalAmount()
+    local playerName = game:GetService("Players").LocalPlayer.Name
+    local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
+    if not playerData then return 0 end
+    
+    local playerFolder = playerData:FindFirstChild(playerName)
+    if not playerFolder then return 0 end
+    
+    local items = playerFolder:FindFirstChild("Items")
+    if not items then return 0 end
+    
+    local rangerCrystal = items:FindFirstChild("Ranger Crystal")
+    if not rangerCrystal then return 0 end
+    
+    local amount = rangerCrystal:FindFirstChild("Amount")
+    if not amount then return 0 end
+    
+    return amount.Value
+end
+
+-- Hàm thực hiện evolve tier cho một unit
+local function evolveTierUnit(unit)
+    if not unit then return false end
+    
+    local evolveTierRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Units", "EvolveTier"}, 0.5)
+    if not evolveTierRemote then return false end
+    
+    evolveTierRemote:FireServer(unit)
+    return true
+end
+
+-- Hàm tìm các unit theo rank đã chọn và thực hiện evolve tier
+local function performEvolveTierForRank()
+    -- Kiểm tra số lượng Ranger Crystal
+    local crystalAmount = checkRangerCrystalAmount()
+    local maxEvolveCount = math.floor(crystalAmount / 10) -- Mỗi lần evolve cần 10 crystal
+    
+    if maxEvolveCount <= 0 then
+        print("Không đủ Ranger Crystal (cần ít nhất 10)")
+        return false
+    end
+    
+    print("Số lượng Ranger Crystal: " .. crystalAmount .. " (đủ cho " .. maxEvolveCount .. " lần evolve)")
+    
+    -- Tìm các unit có rank tương ứng trong Inventory
+    local unitsToEvolve = {}
+    local success, err = pcall(function()
+        local inventoryFolder = game:GetService("ReplicatedStorage").Inventory:FindFirstChild(game.Players.LocalPlayer.Name)
+        if not inventoryFolder then return end
+        
+        for _, unit in pairs(inventoryFolder:GetChildren()) do
+            if unit:FindFirstChild("Rarity") and unit.Rarity.Value == selectedRank and 
+               unit:FindFirstChild("Tier") and unit.Tier.Value < 5 then -- Chỉ evolve tier nếu tier < 5
+                table.insert(unitsToEvolve, unit)
+            end
+        end
+    end)
+    
+    if not success or #unitsToEvolve == 0 then
+        print("Không tìm thấy unit rank " .. selectedRank .. " phù hợp để evolve")
+        return false
+    end
+    
+    print("Tìm thấy " .. #unitsToEvolve .. " unit rank " .. selectedRank .. " có thể evolve")
+    
+    -- Giới hạn số lượng unit evolve theo số crystal
+    local evolveCount = math.min(#unitsToEvolve, maxEvolveCount)
+    
+    -- Thực hiện evolve tier
+    for i = 1, evolveCount do
+        local unit = unitsToEvolve[i]
+        print("Evolve Tier unit " .. i .. "/" .. evolveCount .. ": " .. unit.Name)
+        evolveTierUnit(unit)
+        wait(1) -- Đợi giữa các lần evolve để tránh spam
+    end
+    
+    return true
+end
 
 -- Dropdown để chọn Rank
 EvolveTierSection:AddDropdown("RankDropdown", {
     Title = "Choose Rank",
-    Values = {"Rare", "Epic", "Legendary", "Mythic", "Secret"},
-    Multi = true,
-    Default = selectedRanks,
-    Callback = function(Values)
-        selectedRanks = Values
-        ConfigSystem.CurrentConfig.SelectedRanks = Values
-        ConfigSystem.SaveConfig()
-        
-        local selectedRanksText = ""
-        for rank, isSelected in pairs(Values) do
-            if isSelected then
-                selectedRanksText = selectedRanksText .. rank .. ", "
-            end
-        end
-        
-        if selectedRanksText ~= "" then
-            selectedRanksText = selectedRanksText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
-            print("Đã chọn ranks: " .. selectedRanksText)
-        else
-            print("Không có rank nào được chọn")
-        end
-    end
-})
-
--- Dropdown để chọn Tier
-EvolveTierSection:AddDropdown("TierDropdown", {
-    Title = "Tier Select",
-    Values = {"Hyper", "Ultra"},
+    Values = {"Rare", "Epic", "Legendary", "Mythical"},
     Multi = false,
-    Default = selectedTier,
+    Default = "Rare",
     Callback = function(Value)
-        selectedTier = Value
-        ConfigSystem.CurrentConfig.SelectedTier = Value
-        ConfigSystem.SaveConfig()
-        print("Đã chọn tier: " .. Value)
+        selectedRank = Value
+        print("Đã chọn rank: " .. Value)
     end
 })
 
--- Hàm để scan units và evolve theo rank
-local function evolveSelectedUnits()
-    local success, err = pcall(function()
-        local player = game:GetService("Players").LocalPlayer
-        local playerName = player.Name
-        local collectionGUI = player.PlayerGui:FindFirstChild("Collection")
-        
-        if not collectionGUI then
-            print("Không tìm thấy GUI Collection. Hãy mở Collection trước!")
-            return
-        end
-        
-        local unitSpace = collectionGUI.Main.Base.Space.Unit
-        local playerData = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data")
-        local playerCollection = playerData:FindFirstChild(playerName) and playerData[playerName]:FindFirstChild("Collection")
-        
-        if not unitSpace or not playerCollection then
-            print("Không tìm thấy dữ liệu units cần thiết")
-            return
-        end
-        
-        print("Bắt đầu quét và nâng cấp units...")
-        
-        -- Đếm số lượng unit được xử lý
-        local totalUnits = 0
-        local evolvedUnits = 0
-        local skippedUnits = 0
-        
-        -- Tạo danh sách các unit cần nâng cấp
-        local unitsToEvolve = {}
-        
-        -- Lặp qua từng unit trong Collection
-        for _, unit in pairs(unitSpace:GetChildren()) do
-            -- Kiểm tra rank của unit
-            local unitRank = nil
-            for rank, isSelected in pairs(selectedRanks) do
-                if isSelected and unit:FindFirstChild("Frame") and 
-                   unit.Frame:FindFirstChild("UnitFrame") and 
-                   unit.Frame.UnitFrame:FindFirstChild(rank) then
-                    unitRank = rank
-                    break
-                end
-            end
-            
-            -- Nếu unit có rank đã chọn
-            if unitRank then
-                local unitName = unit.Name
-                local unitData = playerCollection:FindFirstChild(unitName)
-                totalUnits = totalUnits + 1
-                
-                -- Kiểm tra EvolveTier hiện tại
-                if unitData and unitData:FindFirstChild("EvolveTier") then
-                    local currentTier = unitData.EvolveTier.Value
-                    
-                    -- Chỉ evolve nếu hiện tại chưa có tier
-                    if currentTier == "" then
-                        -- Lấy Tag để evolve
-                        if unitData:FindFirstChild("Tag") then
-                            local tag = unitData.Tag.Value
-                            table.insert(unitsToEvolve, {
-                                name = unitName,
-                                tag = tag,
-                                rank = unitRank
-                            })
-                        end
-                    else
-                        skippedUnits = skippedUnits + 1
-                        print(unitName .. " [" .. unitRank .. "] đã có tier: " .. currentTier .. ", bỏ qua")
-                    end
-                end
-            end
-        end
-        
-        print("Đã tìm thấy " .. #unitsToEvolve .. "/" .. totalUnits .. " unit phù hợp để evolve")
-        
-        -- Tiến hành evolve từng unit một với thời gian chờ dài hơn
-        for i, unit in ipairs(unitsToEvolve) do
-            local args = {
-                unit.tag,
-                selectedTier
-            }
-            
-            print("Đang evolve (" .. i .. "/" .. #unitsToEvolve .. "): " .. unit.name .. " [" .. unit.rank .. "] lên " .. selectedTier)
-            
-            -- Thực hiện evolve
-            local evolveRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Units"):WaitForChild("EvolveTier")
-            evolveRemote:FireServer(unpack(args))
-            evolvedUnits = evolvedUnits + 1
-            
-            -- Đợi lâu hơn giữa các lần evolve để đảm bảo game kịp xử lý
-            wait(1) -- Tăng từ 0.5s lên 1.5s
-        end
-        
-        print("Hoàn thành! Đã evolve " .. evolvedUnits .. " unit lên " .. selectedTier .. ", bỏ qua " .. skippedUnits .. " unit đã có tier.")
-    end)
-    
-    if not success then
-        warn("Lỗi khi evolve units: " .. tostring(err))
-    end
-end
-
--- Toggle Auto EvolveTier
-EvolveTierSection:AddToggle("AutoEvolveTierToggle", {
-    Title = "EvolveTier Selected",
-    Default = autoEvolveTierEnabled,
+-- Toggle Evolve Tier Selected
+EvolveTierSection:AddToggle("EvolveTierSelectedToggle", {
+    Title = "Evolve Tier Selected",
+    Default = false,
     Callback = function(Value)
         autoEvolveTierEnabled = Value
-        ConfigSystem.CurrentConfig.AutoEvolveTier = Value
-        ConfigSystem.SaveConfig()
         
-        if Value then
-            print("Auto EvolveTier đã được bật")
+        if autoEvolveTierEnabled then
+            print("Auto Evolve Tier đã được bật cho rank: " .. selectedRank)
             
-            -- Thực hiện evolve ngay lập tức
-            evolveSelectedUnits()
-            
-            -- Tạo vòng lặp
+            -- Hủy vòng lặp cũ nếu có
             if autoEvolveTierLoop then
                 autoEvolveTierLoop:Disconnect()
                 autoEvolveTierLoop = nil
             end
             
+            -- Tạo vòng lặp mới
             spawn(function()
-                while autoEvolveTierEnabled and wait(5) do
-                    evolveSelectedUnits()
+                while autoEvolveTierEnabled and wait(2) do -- Kiểm tra mỗi 2 giây
+                    performEvolveTierForRank()
                 end
             end)
         else
-            print("Auto EvolveTier đã được tắt")
+            print("Auto Evolve Tier đã được tắt")
             
+            -- Hủy vòng lặp nếu có
             if autoEvolveTierLoop then
                 autoEvolveTierLoop:Disconnect()
                 autoEvolveTierLoop = nil
@@ -4756,12 +4702,23 @@ EvolveTierSection:AddToggle("AutoEvolveTierToggle", {
     end
 })
 
--- Nút Evolve Now (thực hiện ngay lập tức)
+-- Nút để Evolve Tier ngay lập tức
 EvolveTierSection:AddButton({
-    Title = "Evolve Now",
+    Title = "Evolve Tier Now",
     Callback = function()
-        print("Đang thực hiện Evolve cho các unit đã chọn...")
-        evolveSelectedUnits()
+        local success = performEvolveTierForRank()
+        if not success then
+            print("Không thể thực hiện Evolve Tier. Vui lòng kiểm tra lại Ranger Crystal và unit.")
+        end
+    end
+})
+
+-- Nút để kiểm tra số lượng Ranger Crystal
+EvolveTierSection:AddButton({
+    Title = "Check Ranger Crystal",
+    Callback = function()
+        local amount = checkRangerCrystalAmount()
+        print("Số lượng Ranger Crystal: " .. amount .. " (đủ cho " .. math.floor(amount / 10) .. " lần evolve)")
     end
 })
 

@@ -1624,13 +1624,9 @@ storyTimeDelayInput = StorySection:AddInput("StoryTimeDelayInput", {
     end
 })
 
--- Thêm biến mới để lưu trữ các map theo thứ tự
-local orderedRangerMaps = {} -- Lưu trữ map theo thứ tự ưu tiên
-local currentMapIndex = 1 -- Index của map đang sử dụng
-
 -- Dropdown để chọn Map cho Ranger
 RangerSection:AddDropdown("RangerMapDropdown", {
-    Title = "Choose Map(s)", -- Sửa tiêu đề
+    Title = "Choose Map", -- Sửa tiêu đề
     Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
     Multi = true, -- Cho phép chọn nhiều
     Default = (function() -- Khôi phục trạng thái đã chọn từ config
@@ -1649,59 +1645,38 @@ RangerSection:AddDropdown("RangerMapDropdown", {
     end)(),
     Callback = function(Values)
         selectedRangerMaps = {} -- Reset trước khi cập nhật
-        orderedRangerMaps = {} -- Reset mảng có thứ tự
         local firstSelectedMap = nil
         local firstSelectedDisplayMap = nil
-        
-        -- Đảm bảo Voocha Village (OnePiece) luôn là ưu tiên đầu tiên nếu được chọn
-        if Values["Voocha Village"] then
-            table.insert(orderedRangerMaps, "OnePiece")
-            selectedRangerMaps["OnePiece"] = true
-            firstSelectedMap = "OnePiece"
-            firstSelectedDisplayMap = "Voocha Village"
-            print("Đã chọn Ranger map với ưu tiên #1: Voocha Village (thực tế: OnePiece)")
-        end
-        
-        -- Thêm các map còn lại theo thứ tự cố định
-        local mapOrder = {"Green Planet", "Demon Forest", "Leaf Village", "Z City"}
-        for _, displayMap in ipairs(mapOrder) do
-            if Values[displayMap] and displayMap ~= "Voocha Village" then
-                local realMap = mapNameMapping[displayMap]
-                if realMap then
-                    table.insert(orderedRangerMaps, realMap)
-                    selectedRangerMaps[realMap] = true
-                    if not firstSelectedMap then
-                        firstSelectedMap = realMap
-                        firstSelectedDisplayMap = displayMap
-                    end
-                    print("Đã chọn Ranger map với ưu tiên #" .. #orderedRangerMaps .. ": " .. displayMap .. " (thực tế: " .. realMap .. ")")
+        for displayMap, isSelected in pairs(Values) do
+            local realMap = mapNameMapping[displayMap]
+            if realMap and isSelected then
+                selectedRangerMaps[realMap] = true
+                if not firstSelectedMap then
+                    firstSelectedMap = realMap
+                    firstSelectedDisplayMap = displayMap
                 end
+                print("Đã chọn Ranger map: " .. displayMap .. " (thực tế: " .. realMap .. ")")
             end
         end
-        
-        -- Cập nhật selectedRangerMap thành map đầu tiên được chọn
+        -- Cập nhật selectedRangerMap (dùng cho các chức năng khác nếu cần) thành map đầu tiên được chọn
         selectedRangerMap = firstSelectedMap or "OnePiece"
         selectedRangerDisplayMap = firstSelectedDisplayMap or "Voocha Village"
 
         ConfigSystem.CurrentConfig.SelectedRangerMaps = selectedRangerMaps
-        ConfigSystem.CurrentConfig.SelectedRangerMap = selectedRangerMap
-        ConfigSystem.CurrentConfig.OrderedRangerMaps = orderedRangerMaps -- Lưu thứ tự vào config
+        ConfigSystem.CurrentConfig.SelectedRangerMap = selectedRangerMap -- Lưu map đầu tiên làm map chính (nếu cần)
         ConfigSystem.SaveConfig()
 
-        -- Hiển thị thông báo tổng hợp
+        -- Thông báo (có thể bỏ nếu không muốn)
         local selectedMapsText = ""
-        for i, map in ipairs(orderedRangerMaps) do
-            selectedMapsText = selectedMapsText .. "#" .. i .. ": " .. (reverseMapNameMapping[map] or map) .. ", "
+        for map, isSelected in pairs(selectedRangerMaps) do
+             if isSelected then selectedMapsText = selectedMapsText .. (reverseMapNameMapping[map] or map) .. ", " end
         end
         if selectedMapsText ~= "" then
              selectedMapsText = selectedMapsText:sub(1, -3)
-             print("Các map Ranger đã chọn theo thứ tự ưu tiên: " .. selectedMapsText)
+             print("Các map Ranger đã chọn: " .. selectedMapsText)
         else
              print("Chưa chọn map Ranger nào.")
         end
-        
-        -- Reset index
-        currentMapIndex = 1
     end
 })
 
@@ -1713,46 +1688,30 @@ RangerSection:AddDropdown("ActDropdown", {
     Default = ConfigSystem.CurrentConfig.SelectedActs or {RangerStage1 = true},
     Callback = function(Values)
         selectedActs = Values
-        -- Reset và tạo mới mảng có thứ tự
-        orderedActs = {}
-        
-        -- Luôn ưu tiên Act 1 trước nếu được chọn
-        if Values["RangerStage1"] then
-            table.insert(orderedActs, "RangerStage1")
-            print("Đã chọn act với ưu tiên #1: RangerStage1")
-        end
-        
-        -- Thêm các act còn lại theo thứ tự
-        if Values["RangerStage2"] then
-            table.insert(orderedActs, "RangerStage2")
-            print("Đã chọn act với ưu tiên #" .. #orderedActs .. ": RangerStage2")
-        end
-        
-        if Values["RangerStage3"] then
-            table.insert(orderedActs, "RangerStage3") 
-            print("Đã chọn act với ưu tiên #" .. #orderedActs .. ": RangerStage3")
-        end
-        
         ConfigSystem.CurrentConfig.SelectedActs = Values
-        ConfigSystem.CurrentConfig.OrderedActs = orderedActs -- Lưu thứ tự vào config
         ConfigSystem.SaveConfig()
         
-        -- Đảm bảo currentActIndex không vượt quá số lượng acts
-        if #orderedActs > 0 then
-            currentActIndex = 1 -- Reset về act đầu tiên khi thay đổi
-        else
-            print("Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.")
-        end
+        -- Cập nhật danh sách Acts đã sắp xếp
+        updateOrderedActs()
         
         -- Hiển thị thông báo khi người dùng chọn act
         local selectedActsText = ""
-        for i, act in ipairs(orderedActs) do
-            selectedActsText = selectedActsText .. "#" .. i .. ": " .. act .. ", "
+        for act, isSelected in pairs(Values) do
+            if isSelected then
+                selectedActsText = selectedActsText .. act .. ", "
+        
+        -- Thay đổi act khi người dùng chọn
+                changeAct(selectedRangerMap, act)
+                print("Đã chọn act: " .. act)
+                wait(0.1) -- Đợi 0.5 giây giữa các lần gửi để tránh lỗi
+            end
         end
         
         if selectedActsText ~= "" then
             selectedActsText = selectedActsText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
-            print("Các act đã chọn theo thứ tự ưu tiên: " .. selectedActsText)
+            print("Đã chọn act: " .. selectedActsText)
+        else
+            print("Bạn chưa chọn act nào! Vui lòng chọn ít nhất một act.")
         end
     end
 })
@@ -1832,6 +1791,30 @@ local function isMapActOnCooldown(mapName, actName)
     return result
 end
 
+-- Hàm trợ giúp mới để tìm màn chơi khả dụng tiếp theo theo thứ tự ưu tiên
+local function findNextAvailableStage()
+    local definedMapsDisplay = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"} -- Thứ tự map trong UI
+    local definedActs = {"RangerStage1", "RangerStage2", "RangerStage3"} -- Thứ tự act trong UI
+
+    for _, displayMapName in ipairs(definedMapsDisplay) do
+        local realMapName = mapNameMapping[displayMapName]
+        -- Kiểm tra xem map này có được người dùng chọn không
+        if realMapName and selectedRangerMaps[realMapName] then 
+            for _, actName in ipairs(definedActs) do
+                -- Kiểm tra xem act này có được người dùng chọn không
+                if selectedActs[actName] then 
+                    if not isMapActOnCooldown(realMapName, actName) then
+                        return {map = realMapName, act = actName} -- Trả về map/act hợp lệ đầu tiên tìm thấy
+                    else
+                        -- print("Auto Join (Cooldown): " .. realMapName .. "_" .. actName) -- Bỏ comment nếu muốn log chi tiết
+                    end
+                end
+            end
+        end
+    end
+    return nil -- Không tìm thấy màn chơi nào khả dụng
+end
+
 -- Cải tiến hàm Auto Join Ranger Stage để thông minh hơn với việc xử lý cooldown
 RangerSection:AddToggle("AutoJoinRangerToggle", {
     Title = "Auto Join Selected Stage", -- Đổi tên cho rõ nghĩa
@@ -1867,32 +1850,14 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                         wait(0.5) -- Đợi một chút giữa các lần kiểm tra
                     end
                     
-                    -- Tìm map và act không bị cooldown để join
-                    local availableMaps = {}
+                    -- Tìm map và act không bị cooldown để join bằng hàm trợ giúp mới
+                    local stageToJoin = findNextAvailableStage()
                     
-                    -- Thu thập tất cả map+act không bị cooldown
-                    for map, mapSelected in pairs(selectedRangerMaps) do
-                        if mapSelected then
-                            for act, actSelected in pairs(selectedActs) do
-                                if actSelected then
-                                    if not isMapActOnCooldown(map, act) then
-                                        table.insert(availableMaps, {map = map, act = act})
-                                    else
-                                        print(map .. "_" .. act .. " đang trong cooldown, sẽ bỏ qua")
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    
-                    -- Nếu có map nào available, join map đó
-                    if #availableMaps > 0 then
-                        -- Ưu tiên map theo thứ tự (có thể tùy chỉnh logic sắp xếp nếu muốn)
-                        local mapToJoin = availableMaps[1]
-                        print("Chuẩn bị join map không có cooldown: " .. mapToJoin.map .. " - " .. mapToJoin.act)
+                    if stageToJoin then
+                        print("Chuẩn bị join map không có cooldown: " .. stageToJoin.map .. " - " .. stageToJoin.act)
                         
                         -- Join map
-                        joinRangerStage(mapToJoin.map, mapToJoin.act)
+                        joinRangerStage(stageToJoin.map, stageToJoin.act)
                         didJoin = true
                         
                         -- Đợi vào map hoặc timeout
@@ -1905,7 +1870,7 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                             wait(rangerTimeDelay)
                         end
                     else
-                        print("Tất cả map đã chọn đều đang trong cooldown, đợi 5 giây và kiểm tra lại...")
+                        print("Tất cả map và act đã chọn đều đang trong cooldown hoặc không có sự kết hợp hợp lệ. Đợi 5 giây và kiểm tra lại...")
                         wait(5)
                     end
                     
@@ -5273,144 +5238,3 @@ StatsPotentialSection:AddButton({
 })
 
 print("Anime Rangers X Script has been loaded and optimized!")
-
--- Hàm để lặp qua các selected Acts theo thứ tự ưu tiên
-local function cycleRangerStages()
-    -- Kiểm tra xem người chơi đã ở trong map chưa
-    if isPlayerInMap() then
-        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Ranger Stage")
-        return false
-    end
-    
-    -- Kiểm tra xem có map và act nào được chọn không
-    if #orderedRangerMaps == 0 then
-        warn("Không có map nào được chọn để join Ranger Stage")
-        return false
-    end
-    
-    if #orderedActs == 0 then
-        warn("Không có Act nào được chọn để join Ranger Stage")
-        return false
-    end
-    
-    -- Tìm map và act đầu tiên không bị cooldown
-    local mapToUse = nil
-    local actToUse = nil
-    local foundValid = false
-    
-    -- Ưu tiên thử các act đầu tiên của map đầu tiên trước
-    for mapIdx = 1, #orderedRangerMaps do
-        local map = orderedRangerMaps[mapIdx]
-        for actIdx = 1, #orderedActs do
-            local act = orderedActs[actIdx]
-            
-            -- Kiểm tra xem map_act này có đang trong cooldown không
-            if not isMapActOnCooldown(map, act) then
-                mapToUse = map
-                actToUse = act
-                print("Đã tìm thấy map không có cooldown: " .. map .. " - " .. act)
-                foundValid = true
-                break
-            else
-                print(map .. "_" .. act .. " đang trong cooldown, thử tiếp theo...")
-            end
-        end
-        
-        if foundValid then
-            break
-        end
-    end
-    
-    -- Nếu không tìm thấy map và act nào có sẵn, báo lỗi và dừng
-    if not mapToUse or not actToUse then
-        warn("Tất cả map và act đã chọn đều đang trong cooldown")
-        return false
-    end
-    
-    -- Join với map và act được chọn
-    return joinRangerStage(mapToUse, actToUse)
-end
-
--- Khôi phục lại orderedRangerMaps và orderedActs từ config khi khởi động
-if ConfigSystem.CurrentConfig.OrderedRangerMaps then
-    orderedRangerMaps = ConfigSystem.CurrentConfig.OrderedRangerMaps
-end
-
-if ConfigSystem.CurrentConfig.OrderedActs then
-    orderedActs = ConfigSystem.CurrentConfig.OrderedActs
-else
-    -- Khởi tạo mặc định nếu không có trong config
-    orderedActs = {}
-    for act, isSelected in pairs(ConfigSystem.CurrentConfig.SelectedActs or {}) do
-        if isSelected then
-            if act == "RangerStage1" then
-                table.insert(orderedActs, 1, act) -- Đặt RangerStage1 lên đầu
-            else
-                table.insert(orderedActs, act)
-            end
-        end
-    end
-end
-
--- Toggle Auto Join Ranger
-RangerSection:AddToggle("AutoJoinRangerToggle", {
-    Title = "Auto Join Selected Stage", -- Đổi tên cho rõ nghĩa
-    Default = ConfigSystem.CurrentConfig.AutoJoinRanger or false,
-    Callback = function(Value)
-        autoJoinRangerEnabled = Value
-        ConfigSystem.CurrentConfig.AutoJoinRanger = Value
-        ConfigSystem.SaveConfig()
-
-        if autoJoinRangerEnabled then
-            -- Kiểm tra xem có Map nào được chọn không
-            if #orderedRangerMaps == 0 then
-                print("Chưa chọn map nào trong Ranger Stage!")
-                return
-            end
-
-            -- Kiểm tra xem có Act nào được chọn không
-            if #orderedActs == 0 then
-                print("Chưa chọn act nào trong Ranger Stage!")
-                return
-            end
-
-            print("Auto Join Selected Ranger Stage đã được bật, bắt đầu với map " 
-                  .. reverseMapNameMapping[orderedRangerMaps[1]] .. " và act " .. orderedActs[1])
-            
-            if autoJoinRangerLoop then
-                autoJoinRangerLoop:Disconnect()
-                autoJoinRangerLoop = nil
-            end
-
-            -- Tạo vòng lặp mới sử dụng hàm cycleRangerStages
-            spawn(function()
-                while autoJoinRangerEnabled do
-                    -- Chỉ thực hiện nếu không ở trong map
-                    if not isPlayerInMap() then
-                        -- Áp dụng time delay
-                        print("Đợi " .. rangerTimeDelay .. " giây trước khi join Ranger Stage")
-                        wait(rangerTimeDelay)
-                        
-                        -- Kiểm tra lại sau khi delay
-                        if autoJoinRangerEnabled and not isPlayerInMap() then
-                            cycleRangerStages() -- Sử dụng hàm mới
-                            
-                            -- Đợi một lúc trước khi thử lại
-                            wait(5)
-                        end
-                    else
-                        -- Đang trong map, đợi đến khi ra
-                        wait(1)
-                    end
-                end
-            end)
-        else
-            print("Auto Join Selected Ranger Stage đã được tắt")
-            
-            if autoJoinRangerLoop then
-                autoJoinRangerLoop:Disconnect()
-                autoJoinRangerLoop = nil
-            end
-        end
-    end
-})

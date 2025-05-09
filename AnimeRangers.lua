@@ -816,6 +816,24 @@ local function isPlayerInMap()
     return player:FindFirstChild("UnitsFolder") ~= nil
 end
 
+local function isPlayerInRangerStageMap()
+    -- Path: ReplicatedStorage -> Values -> Game -> Gamemode (StringValue)
+    local gamemodeStringValue = safeGetPath(game:GetService("ReplicatedStorage"), {"Values", "Game", "Gamemode"}, 0.1) -- waitTime 0.1s
+    
+    if gamemodeStringValue and gamemodeStringValue:IsA("StringValue") then
+        if gamemodeStringValue.Value == "Ranger Stage" then
+            -- print("Currently in Ranger Stage map.") -- For debugging
+            return true
+        else
+            -- print("Gamemode is: " .. gamemodeStringValue.Value .. ", not Ranger Stage.") -- For debugging
+            return false
+        end
+    else
+        -- print("Gamemode StringValue not found at ReplicatedStorage.Values.Game.Gamemode") -- For debugging
+        return false
+    end
+end
+
 -- Thêm section Story trong tab Play
 local StorySection = PlayTab:AddSection("Story")
 
@@ -1516,9 +1534,9 @@ end
 
 -- Hàm để tự động tham gia Ranger Stage (Sửa đổi để nhận map và act)
 local function joinRangerStage(mapToJoin, actToJoin)
-    -- Kiểm tra xem người chơi đã ở trong map chưa
-    if isPlayerInMap() then
-        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Ranger Stage")
+    -- Kiểm tra xem người chơi đã ở trong map Ranger Stage chưa
+    if isPlayerInRangerStageMap() then
+        print("Đã phát hiện người chơi đang ở trong map Ranger Stage, không thực hiện join Ranger Stage")
         return false
     end
 
@@ -1818,10 +1836,10 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                 while autoJoinRangerEnabled do
                     local didJoin = false
                     
-                    -- Kiểm tra nếu đang ở trong map, đợi ra khỏi map trước
-                    if isPlayerInMap() then
-                        print("Đang ở trong map, đợi thoát...")
-                        while isPlayerInMap() and autoJoinRangerEnabled do wait(0.1) end
+                    -- Kiểm tra nếu đang ở trong map Ranger Stage, đợi ra khỏi map trước
+                    if isPlayerInRangerStageMap() then
+                        print("Đang ở trong map Ranger Stage, đợi thoát...")
+                        while isPlayerInRangerStageMap() and autoJoinRangerEnabled do wait(0.1) end
                         if not autoJoinRangerEnabled then return end
                         wait(0.5) -- Đợi một chút giữa các lần kiểm tra
                     end
@@ -1856,11 +1874,11 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                         
                         -- Đợi vào map hoặc timeout
                         local t = 0
-                        while not isPlayerInMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
+                        while not isPlayerInRangerStageMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
                         
                         -- Nếu đã vào map, đợi delay
-                        if isPlayerInMap() and autoJoinRangerEnabled then
-                            print("Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
+                        if isPlayerInRangerStageMap() and autoJoinRangerEnabled then
+                            print("Đã vào map Ranger Stage, đợi " .. rangerTimeDelay .. " giây...")
                             wait(rangerTimeDelay)
                         end
                     else
@@ -1955,8 +1973,8 @@ RangerSection:AddToggle("AutoLeaveToggle", {
                 local emptyTime = 0
                 
                 while autoLeaveEnabled do
-                    -- Chỉ kiểm tra nếu đang ở trong map
-                    if isPlayerInMap() then
+                    -- Chỉ kiểm tra nếu đang ở trong map Ranger Stage
+                    if isPlayerInRangerStageMap() then
                         local areEmpty = checkEnemyFolder()
                         
                         if areEmpty then
@@ -4259,10 +4277,10 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                 local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
                 local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
                 while autoJoinAllRangerEnabled do
-                    -- Kiểm tra nếu đang ở trong map, đợi ra khỏi map trước
-                    if isPlayerInMap() then
-                        print("Auto Join All: Đang ở trong map, đợi thoát...")
-                        while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.1) end
+                    -- Kiểm tra nếu đang ở trong map Ranger Stage, đợi ra khỏi map trước
+                    if isPlayerInRangerStageMap() then
+                        print("Auto Join All: Đang ở trong map Ranger Stage, đợi thoát...")
+                        while isPlayerInRangerStageMap() and autoJoinAllRangerEnabled do wait(0.1) end
                         if not autoJoinAllRangerEnabled then return end
                         wait(0.5) -- Đợi một chút giữa các lần kiểm tra
                     end
@@ -4290,14 +4308,14 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                         
                         -- Đợi vào map hoặc timeout
                         local t = 0
-                        while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do 
+                        while not isPlayerInRangerStageMap() and t < 10 and autoJoinAllRangerEnabled do 
                             wait(0.5)
                             t = t + 0.5
                         end
                         
                         -- Nếu đã vào map, đợi delay
-                        if isPlayerInMap() and autoJoinAllRangerEnabled then
-                            print("Auto Join All: Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
+                        if isPlayerInRangerStageMap() and autoJoinAllRangerEnabled then
+                            print("Auto Join All: Đã vào map Ranger Stage, đợi " .. rangerTimeDelay .. " giây...")
                             wait(rangerTimeDelay)
                         end
                     else

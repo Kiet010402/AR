@@ -684,8 +684,8 @@ local playerName = game:GetService("Players").LocalPlayer.Name
 local Window = Fluent:CreateWindow({
     Title = "HT Hub | Anime Rangers X",
     SubTitle = "",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
+    TabWidth = 140,
+    Size = UDim2.fromOffset(450, 350),
     Acrylic = true,
     Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
     MinimizeKey = Enum.KeyCode.LeftControl
@@ -1015,7 +1015,7 @@ end
 
 -- Dropdown để chọn Map
 StorySection:AddDropdown("MapDropdown", {
-    Title = "Choose Map",
+    Title = "Map",
     Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
     Multi = false,
     Default = selectedDisplayMap,
@@ -1033,7 +1033,7 @@ StorySection:AddDropdown("MapDropdown", {
 
 -- Dropdown để chọn Chapter
 StorySection:AddDropdown("ChapterDropdown", {
-    Title = "Choose Chapter",
+    Title = "Chapter",
     Values = {"Chapter1", "Chapter2", "Chapter3", "Chapter4", "Chapter5", "Chapter6", "Chapter7", "Chapter8", "Chapter9", "Chapter10"},
     Multi = false,
     Default = ConfigSystem.CurrentConfig.SelectedChapter or "Chapter1",
@@ -1050,7 +1050,7 @@ StorySection:AddDropdown("ChapterDropdown", {
 
 -- Dropdown để chọn Difficulty
 StorySection:AddDropdown("DifficultyDropdown", {
-    Title = "Choose Difficulty",
+    Title = "Difficulty",
     Values = {"Normal", "Hard", "Nightmare"},
     Multi = false,
     Default = ConfigSystem.CurrentConfig.SelectedDifficulty or "Normal",
@@ -1620,7 +1620,7 @@ local storyTimeDelayInput = nil
 
 -- Input cho Story Time Delay
 storyTimeDelayInput = StorySection:AddInput("StoryTimeDelayInput", {
-    Title = "Story Time Delay (1-30s)", -- Thêm min/max vào Title
+    Title = "Delay (1-30s)", -- Thêm min/max vào Title
     Placeholder = "Nhập delay",
     Default = tostring(storyTimeDelay),
     Numeric = true,
@@ -1644,7 +1644,7 @@ storyTimeDelayInput = StorySection:AddInput("StoryTimeDelayInput", {
 
 -- Dropdown để chọn Map cho Ranger
 RangerSection:AddDropdown("RangerMapDropdown", {
-    Title = "Choose Map(s)", -- Sửa tiêu đề
+    Title = "Map", -- Sửa tiêu đề
     Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
     Multi = true, -- Cho phép chọn nhiều
     Default = (function() -- Khôi phục trạng thái đã chọn từ config
@@ -1700,7 +1700,7 @@ RangerSection:AddDropdown("RangerMapDropdown", {
 
 -- Dropdown để chọn Act
 RangerSection:AddDropdown("ActDropdown", {
-    Title = "Choose Act",
+    Title = "Act",
     Values = {"RangerStage1", "RangerStage2", "RangerStage3"},
     Multi = true,
     Default = ConfigSystem.CurrentConfig.SelectedActs or {RangerStage1 = true},
@@ -1759,7 +1759,7 @@ local rangerTimeDelayInput = nil
 
 -- Input cho Ranger Time Delay (Giữ lại, sửa callback)
 rangerTimeDelayInput = RangerSection:AddInput("RangerTimeDelayInput", {
-    Title = "Ranger Time Delay (1-30s)",
+    Title = "Delay (1-30s)",
     Placeholder = "Nhập delay",
     Default = tostring(rangerTimeDelay),
     Numeric = true,
@@ -2181,7 +2181,7 @@ local challengeTimeDelayInput = nil
 
 -- Input cho Challenge Time Delay
 challengeTimeDelayInput = ChallengeSection:AddInput("ChallengeTimeDelayInput", {
-    Title = "Challenge Delay (1-30s)",
+    Title = "Delay (1-30s)",
     Placeholder = "Nhập delay",
     Default = tostring(challengeTimeDelay),
     Numeric = true,
@@ -2252,26 +2252,6 @@ ChallengeSection:AddToggle("AutoChallengeToggle", {
     end
 })
 
--- Nút Join Challenge (manual)
-ChallengeSection:AddButton({
-    Title = "Join Challenge Now",
-    Callback = function()
-        -- Kiểm tra nếu người chơi đã ở trong map
-        if isPlayerInMap() then
-            print("Bạn đang ở trong map, không thể tham gia Challenge mới")
-            return
-        end
-        
-        local success = joinChallenge()
-        
-        if success then
-            print("Đang tham gia Challenge")
-        else
-            print("Không thể tham gia Challenge. Vui lòng thử lại sau.")
-        end
-    end
-})
-
 -- Thêm section In-Game Controls
 local InGameSection = InGameTab:AddSection("Game Controls")
 
@@ -2308,7 +2288,7 @@ local autoTPLobbyDelayInput = nil
 
 -- Input cho Auto TP Lobby Delay
 autoTPLobbyDelayInput = InGameSection:AddInput("AutoTPLobbyDelayInput", {
-    Title = "Auto TP Lobby Delay (1-60 phút)",
+    Title = "Delay (1-60m) ",
     Placeholder = "Nhập phút",
     Default = tostring(autoTPLobbyDelay),
     Numeric = true,
@@ -3361,26 +3341,6 @@ MerchantSection:AddDropdown("MerchantItemsDropdown", {
     end
 })
 
--- Nút Buy Selected Item (mua thủ công)
-MerchantSection:AddButton({
-    Title = "Buy Selected Items",
-    Callback = function()
-        local selectedItemsCount = 0
-        -- Sửa cách duyệt qua selectedMerchantItems
-        for item, isSelected in pairs(selectedMerchantItems) do
-            if isSelected then
-                selectedItemsCount = selectedItemsCount + 1
-                buyMerchantItem(item)
-                wait(0.5) -- Chờ 0.5 giây giữa các lần mua
-            end
-        end
-        
-        if selectedItemsCount == 0 then
-            print("Không có item nào được chọn để mua")
-        end
-    end
-})
-
 -- Toggle Auto Buy
 MerchantSection:AddToggle("AutoMerchantBuyToggle", {
     Title = "Auto Buy",
@@ -3532,7 +3492,7 @@ local easterEggTimeDelayInput = nil
 
 -- Input cho Easter Egg Time Delay
 easterEggTimeDelayInput = EasterEggSection:AddInput("EasterEggTimeDelayInput", {
-    Title = "Easter Egg Delay (1-60s)",
+    Title = "Delay (1-60s)",
     Placeholder = "Nhập delay",
     Default = tostring(easterEggTimeDelay),
     Numeric = true,
@@ -4831,15 +4791,6 @@ EvolveTierSection:AddToggle("AutoEvolveTierToggle", {
     end
 })
 
--- Nút Evolve Now (thực hiện ngay lập tức)
-EvolveTierSection:AddButton({
-    Title = "Evolve Now",
-    Callback = function()
-        print("Đang thực hiện Evolve cho các unit đã chọn...")
-        evolveSelectedUnits()
-    end
-})
-
 -- Thêm section Stats Potential trong tab Unit
 local StatsPotentialSection = UnitTab:AddSection("Stats Potential")
 
@@ -5303,47 +5254,6 @@ StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
             if autoRollStatsLoop then
                 autoRollStatsLoop:Disconnect()
                 autoRollStatsLoop = nil
-            end
-        end
-    end
-})
-
--- Nút Roll Now
-StatsPotentialSection:AddButton({
-    Title = "Roll Stats Now",
-    Callback = function()
-        if not selectedUnit then
-            print("Vui lòng chọn unit trước khi roll stats")
-            return
-        end
-        
-        print("Đang roll stats cho " .. selectedUnit.name .. "...")
-        rollStatsPotential()
-        
-        -- Làm mới thông tin unit sau khi roll
-        wait(0.5)
-        local currentUnits = scanAvailableUnits()
-        for _, unit in ipairs(currentUnits) do
-            if unit.tag == selectedUnitTag then
-                selectedUnit = unit
-                
-                -- Hiển thị thông tin stats sau khi roll
-                local unitRef = unit.ref
-                if unitRef then
-                    local damageValue = unitRef:FindFirstChild("DamagePotential") and unitRef.DamagePotential.Value or "N/A"
-                    local healthValue = unitRef:FindFirstChild("HealthPotential") and unitRef.HealthPotential.Value or "N/A"
-                    local speedValue = unitRef:FindFirstChild("SpeedPotential") and unitRef.SpeedPotential.Value or "N/A"
-                    local rangeValue = unitRef:FindFirstChild("RangePotential") and unitRef.RangePotential.Value or "N/A"
-                    local cooldownValue = unitRef:FindFirstChild("AttackCooldownPotential") and unitRef.AttackCooldownPotential.Value or "N/A"
-                    
-                    print("Stats Potential sau khi roll:")
-                    print("- Damage: " .. damageValue)
-                    print("- Health: " .. healthValue)
-                    print("- Speed: " .. speedValue)
-                    print("- Range: " .. rangeValue)
-                    print("- Cooldown: " .. cooldownValue)
-                end
-                break
             end
         end
     end

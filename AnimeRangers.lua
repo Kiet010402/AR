@@ -816,22 +816,6 @@ local function isPlayerInMap()
     return player:FindFirstChild("UnitsFolder") ~= nil
 end
 
--- Hàm mới để kiểm tra xem người chơi có ở trong map Ranger Stage không
-local function isPlayerInRangerStageMap()
-    local success, gamemodeValue = pcall(function()
-        local gamemodeObject = safeGetPath(game:GetService("ReplicatedStorage"), {"Values", "Game", "Gamemode"}, 0.5) -- Ngắn thời gian chờ
-        if gamemodeObject and gamemodeObject:IsA("StringValue") then
-            return gamemodeObject.Value
-        end
-        return nil
-    end)
-    
-    if success and gamemodeValue == "Ranger Stage" then
-        return true
-    end
-    return false
-end
-
 -- Thêm section Story trong tab Play
 local StorySection = PlayTab:AddSection("Story")
 
@@ -1532,9 +1516,9 @@ end
 
 -- Hàm để tự động tham gia Ranger Stage (Sửa đổi để nhận map và act)
 local function joinRangerStage(mapToJoin, actToJoin)
-    -- Kiểm tra xem người chơi đã ở trong map Ranger Stage chưa bằng hàm mới
-    if isPlayerInRangerStageMap() then
-        print("Đã phát hiện người chơi đang ở trong map Ranger Stage, không thực hiện join Ranger Stage")
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Ranger Stage")
         return false
     end
 
@@ -1642,7 +1626,7 @@ storyTimeDelayInput = StorySection:AddInput("StoryTimeDelayInput", {
 
 -- Dropdown để chọn Map cho Ranger
 RangerSection:AddDropdown("RangerMapDropdown", {
-    Title = "Choose Map", -- Sửa tiêu đề
+    Title = "Choose Map(s)", -- Sửa tiêu đề
     Values = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"},
     Multi = true, -- Cho phép chọn nhiều
     Default = (function() -- Khôi phục trạng thái đã chọn từ config
@@ -1807,30 +1791,6 @@ local function isMapActOnCooldown(mapName, actName)
     return result
 end
 
--- Hàm trợ giúp mới để tìm màn chơi khả dụng tiếp theo theo thứ tự ưu tiên
-local function findNextAvailableStage()
-    local definedMapsDisplay = {"Voocha Village", "Green Planet", "Demon Forest", "Leaf Village", "Z City"} -- Thứ tự map trong UI
-    local definedActs = {"RangerStage1", "RangerStage2", "RangerStage3"} -- Thứ tự act trong UI
-
-    for _, displayMapName in ipairs(definedMapsDisplay) do
-        local realMapName = mapNameMapping[displayMapName]
-        -- Kiểm tra xem map này có được người dùng chọn không
-        if realMapName and selectedRangerMaps[realMapName] then 
-            for _, actName in ipairs(definedActs) do
-                -- Kiểm tra xem act này có được người dùng chọn không
-                if selectedActs[actName] then 
-                    if not isMapActOnCooldown(realMapName, actName) then
-                        return {map = realMapName, act = actName} -- Trả về map/act hợp lệ đầu tiên tìm thấy
-                    else
-                        -- print("Auto Join (Cooldown): " .. realMapName .. "_" .. actName) -- Bỏ comment nếu muốn log chi tiết
-                    end
-                end
-            end
-        end
-    end
-    return nil -- Không tìm thấy màn chơi nào khả dụng
-end
-
 -- Cải tiến hàm Auto Join Ranger Stage để thông minh hơn với việc xử lý cooldown
 RangerSection:AddToggle("AutoJoinRangerToggle", {
     Title = "Auto Join Selected Stage", -- Đổi tên cho rõ nghĩa
@@ -1858,35 +1818,53 @@ RangerSection:AddToggle("AutoJoinRangerToggle", {
                 while autoJoinRangerEnabled do
                     local didJoin = false
                     
-                    -- Kiểm tra nếu đang ở trong map Ranger Stage, đợi ra khỏi map trước
-                    if isPlayerInRangerStageMap() then
-                        print("Đang ở trong map Ranger Stage, đợi thoát...")
-                        while isPlayerInRangerStageMap() and autoJoinRangerEnabled do wait(0.1) end
+                    -- Kiểm tra nếu đang ở trong map, đợi ra khỏi map trước
+                    if isPlayerInMap() then
+                        print("Đang ở trong map, đợi thoát...")
+                        while isPlayerInMap() and autoJoinRangerEnabled do wait(0.1) end
                         if not autoJoinRangerEnabled then return end
                         wait(0.5) -- Đợi một chút giữa các lần kiểm tra
                     end
                     
-                    -- Tìm map và act không bị cooldown để join bằng hàm trợ giúp mới
-                    local stageToJoin = findNextAvailableStage()
+                    -- Tìm map và act không bị cooldown để join
+                    local availableMaps = {}
                     
-                    if stageToJoin then
-                        print("Chuẩn bị join map không có cooldown: " .. stageToJoin.map .. " - " .. stageToJoin.act)
+                    -- Thu thập tất cả map+act không bị cooldown
+                    for map, mapSelected in pairs(selectedRangerMaps) do
+                        if mapSelected then
+                            for act, actSelected in pairs(selectedActs) do
+                                if actSelected then
+                                    if not isMapActOnCooldown(map, act) then
+                                        table.insert(availableMaps, {map = map, act = act})
+                                    else
+                                        print(map .. "_" .. act .. " đang trong cooldown, sẽ bỏ qua")
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- Nếu có map nào available, join map đó
+                    if #availableMaps > 0 then
+                        -- Ưu tiên map theo thứ tự (có thể tùy chỉnh logic sắp xếp nếu muốn)
+                        local mapToJoin = availableMaps[1]
+                        print("Chuẩn bị join map không có cooldown: " .. mapToJoin.map .. " - " .. mapToJoin.act)
                         
                         -- Join map
-                        joinRangerStage(stageToJoin.map, stageToJoin.act)
+                        joinRangerStage(mapToJoin.map, mapToJoin.act)
                         didJoin = true
                         
                         -- Đợi vào map hoặc timeout
                         local t = 0
-                        while not isPlayerInRangerStageMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
+                        while not isPlayerInMap() and t < 10 and autoJoinRangerEnabled do wait(0.5); t = t + 0.5; end
                         
-                        -- Nếu đã vào map Ranger Stage, đợi delay
-                        if isPlayerInRangerStageMap() and autoJoinRangerEnabled then
-                            print("Đã vào map Ranger Stage, đợi " .. rangerTimeDelay .. " giây...")
+                        -- Nếu đã vào map, đợi delay
+                        if isPlayerInMap() and autoJoinRangerEnabled then
+                            print("Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
                             wait(rangerTimeDelay)
                         end
                     else
-                        print("Tất cả map và act đã chọn đều đang trong cooldown hoặc không có sự kết hợp hợp lệ. Đợi 5 giây và kiểm tra lại...")
+                        print("Tất cả map đã chọn đều đang trong cooldown, đợi 5 giây và kiểm tra lại...")
                         wait(5)
                     end
                     
@@ -4281,10 +4259,10 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                 local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
                 local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
                 while autoJoinAllRangerEnabled do
-                    -- Kiểm tra nếu đang ở trong map Ranger Stage, đợi ra khỏi map trước
-                    if isPlayerInRangerStageMap() then
-                        print("Auto Join All: Đang ở trong map Ranger Stage, đợi thoát...")
-                        while isPlayerInRangerStageMap() and autoJoinAllRangerEnabled do wait(0.1) end
+                    -- Kiểm tra nếu đang ở trong map, đợi ra khỏi map trước
+                    if isPlayerInMap() then
+                        print("Auto Join All: Đang ở trong map, đợi thoát...")
+                        while isPlayerInMap() and autoJoinAllRangerEnabled do wait(0.1) end
                         if not autoJoinAllRangerEnabled then return end
                         wait(0.5) -- Đợi một chút giữa các lần kiểm tra
                     end
@@ -4312,14 +4290,14 @@ RangerSection:AddToggle("AutoJoinAllRangerToggle", {
                         
                         -- Đợi vào map hoặc timeout
                         local t = 0
-                        while not isPlayerInRangerStageMap() and t < 10 and autoJoinAllRangerEnabled do 
+                        while not isPlayerInMap() and t < 10 and autoJoinAllRangerEnabled do 
                             wait(0.5)
                             t = t + 0.5
                         end
                         
-                        -- Nếu đã vào map Ranger Stage, đợi delay
-                        if isPlayerInRangerStageMap() and autoJoinAllRangerEnabled then
-                            print("Auto Join All: Đã vào map Ranger Stage, đợi " .. rangerTimeDelay .. " giây...")
+                        -- Nếu đã vào map, đợi delay
+                        if isPlayerInMap() and autoJoinAllRangerEnabled then
+                            print("Auto Join All: Đã vào map, đợi " .. rangerTimeDelay .. " giây...")
                             wait(rangerTimeDelay)
                         end
                     else
@@ -4359,53 +4337,99 @@ FPSBoostSection:AddToggle("BoostFPSToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            -- Loại bỏ kiểm tra đang ở trong map, thực hiện Boost FPS ngay lập tức
-            if not fpsBoostScriptLoaded then
-                local success, err = pcall(function()
-                    boostFPSActive = true
+            -- Kiểm tra ngay nếu đang trong map
+            if isPlayerInMap() then
+                -- Thực hiện Boost FPS một lần duy nhất nếu chưa load
+                if not fpsBoostScriptLoaded then
+                    local success, err = pcall(function()
+                        boostFPSActive = true
+                        
+                        -- Thiết lập cấu hình FPS Boost
+                        _G.Settings = {
+                            Players = {
+                                ["Ignore Me"] = true, -- Ignore your Character
+                                ["Ignore Others"] = true -- Ignore other Characters
+                            },
+                            Meshes = {
+                                Destroy = false, -- Destroy Meshes
+                                LowDetail = true -- Low detail meshes (NOT SURE IT DOES ANYTHING)
+                            },
+                            Images = {
+                                Invisible = true, -- Invisible Images
+                                LowDetail = false, -- Low detail images (NOT SURE IT DOES ANYTHING)
+                                Destroy = false, -- Destroy Images
+                            },
+                            ["No Particles"] = true, -- Disables all ParticleEmitter, Trail, Smoke, Fire and Sparkles
+                            ["No Camera Effects"] = true, -- Disables all PostEffect's (Camera/Lighting Effects)
+                            ["No Explosions"] = true, -- Makes Explosion's invisible
+                            ["No Clothes"] = true, -- Removes Clothing from the game
+                            ["Low Water Graphics"] = true, -- Removes Water Quality
+                            ["No Shadows"] = true, -- Remove Shadows
+                            ["Low Rendering"] = true, -- Lower Rendering
+                            ["Low Quality Parts"] = true -- Lower quality parts
+                        }
+                        
+                        -- Load FPS Boost script
+                        loadstring(game:HttpGet("https://raw.githubusercontent.com/Kiet010402/FPS-BOOST/refs/heads/main/FPSBOOTS.lua"))()
+                        
+                        fpsBoostScriptLoaded = true
+                        print("FPS Boost đã được kích hoạt thành công!")
+                    end)
                     
-                    -- Thiết lập cấu hình FPS Boost
-                    _G.Settings = {
-                        Players = {
-                            ["Ignore Me"] = true, -- Ignore your Character
-                            ["Ignore Others"] = true -- Ignore other Characters
-                        },
-                        Meshes = {
-                            Destroy = false, -- Destroy Meshes
-                            LowDetail = true -- Low detail meshes (NOT SURE IT DOES ANYTHING)
-                        },
-                        Images = {
-                            Invisible = true, -- Invisible Images
-                            LowDetail = false, -- Low detail images (NOT SURE IT DOES ANYTHING)
-                            Destroy = false, -- Destroy Images
-                        },
-                        ["No Particles"] = true, -- Disables all ParticleEmitter, Trail, Smoke, Fire and Sparkles
-                        ["No Camera Effects"] = true, -- Disables all PostEffect's (Camera/Lighting Effects)
-                        ["No Explosions"] = true, -- Makes Explosion's invisible
-                        ["No Clothes"] = true, -- Removes Clothing from the game
-                        ["Low Water Graphics"] = true, -- Removes Water Quality
-                        ["No Shadows"] = true, -- Remove Shadows
-                        ["Low Rendering"] = true, -- Lower Rendering
-                        ["Low Quality Parts"] = true -- Lower quality parts
-                    }
-                    
-                    -- Load FPS Boost script
-                    loadstring(game:HttpGet("https://raw.githubusercontent.com/Kiet010402/FPS-BOOST/refs/heads/main/FPSBOOTS.lua"))()
-                    
-                    fpsBoostScriptLoaded = true
-                    print("FPS Boost đã được kích hoạt thành công!")
-                end)
-                
-                if not success then
-                    warn("Lỗi khi Boost FPS: " .. tostring(err))
-                    boostFPSActive = false
-                    fpsBoostScriptLoaded = false
+                    if not success then
+                        warn("Lỗi khi Boost FPS: " .. tostring(err))
+                        boostFPSActive = false
+                        fpsBoostScriptLoaded = false
+                    end
+                else
+                    print("FPS Boost đã được kích hoạt trước đó, không cần kích hoạt lại")
                 end
+                
+                print("Boost FPS đã được bật - Đã tối ưu hóa FPS")
             else
-                print("FPS Boost đã được kích hoạt trước đó, không cần kích hoạt lại")
+                print("Boost FPS đã được bật - Sẽ tối ưu hóa FPS khi vào map")
+                
+                -- Thêm một event handler để Boost FPS khi vào map
+                if not game:GetService("Players").LocalPlayer.CharacterAdded:IsA("RBXScriptConnection") then
+                    game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function()
+                        -- Chờ một chút để map load xong
+                        wait(2)
+                        if boostFPSEnabled and isPlayerInMap() and not fpsBoostScriptLoaded then
+                            -- Thiết lập cấu hình FPS Boost
+                            _G.Settings = {
+                                Players = {
+                                    ["Ignore Me"] = true,
+                                    ["Ignore Others"] = true
+                                },
+                                Meshes = {
+                                    Destroy = false,
+                                    LowDetail = true
+                                },
+                                Images = {
+                                    Invisible = true,
+                                    LowDetail = false,
+                                    Destroy = false,
+                                },
+                                ["No Particles"] = true,
+                                ["No Camera Effects"] = true,
+                                ["No Explosions"] = true,
+                                ["No Clothes"] = true,
+                                ["Low Water Graphics"] = true,
+                                ["No Shadows"] = true,
+                                ["Low Rendering"] = true,
+                                ["Low Quality Parts"] = true
+                            }
+                            
+                            -- Load FPS Boost script
+                            pcall(function()
+                                loadstring(game:HttpGet("https://raw.githubusercontent.com/Kiet010402/FPS-BOOST/refs/heads/main/FPSBOOTS.lua"))()
+                                fpsBoostScriptLoaded = true
+                                print("FPS Boost đã được kích hoạt thành công khi vào map!")
+                            end)
+                        end
+                    end)
+                end
             end
-            
-            print("Boost FPS đã được bật - Đã tối ưu hóa FPS")
         else
             print("Boost FPS đã được tắt (Lưu ý: Thay đổi đã áp dụng vẫn sẽ có hiệu lực, cần reload game để khôi phục)")
         end
@@ -4548,128 +4572,239 @@ MovementSection:AddToggle("AutoMovementToggle", {
 local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
 
 -- Biến lưu trạng thái Evolve Tier
-local selectedRank = "Rare" -- Rank mặc định
-local autoEvolveTierEnabled = false
+local selectedRanks = ConfigSystem.CurrentConfig.SelectedRanks or {}
+local selectedTier = ConfigSystem.CurrentConfig.SelectedTier or "Hyper"
+local autoEvolveTierEnabled = ConfigSystem.CurrentConfig.AutoEvolveTier or false
 local autoEvolveTierLoop = nil
-
--- Hàm kiểm tra số lượng Ranger Crystal
-local function checkRangerCrystalAmount()
-    local playerName = game:GetService("Players").LocalPlayer.Name
-    local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
-    if not playerData then return 0 end
-    
-    local playerFolder = playerData:FindFirstChild(playerName)
-    if not playerFolder then return 0 end
-    
-    local items = playerFolder:FindFirstChild("Items")
-    if not items then return 0 end
-    
-    local rangerCrystal = items:FindFirstChild("Ranger Crystal")
-    if not rangerCrystal then return 0 end
-    
-    local amount = rangerCrystal:FindFirstChild("Amount")
-    if not amount then return 0 end
-    
-    return amount.Value
-end
-
--- Hàm thực hiện evolve tier cho một unit
-local function evolveTierUnit(unit)
-    if not unit then return false end
-    
-    local evolveTierRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Units", "EvolveTier"}, 0.5)
-    if not evolveTierRemote then return false end
-    
-    evolveTierRemote:FireServer(unit)
-    return true
-end
-
--- Hàm tìm các unit theo rank đã chọn và thực hiện evolve tier
-local function performEvolveTierForRank()
-    -- Kiểm tra số lượng Ranger Crystal
-    local crystalAmount = checkRangerCrystalAmount()
-    local maxEvolveCount = math.floor(crystalAmount / 10) -- Mỗi lần evolve cần 10 crystal
-    
-    if maxEvolveCount <= 0 then
-        print("Không đủ Ranger Crystal (cần ít nhất 10)")
-        return false
-    end
-    
-    print("Số lượng Ranger Crystal: " .. crystalAmount .. " (đủ cho " .. maxEvolveCount .. " lần evolve)")
-    
-    -- Tìm các unit có rank tương ứng trong Inventory
-    local unitsToEvolve = {}
-    local success, err = pcall(function()
-        local inventoryFolder = game:GetService("ReplicatedStorage").Inventory:FindFirstChild(game.Players.LocalPlayer.Name)
-        if not inventoryFolder then return end
-        
-        for _, unit in pairs(inventoryFolder:GetChildren()) do
-            if unit:FindFirstChild("Rarity") and unit.Rarity.Value == selectedRank and 
-               unit:FindFirstChild("Tier") and unit.Tier.Value < 5 then -- Chỉ evolve tier nếu tier < 5
-                table.insert(unitsToEvolve, unit)
-            end
-        end
-    end)
-    
-    if not success or #unitsToEvolve == 0 then
-        print("Không tìm thấy unit rank " .. selectedRank .. " phù hợp để evolve")
-        return false
-    end
-    
-    print("Tìm thấy " .. #unitsToEvolve .. " unit rank " .. selectedRank .. " có thể evolve")
-    
-    -- Giới hạn số lượng unit evolve theo số crystal
-    local evolveCount = math.min(#unitsToEvolve, maxEvolveCount)
-    
-    -- Thực hiện evolve tier
-    for i = 1, evolveCount do
-        local unit = unitsToEvolve[i]
-        print("Evolve Tier unit " .. i .. "/" .. evolveCount .. ": " .. unit.Name)
-        evolveTierUnit(unit)
-        wait(1) -- Đợi giữa các lần evolve để tránh spam
-    end
-    
-    return true
-end
 
 -- Dropdown để chọn Rank
 EvolveTierSection:AddDropdown("RankDropdown", {
     Title = "Choose Rank",
-    Values = {"Rare", "Epic", "Legendary", "Mythical"},
-    Multi = false,
-    Default = "Rare",
-    Callback = function(Value)
-        selectedRank = Value
-        print("Đã chọn rank: " .. Value)
+    Values = {"Rare", "Epic", "Legendary", "Mythic", "Secret"},
+    Multi = true,
+    Default = selectedRanks,
+    Callback = function(Values)
+        selectedRanks = Values
+        ConfigSystem.CurrentConfig.SelectedRanks = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedRanksText = ""
+        for rank, isSelected in pairs(Values) do
+            if isSelected then
+                selectedRanksText = selectedRanksText .. rank .. ", "
+            end
+        end
+        
+        if selectedRanksText ~= "" then
+            selectedRanksText = selectedRanksText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
+            print("Đã chọn ranks: " .. selectedRanksText)
+        else
+            print("Không có rank nào được chọn")
+        end
     end
 })
 
--- Toggle Evolve Tier Selected
-EvolveTierSection:AddToggle("EvolveTierSelectedToggle", {
-    Title = "Evolve Tier Selected",
-    Default = false,
+-- Dropdown để chọn Tier
+EvolveTierSection:AddDropdown("TierDropdown", {
+    Title = "Tier Select",
+    Values = {"Hyper", "Ultra"},
+    Multi = false,
+    Default = selectedTier,
+    Callback = function(Value)
+        selectedTier = Value
+        ConfigSystem.CurrentConfig.SelectedTier = Value
+        ConfigSystem.SaveConfig()
+        print("Đã chọn tier: " .. Value)
+    end
+})
+
+-- Hàm để scan units và evolve theo rank
+local function evolveSelectedUnits()
+    local success, err = pcall(function()
+        local player = game:GetService("Players").LocalPlayer
+        local playerName = player.Name
+
+        -- Kiểm tra Ranger Crystal
+        local itemsFolder = safeGetPath(game:GetService("ReplicatedStorage"), {"Player_Data", playerName, "Items"}, 0.2)
+        local rangerCrystalObj = itemsFolder and safeGetChild(itemsFolder, "Ranger Crystal", 0.1)
+        local rangerCrystalAmount = (rangerCrystalObj and rangerCrystalObj:FindFirstChild("Amount") and rangerCrystalObj.Amount.Value) or 0
+
+        print("Số lượng Ranger Crystal hiện có: " .. rangerCrystalAmount)
+
+        if rangerCrystalAmount < 10 then
+            print("Không đủ Ranger Crystal để evolve (cần ít nhất 10).")
+            return
+        end
+
+        local maxEvolvableUnits = math.floor(rangerCrystalAmount / 10)
+        print("Có thể evolve tối đa " .. maxEvolvableUnits .. " unit với số crystal hiện tại.")
+
+        local collectionGUI = player.PlayerGui:FindFirstChild("Collection")
+        
+        if not collectionGUI then
+            print("Không tìm thấy GUI Collection. Hãy mở Collection trước!")
+            return
+        end
+        
+        -- Sử dụng safeGetPath và safeGetChild để lấy playerCollection một cách an toàn hơn
+        local playerDataRoot = safeGetService("ReplicatedStorage")
+        local playerSpecificDataFolder = playerDataRoot and safeGetPath(playerDataRoot, {"Player_Data", playerName}, 0.2)
+        local playerCollection = playerSpecificDataFolder and safeGetChild(playerSpecificDataFolder, "Collection", 0.1)
+        local unitSpace = collectionGUI.Main.Base.Space.Unit
+
+        if not unitSpace or not playerCollection then
+            print("Không tìm thấy dữ liệu units cần thiết (GUI Collection hoặc dữ liệu player trong ReplicatedStorage).")
+            return
+        end
+        
+        print("Bắt đầu quét và nâng cấp units...")
+        
+        -- Đếm số lượng unit được xử lý
+        local totalUnitsScanned = 0
+        local evolvedUnits = 0
+        local skippedUnits = 0
+        
+        -- Tạo danh sách các unit cần nâng cấp
+        local unitsToEvolve = {}
+        
+        -- Lặp qua từng unit trong Collection (từ GUI)
+        for _, unitFrame in pairs(unitSpace:GetChildren()) do
+            -- Kiểm tra rank của unit từ GUI
+            local unitRank = nil
+            for rank, isSelected in pairs(selectedRanks) do
+                if isSelected and unitFrame:FindFirstChild("Frame") and 
+                   unitFrame.Frame:FindFirstChild("UnitFrame") and 
+                   unitFrame.Frame.UnitFrame:FindFirstChild(rank) then
+                    unitRank = rank
+                    break
+                end
+            end
+            
+            -- Nếu unit có rank đã chọn
+            if unitRank then
+                local unitName = unitFrame.Name -- Tên unit từ frame GUI
+                local unitData = safeGetChild(playerCollection, unitName, 0.05) -- Lấy data unit từ ReplicatedStorage
+                totalUnitsScanned = totalUnitsScanned + 1
+                
+                -- Kiểm tra EvolveTier hiện tại từ unitData
+                if unitData and unitData:FindFirstChild("EvolveTier") then
+                    local currentTierValueHolder = unitData.EvolveTier
+                    local currentTier = currentTierValueHolder and currentTierValueHolder.Value
+
+                    -- Chỉ evolve nếu hiện tại chưa có tier (currentTier là rỗng)
+                    if currentTier == "" then
+                        -- Lấy Tag để evolve
+                        local tagValueHolder = unitData:FindFirstChild("Tag")
+                        if tagValueHolder and tagValueHolder.Value then
+                            local tag = tagValueHolder.Value
+                            table.insert(unitsToEvolve, {
+                                name = unitName,
+                                tag = tag,
+                                rank = unitRank
+                            })
+                        else
+                            -- print(unitName .. " [" .. unitRank .. "] không có Tag, bỏ qua.")
+                        end
+                    else
+                        skippedUnits = skippedUnits + 1
+                        -- print(unitName .. " [" .. unitRank .. "] đã có tier: " .. currentTier .. ", bỏ qua.")
+                    end
+                else
+                    -- print(unitName .. " [" .. unitRank .. "] không có thông tin EvolveTier hoặc unitData, bỏ qua.")
+                end
+            end
+        end
+        
+        if #unitsToEvolve == 0 then
+            print("Không tìm thấy unit nào phù hợp (đúng rank và chưa có tier) để evolve trong danh sách đã quét.")
+            if skippedUnits > 0 then
+                 print("Số unit đã có tier (bỏ qua): " .. skippedUnits)
+            end
+            return
+        end
+
+        print("Đã tìm thấy " .. #unitsToEvolve .. " unit phù hợp (đúng rank, chưa có tier) để evolve.")
+        
+        -- Tiến hành evolve từng unit một
+        for i, unitEvolveInfo in ipairs(unitsToEvolve) do
+            if evolvedUnits >= maxEvolvableUnits then
+                print("Đã sử dụng hết số Ranger Crystal cho phép sau khi evolve " .. evolvedUnits .. " unit.")
+                break
+            end
+
+            local args = {
+                unitEvolveInfo.tag,
+                selectedTier
+            }
+            
+            print("Đang evolve (" .. (evolvedUnits + 1) .. "/" .. math.min(#unitsToEvolve, maxEvolvableUnits) .. "): " .. unitEvolveInfo.name .. " [" .. unitEvolveInfo.rank .. "] lên " .. selectedTier)
+            
+            -- Thực hiện evolve
+            local evolveRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Units", "EvolveTier"}, 0.5)
+            if evolveRemote then
+                local evolveSuccess, evolveError = pcall(function()
+                    evolveRemote:FireServer(unpack(args))
+                end)
+                if evolveSuccess then
+                    evolvedUnits = evolvedUnits + 1
+                else
+                    print("Lỗi khi gửi yêu cầu evolve cho " .. unitEvolveInfo.name .. ": " .. tostring(evolveError))
+                end
+            else
+                print("Không tìm thấy EvolveTier remote. Không thể evolve " .. unitEvolveInfo.name)
+                break -- Nếu remote không tồn tại, dừng luôn
+            end
+            
+            -- Đợi lâu hơn giữa các lần evolve để đảm bảo game kịp xử lý
+            wait(1.5) -- Tăng từ 1s lên 1.5s
+        end
+        
+        print("--- Kết quả Evolve Tier ---")
+        print("Số unit đã quét có rank phù hợp: " .. totalUnitsScanned)
+        print("Số unit đã có tier từ trước (bỏ qua): " .. skippedUnits)
+        print("Số unit được đưa vào danh sách evolve (đúng rank, chưa có tier): " .. #unitsToEvolve)
+        print("Số unit đã evolve thành công trong lượt này: " .. evolvedUnits .. " (Lên tier " .. selectedTier .. ")")
+        if evolvedUnits < #unitsToEvolve and evolvedUnits == maxEvolvableUnits then
+             print("Quá trình dừng sớm do đã sử dụng hết Ranger Crystal (" .. rangerCrystalAmount .. " ban đầu).")
+        end
+        print("---------------------------")
+
+    end)
+    
+    if not success then
+        warn("Lỗi khi evolve units: " .. tostring(err))
+    end
+end
+
+-- Toggle Auto EvolveTier
+EvolveTierSection:AddToggle("AutoEvolveTierToggle", {
+    Title = "EvolveTier Selected",
+    Default = autoEvolveTierEnabled,
     Callback = function(Value)
         autoEvolveTierEnabled = Value
+        ConfigSystem.CurrentConfig.AutoEvolveTier = Value
+        ConfigSystem.SaveConfig()
         
-        if autoEvolveTierEnabled then
-            print("Auto Evolve Tier đã được bật cho rank: " .. selectedRank)
+        if Value then
+            print("Auto EvolveTier đã được bật")
             
-            -- Hủy vòng lặp cũ nếu có
+            -- Thực hiện evolve ngay lập tức
+            evolveSelectedUnits()
+            
+            -- Tạo vòng lặp
             if autoEvolveTierLoop then
                 autoEvolveTierLoop:Disconnect()
                 autoEvolveTierLoop = nil
             end
             
-            -- Tạo vòng lặp mới
             spawn(function()
-                while autoEvolveTierEnabled and wait(2) do -- Kiểm tra mỗi 2 giây
-                    performEvolveTierForRank()
+                while autoEvolveTierEnabled and wait(5) do
+                    evolveSelectedUnits()
                 end
             end)
         else
-            print("Auto Evolve Tier đã được tắt")
+            print("Auto EvolveTier đã được tắt")
             
-            -- Hủy vòng lặp nếu có
             if autoEvolveTierLoop then
                 autoEvolveTierLoop:Disconnect()
                 autoEvolveTierLoop = nil
@@ -4678,23 +4813,12 @@ EvolveTierSection:AddToggle("EvolveTierSelectedToggle", {
     end
 })
 
--- Nút để Evolve Tier ngay lập tức
+-- Nút Evolve Now (thực hiện ngay lập tức)
 EvolveTierSection:AddButton({
-    Title = "Evolve Tier Now",
+    Title = "Evolve Now",
     Callback = function()
-        local success = performEvolveTierForRank()
-        if not success then
-            print("Không thể thực hiện Evolve Tier. Vui lòng kiểm tra lại Ranger Crystal và unit.")
-        end
-    end
-})
-
--- Nút để kiểm tra số lượng Ranger Crystal
-EvolveTierSection:AddButton({
-    Title = "Check Ranger Crystal",
-    Callback = function()
-        local amount = checkRangerCrystalAmount()
-        print("Số lượng Ranger Crystal: " .. amount .. " (đủ cho " .. math.floor(amount / 10) .. " lần evolve)")
+        print("Đang thực hiện Evolve cho các unit đã chọn...")
+        evolveSelectedUnits()
     end
 })
 

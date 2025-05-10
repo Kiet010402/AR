@@ -490,6 +490,14 @@ ConfigSystem.DefaultConfig = {
     
     -- Cài đặt Auto Movement
     AutoMovement = false,
+
+    -- Cài đặt Priority -- Added
+    AutoJoinPriority = false,
+    PrioritySlot1 = "None",
+    PrioritySlot2 = "None",
+    PrioritySlot3 = "None",
+    PrioritySlot4 = "None",
+    PrioritySlot5 = "None"
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -685,7 +693,7 @@ local Window = Fluent:CreateWindow({
     Size = UDim2.fromOffset(450, 350),
     Acrylic = true,
     Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+    MinimizeKey = Enum.KeyCode.LeftControl 
 })
 
 -- Tạo tab Info
@@ -698,6 +706,12 @@ local InfoTab = Window:AddTab({
 local PlayTab = Window:AddTab({
     Title = "Play",
     Icon = "rbxassetid://7743871480"
+})
+
+-- Tạo tab Priority
+local PriorityTab = Window:AddTab({
+    Title = "Priority",
+    Icon = "rbxassetid://6031280882"
 })
 
 -- Tạo tab Event
@@ -3456,22 +3470,6 @@ EasterEggSection:AddToggle("AutoJoinEasterEggToggle", {
     end
 })
 
--- Nút Join Easter Egg Now (thủ công)
-EasterEggSection:AddButton({
-    Title = "Join Easter Egg Now",
-    Callback = function()
-        -- Kiểm tra nếu người chơi đang ở trong map
-        if isPlayerInMap() then
-        print("Bạn đang ở trong map, không thể tham gia Easter Egg Event mới")
-            return
-        end
-        
-        print("Đang tham gia Easter Egg Event...")
-        
-        joinEasterEggEvent()
-    end
-})
-
 -- Khởi tạo Anti AFK khi script khởi động
 spawn(function()
     -- Đợi một chút để script khởi động hoàn tất
@@ -3603,6 +3601,7 @@ local function getGameInfoText()
         local leftSide = rewardsUI:FindFirstChild("Main") and rewardsUI.Main:FindFirstChild("LeftSide")
         if leftSide then
             local labels = {
+                "GameStatus",
                 "Mode",
                 "World",
                 "Chapter",
@@ -5413,8 +5412,8 @@ local function setupRewardsUIWatcher()
                 
                 -- Chỉ kích hoạt nếu RewardsUI được bật VÀ chưa thực hiện Auto Retry/Auto Next
                 if rewardsUI and rewardsUI.Enabled and not hasTriggeredAction then
-                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 0.7s")
-                    wait(0.7) -- Đợi 0.7 giây như yêu cầu
+                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 1s")
+                    wait(1) -- Đợi 1 giây như yêu cầu
                     
                     -- Đánh dấu đã kích hoạt để không kích hoạt lại liên tục
                     hasTriggeredAction = true
@@ -5505,3 +5504,173 @@ InGameSection:AddToggle("AutoNextToggle", {
 
 -- Gọi hàm theo dõi RewardsUI khi script khởi động
 setupRewardsUIWatcher()
+
+-- priority tab -- Added
+local PrioritySection = PriorityTab:AddSection("Priority Settings")
+
+-- Tạo 5 dropdown cho thứ tự ưu tiên
+for i = 1, 5 do
+    PrioritySection:AddDropdown("PriorityDropdown" .. i, {
+        Title = "Priority Slot " .. i,
+        Values = availableModes,
+        Multi = false,
+        Default = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None",
+        Callback = function(Value)
+            priorityOrder[i] = Value 
+            ConfigSystem.CurrentConfig["PrioritySlot" .. i] = Value 
+            ConfigSystem.SaveConfig()
+            
+            Fluent:Notify({
+                Title = "Priority",
+                Content = "Đã chọn Priority Slot " .. i .. ": " .. Value,
+                Duration = 2
+            })
+            print("Đã chọn Priority Slot " .. i .. ": " .. Value)
+        end
+    })
+end
+
+-- Cập nhật hàm Auto Join Priority để bỏ qua "None"
+local function autoJoinPriority()
+    if not autoJoinPriorityEnabled or isPlayerInMap() then
+        return
+    end
+
+    -- Duyệt qua thứ tự ưu tiên và bỏ qua "None"
+    for _, mode in ipairs(priorityOrder) do
+        if mode ~= "None" then
+            local success = false
+            if mode == "Story" then
+                success = joinMap()
+            elseif mode == "Ranger Stage" then
+                -- Decide whether to join a specific selected stage or cycle through all uncompleted ones
+                if autoJoinRangerEnabled then -- If auto join for specific selected stages is on
+                    -- This part needs to decide which ranger stage to join.
+                    -- For simplicity, let's try to join the first available uncompleted selected stage.
+                    local joinedRanger = false
+                    for map, mapSelected in pairs(selectedRangerMaps) do
+                        if mapSelected then
+                            for act, actSelected in pairs(selectedActs) do
+                                if actSelected and not isRangerStageCompleted(map, act) then
+                                    success = joinRangerStage(map, act)
+                                    if success then joinedRanger = true; break; end
+                                end
+                            end
+                        end
+                        if joinedRanger then break; end
+                    end
+                elseif autoJoinAllRangerEnabled then -- if auto join all ranger stages is on
+                    success = joinFirstAvailableRangerStageFromAll() -- Assumes such a function exists or will be created
+                else -- Default to trying to join any available ranger stage
+                    success = joinRangerStage() -- joinRangerStage might need adjustment to pick one if multiple are available
+                end
+            elseif mode == "Boss Event" then
+                success = joinBossEvent()
+            elseif mode == "Challenge" then
+                success = joinChallenge()
+            elseif mode == "Easter Egg" then
+                success = joinEasterEggEvent()
+            end
+
+            if success then
+                Fluent:Notify({ Title = "Priority Join", Content = "Đã tham gia mode: " .. mode, Duration = 3 })
+                print("Đã tham gia mode: " .. mode)
+                return
+            else
+                Fluent:Notify({ Title = "Priority Join", Content = "Không thể tham gia mode: " .. mode .. ", chuyển sang mode tiếp theo.", Duration = 2 })
+                print("Không thể tham gia mode: " .. mode .. ", chuyển sang mode tiếp theo.")
+            end
+        end
+    end
+    Fluent:Notify({ Title = "Priority Join", Content = "Không có mode nào khả dụng để tham gia.", Duration = 3 })
+    print("Không có mode nào khả dụng để tham gia.")
+end
+
+-- Tự động tải thứ tự ưu tiên từ cấu hình khi khởi động
+spawn(function()
+    wait(2) -- Đợi game load & config load
+    for i = 1, 5 do
+        priorityOrder[i] = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None"
+    end
+    print("Đã tải thứ tự ưu tiên từ cấu hình:", table.concat(priorityOrder, ", "))
+    
+    -- Tải trạng thái Auto Join Priority
+    autoJoinPriorityEnabled = ConfigSystem.CurrentConfig.AutoJoinPriority or false
+    if autoJoinPriorityEnabled then
+         -- Start the loop if enabled on load
+        if autoJoinPriorityLoop then
+            autoJoinPriorityLoop:Disconnect()
+            autoJoinPriorityLoop = nil
+        end
+        autoJoinPriorityLoop = spawn(function()
+            while autoJoinPriorityEnabled and wait(5) do -- Check every 5 seconds
+                autoJoinPriority()
+            end
+        end)
+    end
+end)
+
+-- Toggle Auto Join Priority
+PrioritySection:AddToggle("AutoJoinPriorityToggle", {
+    Title = "Enable Auto Join Priority",
+    Default = autoJoinPriorityEnabled, -- Ensures UI reflects loaded config
+    Callback = function(Value)
+        autoJoinPriorityEnabled = Value
+        ConfigSystem.CurrentConfig.AutoJoinPriority = Value
+        ConfigSystem.SaveConfig()
+
+        if Value then
+            Fluent:Notify({
+                Title = "Auto Join Priority",
+                Content = "Auto Join Priority đã được bật.",
+                Duration = 3
+            })
+            autoJoinPriority() -- Attempt to join immediately
+
+            if autoJoinPriorityLoop then
+                autoJoinPriorityLoop:Disconnect()
+                autoJoinPriorityLoop = nil
+            end
+            autoJoinPriorityLoop = spawn(function()
+                while autoJoinPriorityEnabled and wait(5) do -- Check every 5 seconds
+                    autoJoinPriority()
+                end
+            end)
+        else
+            Fluent:Notify({
+                Title = "Auto Join Priority",
+                Content = "Auto Join Priority đã được tắt.",
+                Duration = 3
+            })
+            if autoJoinPriorityLoop then
+                autoJoinPriorityLoop:Disconnect()
+                autoJoinPriorityLoop = nil
+            end
+        end
+    end
+})
+-- end priority tab
+
+-- Add a function to join the first available Ranger Stage from all possible stages
+-- This is a placeholder and might need more sophisticated logic based on how `joinRangerStage` is structured
+-- and how completed stages are tracked for "all" stages vs "selected" stages.
+local function joinFirstAvailableRangerStageFromAll()
+    local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
+    local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
+    for _, mapName in ipairs(allMaps) do
+        for _, actName in ipairs(allActs) do
+            if not isRangerStageCompleted(mapName, actName) then
+                local success = joinRangerStage(mapName, actName) -- Assuming joinRangerStage can take map and act
+                if success then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+-- Kiểm tra trạng thái người chơi khi script khởi động
+if isPlayerInMap() then
+    print("Bạn đang ở trong map, Auto Join sẽ chỉ hoạt động khi bạn rời khỏi map")
+end

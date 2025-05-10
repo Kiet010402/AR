@@ -446,7 +446,6 @@ ConfigSystem.DefaultConfig = {
     AutoRetry = false,
     AutoNext = false,
     AutoVote = false,
-    RemoveAnimation = true,
     
     -- Cài đặt Update Units
     AutoUpdate = false,
@@ -643,11 +642,9 @@ local autoPlayEnabled = ConfigSystem.CurrentConfig.AutoPlay or false
 local autoRetryEnabled = ConfigSystem.CurrentConfig.AutoRetry or false
 local autoNextEnabled = ConfigSystem.CurrentConfig.AutoNext or false
 local autoVoteEnabled = ConfigSystem.CurrentConfig.AutoVote or false
-local removeAnimationEnabled = ConfigSystem.CurrentConfig.RemoveAnimation or false
 local autoRetryLoop = nil
 local autoNextLoop = nil
 local autoVoteLoop = nil
-local removeAnimationLoop = nil
 
 -- Biến lưu trạng thái Update Units
 local autoUpdateEnabled = ConfigSystem.CurrentConfig.AutoUpdate or false
@@ -2499,7 +2496,7 @@ local function toggleAutoVote()
     end
 end
 
--- Toggle Auto Retry
+-- Cập nhật Toggle Auto Retry
 InGameSection:AddToggle("AutoRetryToggle", {
     Title = "Auto Retry",
     Default = ConfigSystem.CurrentConfig.AutoRetry or false,
@@ -2509,7 +2506,7 @@ InGameSection:AddToggle("AutoRetryToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            print("Auto Retry đã được bật")
+            print("Auto Retry đã được bật (bao gồm tự động click sau GameEndedAnimationUI)")
             
             -- Hủy vòng lặp cũ nếu có
             if autoRetryLoop then
@@ -2545,7 +2542,7 @@ InGameSection:AddToggle("AutoNextToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            print("Auto Next đã được bật")
+            print("Auto Next đã được bật (bao gồm tự động click sau GameEndedAnimationUI)")
             
             -- Hủy vòng lặp cũ nếu có
             if autoNextLoop then
@@ -3159,108 +3156,6 @@ spawn(function()
         end
     else
         print("AutoHideUI startup: Config disabled.") -- Debug
-    end
-end)
-
--- Hàm để xóa animations
-local function removeAnimations()
-    if not isPlayerInMap() then
-        return false
-    end
-    
-    local success, err = pcall(function()
-        -- Xóa UIS.Packages.Transition.Flash từ ReplicatedStorage
-        local uis = game:GetService("ReplicatedStorage"):FindFirstChild("UIS")
-            if uis then
-                local packages = uis:FindFirstChild("Packages")
-                if packages then
-                    local transition = packages:FindFirstChild("Transition")
-                    if transition then
-                    local flash = transition:FindFirstChild("Flash")
-                    if flash then
-                        flash:Destroy()
-                        print("Đã xóa ReplicatedStorage.UIS.Packages.Transition.Flash")
-                    end
-                end
-            end
-            
-            -- Xóa RewardsUI
-            local rewardsUI = uis:FindFirstChild("RewardsUI")
-            if rewardsUI then
-                rewardsUI:Destroy()
-                print("Đã xóa ReplicatedStorage.UIS.RewardsUI")
-            end
-        end
-    end)
-    
-    if not success then
-        warn("Lỗi khi xóa animations: " .. tostring(err))
-        return false
-    end
-    
-    return true
-end
-
--- Thêm Toggle Remove Animation
-InGameSection:AddToggle("RemoveAnimationToggle", {
-    Title = "Remove Animation",
-    Default = ConfigSystem.CurrentConfig.RemoveAnimation or true,
-    Callback = function(Value)
-        removeAnimationEnabled = Value
-        ConfigSystem.CurrentConfig.RemoveAnimation = Value
-        ConfigSystem.SaveConfig()
-        
-        if Value then
-            print("Remove Animation đã được bật")
-            
-            -- Hủy vòng lặp cũ nếu có
-            if removeAnimationLoop then
-                removeAnimationLoop:Disconnect()
-                removeAnimationLoop = nil
-            end
-            
-            -- Thử xóa animations ngay lập tức nếu đang trong map
-            if isPlayerInMap() then
-                removeAnimations()
-            else
-                print("Không ở trong map, sẽ xóa animations khi vào map")
-            end
-            
-            -- Tạo vòng lặp mới để xóa animations định kỳ
-            spawn(function()
-                while removeAnimationEnabled and wait(3) do
-                    if isPlayerInMap() then
-                        removeAnimations()
-                    end
-                end
-            end)
-        else
-            print("Remove Animation đã được tắt")
-            
-            -- Hủy vòng lặp nếu có
-            if removeAnimationLoop then
-                removeAnimationLoop:Disconnect()
-                removeAnimationLoop = nil
-            end
-        end
-    end
-})
-
--- Tự động xóa animations khi khởi động script nếu tính năng được bật và đang ở trong map
-spawn(function()
-    wait(3) -- Đợi game load
-    
-    if removeAnimationEnabled and isPlayerInMap() then
-        removeAnimations()
-        
-        -- Tạo vòng lặp để tiếp tục xóa animations định kỳ
-        spawn(function()
-            while removeAnimationEnabled and wait(3) do
-                if isPlayerInMap() then
-                    removeAnimations()
-                end
-            end
-        end)
     end
 end)
 
@@ -4629,7 +4524,7 @@ local function evolveSelectedUnits()
         local playerSpecificDataFolder = playerDataRoot and safeGetPath(playerDataRoot, {"Player_Data", playerName}, 0.2)
         local playerCollection = playerSpecificDataFolder and safeGetChild(playerSpecificDataFolder, "Collection", 0.1)
         local unitSpace = collectionGUI.Main.Base.Space.Unit
-
+        
         if not unitSpace or not playerCollection then
             print("Không tìm thấy dữ liệu units cần thiết (GUI Collection hoặc dữ liệu player trong ReplicatedStorage).")
             return
@@ -4668,7 +4563,7 @@ local function evolveSelectedUnits()
                 if unitData and unitData:FindFirstChild("EvolveTier") then
                     local currentTierValueHolder = unitData.EvolveTier
                     local currentTier = currentTierValueHolder and currentTierValueHolder.Value
-
+                    
                     -- Chỉ evolve nếu hiện tại chưa có tier (currentTier là rỗng)
                     if currentTier == "" then
                         -- Lấy Tag để evolve
@@ -4721,10 +4616,10 @@ local function evolveSelectedUnits()
             local evolveRemote = safeGetPath(game:GetService("ReplicatedStorage"), {"Remote", "Server", "Units", "EvolveTier"}, 0.5)
             if evolveRemote then
                 local evolveSuccess, evolveError = pcall(function()
-                    evolveRemote:FireServer(unpack(args))
+            evolveRemote:FireServer(unpack(args))
                 end)
                 if evolveSuccess then
-                    evolvedUnits = evolvedUnits + 1
+            evolvedUnits = evolvedUnits + 1
                 else
                     print("Lỗi khi gửi yêu cầu evolve cho " .. unitEvolveInfo.name .. ": " .. tostring(evolveError))
                 end
@@ -4991,7 +4886,7 @@ EvolveTierSection:AddToggle("AutoEvolveTierToggle", {
             print("Auto Evolve Tier đã được bật")
             
             -- Thực hiện evolve ngay lập tức
-            evolveSelectedUnits()
+        evolveSelectedUnits()
         else
             print("Auto Evolve Tier đã được tắt")
         end
@@ -5466,4 +5361,85 @@ StatsPotentialSection:AddToggle("RollStatsPotentialToggle", {
     end
 })
 
-print("Anime Rangers X Script has been loaded and optimized!")
+-- Hàm để theo dõi RewardsUI và kích hoạt Auto Retry và Auto Next
+local function setupRewardsUIWatcher()
+    spawn(function()
+        -- Sử dụng pcall để tránh lỗi khi không tìm thấy PlayerGui
+        pcall(function()
+            local player = game:GetService("Players").LocalPlayer
+            if not player then return end
+            
+            -- Đợi PlayerGui load
+            while not player:FindFirstChild("PlayerGui") do wait(0.1) end
+            local PlayerGui = player.PlayerGui
+            
+            -- Hàm để mô phỏng một click chuột
+            local function simulateClick()
+                local UserInputService = game:GetService("UserInputService")
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+
+                -- Tọa độ giả định - bạn có thể thay đổi cho phù hợp nút cần nhấn
+                local x, y = 500, 500 
+
+                -- Gửi sự kiện click chuột trái
+                VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
+                VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+            end
+            
+            -- Theo dõi khi GameEndedAnimationUI được thêm vào PlayerGui
+            PlayerGui.ChildAdded:Connect(function(child)
+                if child.Name == "GameEndedAnimationUI" then
+                    warn("Đã phát hiện GameEndedAnimationUI")
+                    
+                    -- Chỉ kích hoạt tính năng này nếu Auto Retry hoặc Auto Next được bật
+                    if autoRetryEnabled or autoNextEnabled then
+                        -- Lặp liên tục click cho tới khi RewardsUI.Enabled = true
+                        task.spawn(function()
+                            while true do
+                                task.wait(0.2) -- thời gian chờ giữa mỗi click, tránh spam quá nhanh
+                                
+                                local rewardsUI = PlayerGui:FindFirstChild("RewardsUI")
+                                if rewardsUI and rewardsUI.Enabled then
+                                    warn("RewardsUI đã bật. Ngưng click.")
+                break
+            end
+                                
+                                warn("Đang thực hiện click tự động...")
+                                simulateClick()
+                            end
+                        end)
+                    end
+                end
+            end)
+            
+            -- Theo dõi khi RewardsUI xuất hiện
+            local function checkRewardsUI()
+                local rewardsUI = player.PlayerGui:FindFirstChild("RewardsUI")
+                if rewardsUI and rewardsUI.Enabled then
+                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 0.7s")
+                    wait(0.7) -- Đợi 0.7 giây
+                    
+                    -- Kích hoạt Auto Retry nếu đã bật
+                    if autoRetryEnabled then
+                        print("Kích hoạt Auto Retry...")
+                        toggleAutoRetry()
+                    end
+                    
+                    -- Kích hoạt Auto Next nếu đã bật
+                    if autoNextEnabled then
+                        print("Kích hoạt Auto Next...")
+                        toggleAutoNext()
+                    end
+                end
+            end
+            
+            -- Kiểm tra RewardsUI định kỳ
+            while wait(0.5) do
+                checkRewardsUI()
+            end
+        end)
+    end)
+end
+
+-- Gọi hàm theo dõi RewardsUI khi script khởi động
+setupRewardsUIWatcher()

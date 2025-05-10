@@ -490,14 +490,6 @@ ConfigSystem.DefaultConfig = {
     
     -- Cài đặt Auto Movement
     AutoMovement = false,
-
-    -- Cài đặt Priority -- Added
-    AutoJoinPriority = false,
-    PrioritySlot1 = "None",
-    PrioritySlot2 = "None",
-    PrioritySlot3 = "None",
-    PrioritySlot4 = "None",
-    PrioritySlot5 = "None"
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -693,7 +685,7 @@ local Window = Fluent:CreateWindow({
     Size = UDim2.fromOffset(450, 350),
     Acrylic = true,
     Theme = ConfigSystem.CurrentConfig.UITheme or "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl 
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
 -- Tạo tab Info
@@ -708,22 +700,22 @@ local PlayTab = Window:AddTab({
     Icon = "rbxassetid://7743871480"
 })
 
+-- Tạo tab In-Game
+local InGameTab = Window:AddTab({
+    Title = "In-Game",
+    Icon = "rbxassetid://7733799901"
+})
+
 -- Tạo tab Priority
 local PriorityTab = Window:AddTab({
     Title = "Priority",
-    Icon = "rbxassetid://6031280882"
+    Icon = "rbxassetid://7733734848"
 })
 
 -- Tạo tab Event
 local EventTab = Window:AddTab({
     Title = "Event",
     Icon = "rbxassetid://7734068321"
-})
-
--- Tạo tab In-Game
-local InGameTab = Window:AddTab({
-    Title = "In-Game",
-    Icon = "rbxassetid://7733799901"
 })
 
 -- Tạo tab Unit
@@ -5505,8 +5497,17 @@ InGameSection:AddToggle("AutoNextToggle", {
 -- Gọi hàm theo dõi RewardsUI khi script khởi động
 setupRewardsUIWatcher()
 
--- priority tab -- Added
+-- Priority tab
 local PrioritySection = PriorityTab:AddSection("Priority Settings")
+
+-- Biến lưu trạng thái Auto Join Priority
+local autoJoinPriorityEnabled = ConfigSystem.CurrentConfig.AutoJoinPriority or false
+local autoJoinPriorityLoop = nil
+-- Danh sách các mode
+local availableModes = {"Story", "Ranger Stage", "Boss Event", "Challenge", "Easter Egg", "None"}
+
+-- Biến lưu thứ tự ưu tiên
+local priorityOrder = {"None", "None", "None", "None", "None"}
 
 -- Tạo 5 dropdown cho thứ tự ưu tiên
 for i = 1, 5 do
@@ -5514,17 +5515,12 @@ for i = 1, 5 do
         Title = "Priority Slot " .. i,
         Values = availableModes,
         Multi = false,
-        Default = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None",
+        Default = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None", -- Lấy giá trị từ JSON hoặc mặc định là "None"
         Callback = function(Value)
-            priorityOrder[i] = Value 
-            ConfigSystem.CurrentConfig["PrioritySlot" .. i] = Value 
-            ConfigSystem.SaveConfig()
+            priorityOrder[i] = Value -- Cập nhật thứ tự ưu tiên
+            ConfigSystem.CurrentConfig["PrioritySlot" .. i] = Value -- Lưu vào cấu hình
+            ConfigSystem.SaveConfig() -- Lưu cấu hình vào file JSON
             
-            Fluent:Notify({
-                Title = "Priority",
-                Content = "Đã chọn Priority Slot " .. i .. ": " .. Value,
-                Duration = 2
-            })
             print("Đã chọn Priority Slot " .. i .. ": " .. Value)
         end
     })
@@ -5543,27 +5539,7 @@ local function autoJoinPriority()
             if mode == "Story" then
                 success = joinMap()
             elseif mode == "Ranger Stage" then
-                -- Decide whether to join a specific selected stage or cycle through all uncompleted ones
-                if autoJoinRangerEnabled then -- If auto join for specific selected stages is on
-                    -- This part needs to decide which ranger stage to join.
-                    -- For simplicity, let's try to join the first available uncompleted selected stage.
-                    local joinedRanger = false
-                    for map, mapSelected in pairs(selectedRangerMaps) do
-                        if mapSelected then
-                            for act, actSelected in pairs(selectedActs) do
-                                if actSelected and not isRangerStageCompleted(map, act) then
-                                    success = joinRangerStage(map, act)
-                                    if success then joinedRanger = true; break; end
-                                end
-                            end
-                        end
-                        if joinedRanger then break; end
-                    end
-                elseif autoJoinAllRangerEnabled then -- if auto join all ranger stages is on
-                    success = joinFirstAvailableRangerStageFromAll() -- Assumes such a function exists or will be created
-                else -- Default to trying to join any available ranger stage
-                    success = joinRangerStage() -- joinRangerStage might need adjustment to pick one if multiple are available
-                end
+                success = joinRangerStage()
             elseif mode == "Boss Event" then
                 success = joinBossEvent()
             elseif mode == "Challenge" then
@@ -5572,48 +5548,32 @@ local function autoJoinPriority()
                 success = joinEasterEggEvent()
             end
 
+            -- Nếu tham gia thành công, dừng vòng lặp
             if success then
-                Fluent:Notify({ Title = "Priority Join", Content = "Đã tham gia mode: " .. mode, Duration = 3 })
                 print("Đã tham gia mode: " .. mode)
                 return
             else
-                Fluent:Notify({ Title = "Priority Join", Content = "Không thể tham gia mode: " .. mode .. ", chuyển sang mode tiếp theo.", Duration = 2 })
                 print("Không thể tham gia mode: " .. mode .. ", chuyển sang mode tiếp theo.")
             end
         end
     end
-    Fluent:Notify({ Title = "Priority Join", Content = "Không có mode nào khả dụng để tham gia.", Duration = 3 })
+
     print("Không có mode nào khả dụng để tham gia.")
 end
 
 -- Tự động tải thứ tự ưu tiên từ cấu hình khi khởi động
 spawn(function()
-    wait(2) -- Đợi game load & config load
+    wait(1) -- Đợi game load
     for i = 1, 5 do
         priorityOrder[i] = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None"
     end
     print("Đã tải thứ tự ưu tiên từ cấu hình:", table.concat(priorityOrder, ", "))
-    
-    -- Tải trạng thái Auto Join Priority
-    autoJoinPriorityEnabled = ConfigSystem.CurrentConfig.AutoJoinPriority or false
-    if autoJoinPriorityEnabled then
-         -- Start the loop if enabled on load
-        if autoJoinPriorityLoop then
-            autoJoinPriorityLoop:Disconnect()
-            autoJoinPriorityLoop = nil
-        end
-        autoJoinPriorityLoop = spawn(function()
-            while autoJoinPriorityEnabled and wait(5) do -- Check every 5 seconds
-                autoJoinPriority()
-            end
-        end)
-    end
 end)
 
 -- Toggle Auto Join Priority
 PrioritySection:AddToggle("AutoJoinPriorityToggle", {
     Title = "Enable Auto Join Priority",
-    Default = autoJoinPriorityEnabled, -- Ensures UI reflects loaded config
+    Default = autoJoinPriorityEnabled,
     Callback = function(Value)
         autoJoinPriorityEnabled = Value
         ConfigSystem.CurrentConfig.AutoJoinPriority = Value
@@ -5625,14 +5585,18 @@ PrioritySection:AddToggle("AutoJoinPriorityToggle", {
                 Content = "Auto Join Priority đã được bật.",
                 Duration = 3
             })
-            autoJoinPriority() -- Attempt to join immediately
 
+            -- Gọi hàm autoJoinPriority ngay lập tức
+            autoJoinPriority()
+
+            -- Tạo vòng lặp Auto Join Priority
             if autoJoinPriorityLoop then
                 autoJoinPriorityLoop:Disconnect()
                 autoJoinPriorityLoop = nil
             end
-            autoJoinPriorityLoop = spawn(function()
-                while autoJoinPriorityEnabled and wait(5) do -- Check every 5 seconds
+
+            spawn(function()
+                while autoJoinPriorityEnabled and wait(5) do
                     autoJoinPriority()
                 end
             end)
@@ -5642,6 +5606,8 @@ PrioritySection:AddToggle("AutoJoinPriorityToggle", {
                 Content = "Auto Join Priority đã được tắt.",
                 Duration = 3
             })
+
+            -- Hủy vòng lặp nếu có
             if autoJoinPriorityLoop then
                 autoJoinPriorityLoop:Disconnect()
                 autoJoinPriorityLoop = nil
@@ -5649,28 +5615,23 @@ PrioritySection:AddToggle("AutoJoinPriorityToggle", {
         end
     end
 })
--- end priority tab
 
--- Add a function to join the first available Ranger Stage from all possible stages
--- This is a placeholder and might need more sophisticated logic based on how `joinRangerStage` is structured
--- and how completed stages are tracked for "all" stages vs "selected" stages.
-local function joinFirstAvailableRangerStageFromAll()
-    local allMaps = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
-    local allActs = {"RangerStage1", "RangerStage2", "RangerStage3"}
-    for _, mapName in ipairs(allMaps) do
-        for _, actName in ipairs(allActs) do
-            if not isRangerStageCompleted(mapName, actName) then
-                local success = joinRangerStage(mapName, actName) -- Assuming joinRangerStage can take map and act
-                if success then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
+-- Tự động tải trạng thái Auto Join Priority và Priority List khi khởi động
+spawn(function()
+    wait(1) -- Đợi game load
 
--- Kiểm tra trạng thái người chơi khi script khởi động
-if isPlayerInMap() then
-    print("Bạn đang ở trong map, Auto Join sẽ chỉ hoạt động khi bạn rời khỏi map")
-end
+    -- Tải trạng thái Auto Join Priority
+    autoJoinPriorityEnabled = ConfigSystem.CurrentConfig.AutoJoinPriority or false
+
+    -- Tải danh sách Priority List
+    priorityOrder = {
+        ConfigSystem.CurrentConfig["PrioritySlot1"] or "None",
+        ConfigSystem.CurrentConfig["PrioritySlot2"] or "None",
+        ConfigSystem.CurrentConfig["PrioritySlot3"] or "None",
+        ConfigSystem.CurrentConfig["PrioritySlot4"] or "None",
+        ConfigSystem.CurrentConfig["PrioritySlot5"] or "None"
+    }
+
+    print("Đã tải trạng thái Auto Join Priority và Priority List từ cấu hình.")
+end)
+-- end 

@@ -2496,7 +2496,7 @@ local function toggleAutoVote()
     end
 end
 
--- Cập nhật Toggle Auto Retry
+-- Cập nhật Toggle Auto Retry 
 InGameSection:AddToggle("AutoRetryToggle", {
     Title = "Auto Retry",
     Default = ConfigSystem.CurrentConfig.AutoRetry or false,
@@ -2514,12 +2514,8 @@ InGameSection:AddToggle("AutoRetryToggle", {
                 autoRetryLoop = nil
             end
             
-            -- Tạo vòng lặp mới
-            spawn(function()
-                while autoRetryEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
-                    toggleAutoRetry()
-                end
-            end)
+            -- Không tạo vòng lặp mới để tránh gửi yêu cầu liên tục
+            -- Chỉ kích hoạt khi RewardsUI xuất hiện
         else
             print("Auto Retry đã được tắt")
             
@@ -2532,7 +2528,7 @@ InGameSection:AddToggle("AutoRetryToggle", {
     end
 })
 
--- Toggle Auto Next
+-- Toggle Auto Next 
 InGameSection:AddToggle("AutoNextToggle", {
     Title = "Auto Next",
     Default = ConfigSystem.CurrentConfig.AutoNext or false,
@@ -2550,12 +2546,8 @@ InGameSection:AddToggle("AutoNextToggle", {
                 autoNextLoop = nil
             end
             
-            -- Tạo vòng lặp mới
-            spawn(function()
-                while autoNextEnabled and wait(3) do -- Gửi yêu cầu mỗi 3 giây
-                    toggleAutoNext()
-                end
-            end)
+            -- Không tạo vòng lặp mới để tránh gửi yêu cầu liên tục
+            -- Chỉ kích hoạt khi RewardsUI xuất hiện
         else
             print("Auto Next đã được tắt")
             
@@ -5373,9 +5365,11 @@ local function setupRewardsUIWatcher()
             while not player:FindFirstChild("PlayerGui") do wait(0.1) end
             local PlayerGui = player.PlayerGui
             
+            -- Biến để theo dõi khi nào đã thực hiện Auto Retry/Auto Next
+            local hasTriggeredAction = false
+            
             -- Hàm để mô phỏng một click chuột
             local function simulateClick()
-                local UserInputService = game:GetService("UserInputService")
                 local VirtualInputManager = game:GetService("VirtualInputManager")
 
                 -- Tọa độ giả định - bạn có thể thay đổi cho phù hợp nút cần nhấn
@@ -5390,6 +5384,7 @@ local function setupRewardsUIWatcher()
             PlayerGui.ChildAdded:Connect(function(child)
                 if child.Name == "GameEndedAnimationUI" then
                     warn("Đã phát hiện GameEndedAnimationUI")
+                    hasTriggeredAction = false
                     
                     -- Chỉ kích hoạt tính năng này nếu Auto Retry hoặc Auto Next được bật
                     if autoRetryEnabled or autoNextEnabled then
@@ -5401,8 +5396,8 @@ local function setupRewardsUIWatcher()
                                 local rewardsUI = PlayerGui:FindFirstChild("RewardsUI")
                                 if rewardsUI and rewardsUI.Enabled then
                                     warn("RewardsUI đã bật. Ngưng click.")
-                break
-            end
+                                    break
+                                end
                                 
                                 warn("Đang thực hiện click tự động...")
                                 simulateClick()
@@ -5412,34 +5407,101 @@ local function setupRewardsUIWatcher()
                 end
             end)
             
-            -- Theo dõi khi RewardsUI xuất hiện
-            local function checkRewardsUI()
+            -- Kiểm tra RewardsUI định kỳ
+            while wait(0.5) do
                 local rewardsUI = player.PlayerGui:FindFirstChild("RewardsUI")
-                if rewardsUI and rewardsUI.Enabled then
-                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 2s")
-                    wait(2) -- Đợi 2 giây
+                
+                -- Chỉ kích hoạt nếu RewardsUI được bật VÀ chưa thực hiện Auto Retry/Auto Next
+                if rewardsUI and rewardsUI.Enabled and not hasTriggeredAction then
+                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 0.7s")
+                    wait(0.7) -- Đợi 0.7 giây như yêu cầu
                     
-                    -- Kích hoạt Auto Retry nếu đã bật
+                    -- Đánh dấu đã kích hoạt để không kích hoạt lại liên tục
+                    hasTriggeredAction = true
+                    
+                    -- Kích hoạt Auto Retry/Auto Next một lần duy nhất
                     if autoRetryEnabled then
                         print("Kích hoạt Auto Retry...")
                         toggleAutoRetry()
-                    end
-                    
-                    -- Kích hoạt Auto Next nếu đã bật
-                    if autoNextEnabled then
+                    elseif autoNextEnabled then
                         print("Kích hoạt Auto Next...")
                         toggleAutoNext()
                     end
+                    
+                    -- Reset cờ hasTriggeredAction sau 5 giây để chuẩn bị cho lần tiếp theo
+                    spawn(function()
+                        wait(5)
+                        hasTriggeredAction = false
+                    end)
                 end
-            end
-            
-            -- Kiểm tra RewardsUI định kỳ
-            while wait(0.5) do
-                checkRewardsUI()
             end
         end)
     end)
 end
+
+-- Cập nhật Toggle Auto Retry 
+InGameSection:AddToggle("AutoRetryToggle", {
+    Title = "Auto Retry",
+    Default = ConfigSystem.CurrentConfig.AutoRetry or false,
+    Callback = function(Value)
+        autoRetryEnabled = Value
+        ConfigSystem.CurrentConfig.AutoRetry = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            print("Auto Retry đã được bật (bao gồm tự động click sau GameEndedAnimationUI)")
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoRetryLoop then
+                autoRetryLoop:Disconnect()
+                autoRetryLoop = nil
+            end
+            
+            -- Không tạo vòng lặp mới để tránh gửi yêu cầu liên tục
+            -- Chỉ kích hoạt khi RewardsUI xuất hiện
+        else
+            print("Auto Retry đã được tắt")
+            
+            -- Hủy vòng lặp nếu có
+            if autoRetryLoop then
+                autoRetryLoop:Disconnect()
+                autoRetryLoop = nil
+            end
+        end
+    end
+})
+
+-- Toggle Auto Next 
+InGameSection:AddToggle("AutoNextToggle", {
+    Title = "Auto Next",
+    Default = ConfigSystem.CurrentConfig.AutoNext or false,
+    Callback = function(Value)
+        autoNextEnabled = Value
+        ConfigSystem.CurrentConfig.AutoNext = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            print("Auto Next đã được bật (bao gồm tự động click sau GameEndedAnimationUI)")
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoNextLoop then
+                autoNextLoop:Disconnect()
+                autoNextLoop = nil
+            end
+            
+            -- Không tạo vòng lặp mới để tránh gửi yêu cầu liên tục
+            -- Chỉ kích hoạt khi RewardsUI xuất hiện
+        else
+            print("Auto Next đã được tắt")
+            
+            -- Hủy vòng lặp nếu có
+            if autoNextLoop then
+                autoNextLoop:Disconnect()
+                autoNextLoop = nil
+            end
+        end
+    end
+})
 
 -- Gọi hàm theo dõi RewardsUI khi script khởi động
 setupRewardsUIWatcher()

@@ -477,6 +477,9 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Easter Egg
     AutoJoinEasterEgg = false,
     EasterEggTimeDelay = 5,
+
+    -- Cài đặt Auto Join Priority
+    AutoJoinPriority = false,
     
     -- Cài đặt Anti AFK
     AntiAFK = true, -- Mặc định bật

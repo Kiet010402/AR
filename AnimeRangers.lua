@@ -333,8 +333,8 @@ if not keyValid then
 end
 
 -- Delay 30 giây trước khi mở script
-print("HT Hub | Anime Rangers X đang khởi động, vui lòng đợi 15 giây...")
-wait(15)
+print("HT Hub | Anime Rangers X đang khởi động, vui lòng đợi 10 giây...")
+wait(10)
 print("Đang tải script...")
 
 -- Tải thư viện Fluent
@@ -5433,70 +5433,6 @@ local function setupRewardsUIWatcher()
     end)
 end
 
--- Cập nhật Toggle Auto Retry 
-InGameSection:AddToggle("AutoRetryToggle", {
-    Title = "Auto Retry",
-    Default = ConfigSystem.CurrentConfig.AutoRetry or false,
-    Callback = function(Value)
-        autoRetryEnabled = Value
-        ConfigSystem.CurrentConfig.AutoRetry = Value
-        ConfigSystem.SaveConfig()
-        
-        if Value then
-            print("Auto Retry đã được bật (bao gồm tự động click sau GameEndedAnimationUI)")
-            
-            -- Hủy vòng lặp cũ nếu có
-            if autoRetryLoop then
-                autoRetryLoop:Disconnect()
-                autoRetryLoop = nil
-            end
-            
-            -- Không tạo vòng lặp mới để tránh gửi yêu cầu liên tục
-            -- Chỉ kích hoạt khi RewardsUI xuất hiện
-        else
-            print("Auto Retry đã được tắt")
-            
-            -- Hủy vòng lặp nếu có
-            if autoRetryLoop then
-                autoRetryLoop:Disconnect()
-                autoRetryLoop = nil
-            end
-        end
-    end
-})
-
--- Toggle Auto Next 
-InGameSection:AddToggle("AutoNextToggle", {
-    Title = "Auto Next",
-    Default = ConfigSystem.CurrentConfig.AutoNext or false,
-    Callback = function(Value)
-        autoNextEnabled = Value
-        ConfigSystem.CurrentConfig.AutoNext = Value
-        ConfigSystem.SaveConfig()
-        
-        if Value then
-            print("Auto Next đã được bật (bao gồm tự động click sau GameEndedAnimationUI)")
-            
-            -- Hủy vòng lặp cũ nếu có
-            if autoNextLoop then
-                autoNextLoop:Disconnect()
-                autoNextLoop = nil
-            end
-            
-            -- Không tạo vòng lặp mới để tránh gửi yêu cầu liên tục
-            -- Chỉ kích hoạt khi RewardsUI xuất hiện
-        else
-            print("Auto Next đã được tắt")
-            
-            -- Hủy vòng lặp nếu có
-            if autoNextLoop then
-                autoNextLoop:Disconnect()
-                autoNextLoop = nil
-            end
-        end
-    end
-})
-
 -- Gọi hàm theo dõi RewardsUI khi script khởi động
 setupRewardsUIWatcher()
 
@@ -5638,3 +5574,4 @@ spawn(function()
     print("Đã tải trạng thái Auto Join Priority và Priority List từ cấu hình.")
 end)
 -- end 
+print("HT Hub | Anime Rangers X đã được tải thành công!")

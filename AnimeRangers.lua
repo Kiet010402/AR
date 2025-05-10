@@ -5416,8 +5416,8 @@ local function setupRewardsUIWatcher()
             local function checkRewardsUI()
                 local rewardsUI = player.PlayerGui:FindFirstChild("RewardsUI")
                 if rewardsUI and rewardsUI.Enabled then
-                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 0.7s")
-                    wait(0.7) -- Đợi 0.7 giây
+                    print("RewardsUI được bật lên, sẽ kích hoạt Auto Retry và Auto Next sau 2s")
+                    wait(2) -- Đợi 2 giây
                     
                     -- Kích hoạt Auto Retry nếu đã bật
                     if autoRetryEnabled then

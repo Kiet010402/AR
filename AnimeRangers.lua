@@ -1376,16 +1376,16 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Sử dụng spawn thay vì coroutine
             spawn(function()
-                while autoSummonEnabled and wait(1) do -- Summon mỗi 1 giây
+                while autoSummonEnabled and wait(3) do -- Summon mỗi 3 giây
                     -- Thực hiện summon
                     performSummon()
                     
                     -- Thực hiện click chuột để đóng UI kết quả (nếu có)
-                    wait(0.5) -- Đợi UI kết quả xuất hiện
+                    wait(0.1) -- Đợi UI kết quả xuất hiện
                     simulateMouseClick()
                     
                     -- Đợi thêm thời gian để đảm bảo UI đã đóng hoàn toàn
-                    wait(0.5)
+                    wait(0.1)
                 end
             end)
             

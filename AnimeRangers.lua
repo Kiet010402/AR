@@ -5042,7 +5042,7 @@ local function setupRewardsUIWatcher()
                         -- Lặp liên tục click cho tới khi RewardsUI.Enabled = true
                         task.spawn(function()
                             while true do
-                                task.wait(0.2) -- thời gian chờ giữa mỗi click, tránh spam quá nhanh
+                                task.wait(0.5) -- thời gian chờ giữa mỗi click, tránh spam quá nhanh
                                 
                                 local rewardsUI = PlayerGui:FindFirstChild("RewardsUI")
                                 if rewardsUI and rewardsUI.Enabled then

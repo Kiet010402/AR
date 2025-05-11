@@ -4993,13 +4993,42 @@ local function setupRewardsUIWatcher()
             -- Hàm để mô phỏng một click chuột
             local function simulateClick()
                 local VirtualInputManager = game:GetService("VirtualInputManager")
-
-                -- Tọa độ giả định - bạn có thể thay đổi cho phù hợp nút cần nhấn
-                local x, y = 500, 500 
-
-                -- Gửi sự kiện click chuột trái
-                VirtualInputManager:SendMouseButtonEvent(x, y, 0, true, game, 0)
-                VirtualInputManager:SendMouseButtonEvent(x, y, 0, false, game, 0)
+                local Players = game:GetService("Players")
+                local LocalPlayer = Players.LocalPlayer
+                local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+                
+                -- Lấy kích thước màn hình hiện tại
+                local guiInset = game:GetService("GuiService"):GetGuiInset()
+                local screenSize = workspace.CurrentCamera.ViewportSize
+                
+                -- Tính toán vị trí trung tâm màn hình (vị trí tốt nhất để click)
+                local centerX = screenSize.X / 2
+                local centerY = screenSize.Y / 2
+                
+                -- Tạo click tại trung tâm màn hình
+                VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+                wait(0.05) -- Độ trễ nhỏ
+                VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+                
+                -- Thử click thêm vài vị trí nếu cần thiết (4 góc màn hình)
+                local testPositions = {
+                    {X = centerX, Y = centerY}, -- Trung tâm
+                    {X = centerX * 0.9, Y = centerY * 1.5}, -- Phía dưới 
+                    {X = centerX * 1.5, Y = centerY * 0.9}, -- Phía phải
+                    {X = centerX * 0.5, Y = centerY * 0.5}  -- Phía trên bên trái
+                }
+                
+                for _, pos in ipairs(testPositions) do
+                    if pos.X > 0 and pos.X < screenSize.X and pos.Y > 0 and pos.Y < screenSize.Y then
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                        wait(0.05)
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                        wait(0.05)
+                    end
+                end
+                
+                -- Thông báo debug
+                print("Đã thực hiện click tự động trên màn hình " .. screenSize.X .. "x" .. screenSize.Y)
             end
             
             -- Theo dõi khi GameEndedAnimationUI được thêm vào PlayerGui

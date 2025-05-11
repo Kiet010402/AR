@@ -813,6 +813,90 @@ InfoSection:AddParagraph({
     Content = "Script được phát triển bởi Dương Tuấn và ghjiukliop"
 })
 
+-- Thêm paragraph cho Challenge Info
+local ChallengeInfoParagraph = InfoSection:AddParagraph({
+    Title = "Current Challenge Info",
+    Content = "Đang tải thông tin challenge..."
+})
+
+-- Hàm cập nhật thông tin Challenge
+local function updateChallengeInfo()
+    spawn(function()
+        while wait(3) do -- Cập nhật mỗi 3 giây
+            local content = "Không có challenge nào đang diễn ra"
+            
+            local success, challengeInfo = pcall(function()
+                local challengeFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Gameplay")
+                
+                if challengeFolder then
+                    challengeFolder = challengeFolder:FindFirstChild("Game")
+                    if challengeFolder then
+                        challengeFolder = challengeFolder:FindFirstChild("Challenge")
+                    end
+                end
+                
+                return challengeFolder
+            end)
+            
+            if success and challengeInfo then
+                content = ""
+                
+                -- ChallengeName
+                local challengeName = challengeInfo:FindFirstChild("ChallengeName")
+                if challengeName and challengeName:IsA("StringValue") then
+                    content = content .. "ChallengeName: " .. challengeName.Value .. "\n"
+                end
+                
+                -- Chapter (Chỉ hiển thị số)
+                local chapter = challengeInfo:FindFirstChild("Chapter")
+                if chapter and chapter:IsA("StringValue") then
+                    local chapterValue = chapter.Value
+                    local chapterNum = chapterValue:match("Chapter(%d+)")
+                    
+                    if chapterNum then
+                        content = content .. "Chapter: " .. chapterNum .. "\n"
+                    else
+                        content = content .. "Chapter: " .. chapterValue .. "\n"
+                    end
+                end
+                
+                -- World (Hiển thị tên map thân thiện)
+                local world = challengeInfo:FindFirstChild("World")
+                if world and world:IsA("StringValue") then
+                    local worldValue = world.Value
+                    local displayName = reverseMapNameMapping[worldValue] or worldValue
+                    
+                    content = content .. "World: " .. displayName .. "\n"
+                end
+                
+                -- Items
+                local items = challengeInfo:FindFirstChild("Items")
+                if items then
+                    content = content .. "Items:\n"
+                    for _, item in pairs(items:GetChildren()) do
+                        if item:IsA("StringValue") then
+                            content = content .. "- " .. item.Name .. ": " .. item.Value .. "\n"
+                        else
+                            content = content .. "- " .. item.Name .. "\n"
+                        end
+                    end
+                end
+            end
+            
+            -- Cập nhật nội dung paragraph
+            if ChallengeInfoParagraph and ChallengeInfoParagraph.Set then
+                ChallengeInfoParagraph:Set({
+                    Title = "Current Challenge Info",
+                    Content = content
+                })
+            end
+        end
+    end)
+end
+
+-- Gọi hàm cập nhật khi script khởi động
+updateChallengeInfo()
+
 -- Kiểm tra xem người chơi đã ở trong map chưa
 local function isPlayerInMap()
     local player = game:GetService("Players").LocalPlayer

@@ -1291,7 +1291,7 @@ SummonSection:AddDropdown("SummonAmountDropdown", {
 -- Dropdown để chọn banner
 SummonSection:AddDropdown("SummonBannerDropdown", {
     Title = "Banner",
-    Values = {"Standard", "Rate-Up"},
+    Values = {"Standard", "Rateup"},
     Multi = false,
     Default = ConfigSystem.CurrentConfig.SummonBanner or "Standard",
     Callback = function(Value)

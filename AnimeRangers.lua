@@ -1376,7 +1376,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Sử dụng spawn thay vì coroutine
             spawn(function()
-                while autoSummonEnabled and wait(3) do -- Summon mỗi 3 giây
+                while autoSummonEnabled and wait(0.1) do -- Summon mỗi 0.1 giây
                     -- Thực hiện summon
                     performSummon()
                     

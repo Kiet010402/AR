@@ -4431,7 +4431,7 @@ MovementSection:AddToggle("AutoMovementToggle", {
 local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
 
 -- Biến lưu trạng thái Evolve Tier
-local selectedEvolveRank = ConfigSystem.CurrentConfig.SelectedEvolveRank or "Rare"
+local selectedRanks = ConfigSystem.CurrentConfig.SelectedRanks or {}
 local selectedTier = ConfigSystem.CurrentConfig.SelectedTier or "Hyper"
 local autoEvolveTierEnabled = ConfigSystem.CurrentConfig.AutoEvolveTier or false
 local autoEvolveTierLoop = nil
@@ -4461,19 +4461,35 @@ EvolveTierSection:AddButton({
             local rank = unit:FindFirstChild("Rank") and unit.Rank.Value
             local tier = unit:FindFirstChild("Tier") and unit.Tier.Value
             
+            -- Kiểm tra xem rank có được chọn không
+            local isRankSelected = selectedRanks[rank] == true
+            
             -- Debug để xem thông tin unit
-            if rank == selectedEvolveRank then
+            if isRankSelected then
                 print("Unit: " .. unit.Name .. ", Rank: " .. (rank or "N/A") .. ", Tier: " .. (tier or "None"))
             end
             
             -- Chỉ lấy những unit có rank đúng và chưa có tier
-            if rank == selectedEvolveRank and (tier == nil or tier == "") then
+            if isRankSelected and (tier == nil or tier == "") then
                 table.insert(availableEvolveUnits, unit)
                 countFound = countFound + 1
             end
         end
         
-        print("Đã refresh xong! Tìm thấy " .. countFound .. " unit phù hợp để evolve với rank " .. (selectedEvolveRank or "None"))
+        -- Hiển thị số lượng unit tìm thấy
+        local selectedRanksText = ""
+        for rank, isSelected in pairs(selectedRanks) do
+            if isSelected then
+                selectedRanksText = selectedRanksText .. rank .. ", "
+            end
+        end
+        if selectedRanksText ~= "" then
+            selectedRanksText = selectedRanksText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
+        else
+            selectedRanksText = "none"
+        end
+        
+        print("Đã refresh xong! Tìm thấy " .. countFound .. " unit phù hợp để evolve với rank: " .. selectedRanksText)
         Fluent:Notify({
             Title = "Refresh Evolve Units",
             Content = "Đã tìm thấy " .. countFound .. " unit phù hợp để evolve",

@@ -805,7 +805,7 @@ local InfoSection = InfoTab:AddSection("Thông tin")
 
 InfoSection:AddParagraph({
     Title = "Anime Rangers X",
-    Content = "Phiên bản: 0.2 Beta\nTrạng thái: Hoạt động"
+    Content = "Phiên bản: 0.5 Beta\nTrạng thái: Hoạt động"
 })
 
 InfoSection:AddParagraph({
@@ -5418,7 +5418,7 @@ local function setupRewardsUIWatcher()
                         print("Kích hoạt Auto Retry...")
                         toggleAutoRetry()
                     end
-                    
+
                     if autoNextEnabled then
                         print("Kích hoạt Auto Next...")
                         toggleAutoNext()

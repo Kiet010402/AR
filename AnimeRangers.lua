@@ -1234,6 +1234,25 @@ StorySection:AddToggle("AutoJoinMapToggle", {
 -- Thêm section Summon trong tab Shop
 local SummonSection = ShopTab:AddSection("Summon")
 
+-- Hàm mô phỏng click chuột
+local function simulateMouseClick()
+    local VirtualInputManager = game:GetService("VirtualInputManager")
+    
+    -- Lấy kích thước màn hình hiện tại
+    local screenSize = workspace.CurrentCamera.ViewportSize
+    
+    -- Tính toán vị trí trung tâm màn hình (vị trí tốt nhất để click)
+    local centerX = screenSize.X / 2
+    local centerY = screenSize.Y / 2
+    
+    -- Tạo click tại trung tâm màn hình
+    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+    wait(0.05) -- Độ trễ nhỏ
+    VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+    
+    print("Đã thực hiện click chuột tại vị trí (" .. centerX .. ", " .. centerY .. ")")
+end
+
 -- Hàm thực hiện summon
 local function performSummon()
     -- An toàn kiểm tra Remote có tồn tại không
@@ -1357,8 +1376,16 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Sử dụng spawn thay vì coroutine
             spawn(function()
-                while autoSummonEnabled and wait(2) do -- Summon mỗi 2 giây
+                while autoSummonEnabled and wait(1) do -- Summon mỗi 1 giây
+                    -- Thực hiện summon
                     performSummon()
+                    
+                    -- Thực hiện click chuột để đóng UI kết quả (nếu có)
+                    wait(0.5) -- Đợi UI kết quả xuất hiện
+                    simulateMouseClick()
+                    
+                    -- Đợi thêm thời gian để đảm bảo UI đã đóng hoàn toàn
+                    wait(0.5)
                 end
             end)
             

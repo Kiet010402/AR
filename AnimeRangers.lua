@@ -5417,7 +5417,9 @@ local function setupRewardsUIWatcher()
                     if autoRetryEnabled then
                         print("Kích hoạt Auto Retry...")
                         toggleAutoRetry()
-                    elseif autoNextEnabled then
+                    end
+                    
+                    if autoNextEnabled then
                         print("Kích hoạt Auto Next...")
                         toggleAutoNext()
                     end

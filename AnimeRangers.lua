@@ -5234,3 +5234,238 @@ spawn(function()
 end)
 -- end 
 print("HT Hub | Anime Rangers X đã được tải thành công!")
+
+-- Thêm section Trait Reroll trong tab Unit
+local TraitRerollSection = UnitTab:AddSection("Trait Reroll")
+
+-- Biến lưu trạng thái
+local selectedUnit = nil
+local selectedTraits = {}
+local autoRollTraitEnabled = false
+local autoRollTraitLoop = nil
+
+-- Hàm để lấy tên unit đang được chọn
+local function getCurrentSelectedUnit()
+    local success, result = pcall(function()
+        local unitFolder = game:GetService("Players").LocalPlayer.PlayerGui.Traits.Main.Base.UnitFolder
+        if unitFolder and unitFolder.Value and unitFolder.Value ~= "" then
+            return unitFolder.Value
+        end
+        return nil
+    end)
+    
+    if not success or not result then
+        return nil
+    end
+    
+    return result
+end
+
+-- Hàm kiểm tra trait hiện tại
+local function checkCurrentTraits()
+    local success, result = pcall(function()
+        local mainTraitText = game:GetService("Players").LocalPlayer.PlayerGui.Traits.Main.Base.Main_Trait.Trait.Text
+        local subTraitText = game:GetService("Players").LocalPlayer.PlayerGui.Traits.Main.Base.Sub_Trait.Trait.Text
+        
+        return {mainTraitText, subTraitText}
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra trait: " .. tostring(result))
+        return {}
+    end
+    
+    return result
+end
+
+-- Hàm để kiểm tra xem có trait mong muốn không
+local function hasDesiredTrait(currentTraits)
+    if not currentTraits or #currentTraits == 0 then
+        return false
+    end
+    
+    for _, trait in pairs(currentTraits) do
+        for selectedTrait, isSelected in pairs(selectedTraits) do
+            if isSelected and string.find(trait, selectedTrait) then
+                print("Đã tìm thấy trait mong muốn: " .. selectedTrait)
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+-- Hàm để thực hiện reroll trait
+local function rerollTrait()
+    local unitName = getCurrentSelectedUnit()
+    if not unitName then
+        print("Không tìm thấy unit đang chọn")
+        return false
+    end
+    
+    local success, error = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local unitObject = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data"):WaitForChild(playerName):WaitForChild("Collection"):WaitForChild(unitName)
+        
+        local args = {
+            unitObject,
+            "Reroll",
+            "Main",
+            "Shards"
+        }
+        
+        game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gambling"):WaitForChild("RerollTrait"):FireServer(unpack(args))
+    end)
+    
+    if not success then
+        warn("Lỗi khi reroll trait: " .. tostring(error))
+        return false
+    end
+    
+    return true
+end
+
+-- Hiển thị thông tin unit hiện tại
+local unitInfoParagraph = TraitRerollSection:AddParagraph({
+    Title = "Unit hiện tại",
+    Content = "Chưa chọn unit nào"
+})
+
+-- Cập nhật thông tin unit hiện tại
+spawn(function()
+    while wait(1) do
+        local unitName = getCurrentSelectedUnit()
+        if unitName then
+            unitInfoParagraph:SetDesc("Đang chọn: " .. unitName)
+            local traits = checkCurrentTraits()
+            if #traits == 2 then
+                unitInfoParagraph:SetDesc("Đang chọn: " .. unitName .. "\nMain Trait: " .. traits[1] .. "\nSub Trait: " .. traits[2])
+            end
+        else
+            unitInfoParagraph:SetDesc("Chưa chọn unit nào.\nHãy mở menu Traits trong game để chọn unit.")
+        end
+    end
+end)
+
+-- Dropdown để chọn trait mong muốn
+TraitRerollSection:AddDropdown("ChooseTraitDropdown", {
+    Title = "Chọn Trait mong muốn",
+    Values = {"Seraph", "Capitalist", "Duplicator", "Sovereign"},
+    Multi = true,
+    Default = {},
+    Callback = function(Value)
+        selectedTraits = Value
+        
+        -- Hiển thị các trait đã chọn
+        local selectedTraitText = ""
+        for trait, isSelected in pairs(Value) do
+            if isSelected then
+                selectedTraitText = selectedTraitText .. trait .. ", "
+            end
+        end
+        
+        if selectedTraitText ~= "" then
+            selectedTraitText = selectedTraitText:sub(1, -3) -- Xóa ", " cuối cùng
+            print("Đã chọn các trait: " .. selectedTraitText)
+        else
+            print("Chưa chọn trait nào")
+        end
+    end
+})
+
+-- Toggle Auto Roll Trait
+TraitRerollSection:AddToggle("AutoRollTraitToggle", {
+    Title = "Auto Roll Trait",
+    Default = false,
+    Callback = function(Value)
+        autoRollTraitEnabled = Value
+        
+        if Value then
+            -- Kiểm tra unit hiện tại
+            local unitName = getCurrentSelectedUnit()
+            if not unitName then
+                print("Không tìm thấy unit đang chọn. Vui lòng mở menu Traits và chọn unit trước.")
+                return
+            end
+            
+            -- Kiểm tra trait đã chọn
+            local hasSelectedTrait = false
+            for _, isSelected in pairs(selectedTraits) do
+                if isSelected then
+                    hasSelectedTrait = true
+                    break
+                end
+            end
+            
+            if not hasSelectedTrait then
+                print("Vui lòng chọn ít nhất một trait mong muốn.")
+                return
+            end
+            
+            print("Auto Roll Trait đã được bật cho unit: " .. unitName)
+            
+            -- Tạo vòng lặp Auto Roll Trait
+            spawn(function()
+                local rerollCount = 0
+                
+                while autoRollTraitEnabled do
+                    -- Lấy unit hiện tại
+                    local currentUnit = getCurrentSelectedUnit()
+                    if not currentUnit then
+                        print("Không tìm thấy unit đang chọn, dừng Auto Roll")
+                        break
+                    end
+                    
+                    -- Nếu unit thay đổi, dừng vòng lặp
+                    if currentUnit ~= unitName then
+                        print("Unit đã thay đổi từ " .. unitName .. " thành " .. currentUnit .. ", dừng Auto Roll")
+                        break
+                    end
+                    
+                    -- Kiểm tra trait hiện tại
+                    local currentTraits = checkCurrentTraits()
+                    
+                    -- Nếu có trait mong muốn, dừng vòng lặp
+                    if hasDesiredTrait(currentTraits) then
+                        print("Đã có trait mong muốn, dừng Auto Roll")
+                        break
+                    end
+                    
+                    -- Thực hiện reroll
+                    rerollTrait()
+                    rerollCount = rerollCount + 1
+                    
+                    -- Hiển thị số lần reroll
+                    print("Đã reroll " .. rerollCount .. " lần")
+                    
+                    -- Đợi một chút để game cập nhật UI
+                    wait(0.2)
+                end
+                
+                -- Tắt Auto Roll khi hoàn thành
+                autoRollTraitEnabled = false
+                if TraitRerollSection._components["AutoRollTraitToggle"] then
+                    TraitRerollSection._components["AutoRollTraitToggle"]:Set(false)
+                end
+            end)
+        else
+            print("Auto Roll Trait đã được tắt")
+        end
+    end
+})
+
+-- Nút Roll Trait Now
+TraitRerollSection:AddButton({
+    Title = "Roll Trait Now",
+    Callback = function()
+        local unitName = getCurrentSelectedUnit()
+        if not unitName then
+            print("Không tìm thấy unit đang chọn")
+            return
+        end
+        
+        print("Đang reroll trait cho unit: " .. unitName)
+        rerollTrait()
+    end
+})

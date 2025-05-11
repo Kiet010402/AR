@@ -4431,12 +4431,58 @@ MovementSection:AddToggle("AutoMovementToggle", {
 local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
 
 -- Biến lưu trạng thái Evolve Tier
-local selectedRanks = ConfigSystem.CurrentConfig.SelectedRanks or {}
+local selectedEvolveRank = ConfigSystem.CurrentConfig.SelectedEvolveRank or "Rare"
 local selectedTier = ConfigSystem.CurrentConfig.SelectedTier or "Hyper"
 local autoEvolveTierEnabled = ConfigSystem.CurrentConfig.AutoEvolveTier or false
 local autoEvolveTierLoop = nil
+local availableEvolveUnits = {}
 
--- Dropdown để chọn Rank
+-- Thêm nút Refresh Units cho Evolve Tier
+EvolveTierSection:AddButton({
+    Title = "Refresh Units",
+    Callback = function()
+        print("Đang refresh danh sách units cho Evolve Tier...")
+        
+        -- Reset biến lưu trữ danh sách units
+        availableEvolveUnits = {}
+        
+        -- Tìm units phù hợp theo rank đã chọn
+        local player = game:GetService("Players").LocalPlayer
+        if not player or not player:FindFirstChild("Collection") then
+            print("Không thể tìm thấy Collection của người chơi")
+            return
+        end
+        
+        local units = player.Collection:GetChildren()
+        local countFound = 0
+        
+        for _, unit in ipairs(units) do
+            -- Kiểm tra rank và tier
+            local rank = unit:FindFirstChild("Rank") and unit.Rank.Value
+            local tier = unit:FindFirstChild("Tier") and unit.Tier.Value
+            
+            -- Debug để xem thông tin unit
+            if rank == selectedEvolveRank then
+                print("Unit: " .. unit.Name .. ", Rank: " .. (rank or "N/A") .. ", Tier: " .. (tier or "None"))
+            end
+            
+            -- Chỉ lấy những unit có rank đúng và chưa có tier
+            if rank == selectedEvolveRank and (tier == nil or tier == "") then
+                table.insert(availableEvolveUnits, unit)
+                countFound = countFound + 1
+            end
+        end
+        
+        print("Đã refresh xong! Tìm thấy " .. countFound .. " unit phù hợp để evolve với rank " .. (selectedEvolveRank or "None"))
+        Fluent:Notify({
+            Title = "Refresh Evolve Units",
+            Content = "Đã tìm thấy " .. countFound .. " unit phù hợp để evolve",
+            Duration = 3
+        })
+    end
+})
+
+-- Dropdown để chọn rank cho Evolve Tier
 EvolveTierSection:AddDropdown("RankDropdown", {
     Title = "Choose Rank",
     Values = {"Rare", "Epic", "Legendary", "Mythic", "Secret"},

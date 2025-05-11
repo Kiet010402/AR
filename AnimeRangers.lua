@@ -591,6 +591,13 @@ local selectedSummonBanner = ConfigSystem.CurrentConfig.SummonBanner or "Standar
 local autoSummonEnabled = ConfigSystem.CurrentConfig.AutoSummon or false
 local autoSummonLoop = nil
 
+-- Biến lưu trạng thái Auto Sell
+local autoSellRarities = {
+    Rare = ConfigSystem.CurrentConfig.AutoSellRare or false,
+    Epic = ConfigSystem.CurrentConfig.AutoSellEpic or false,
+    Legendary = ConfigSystem.CurrentConfig.AutoSellLegendary or false
+}
+
 -- Biến lưu trạng thái Quest
 local autoClaimQuestEnabled = ConfigSystem.CurrentConfig.AutoClaimQuest or false
 local autoClaimQuestLoop = nil
@@ -1237,11 +1244,26 @@ local function performSummon()
             local args = {
                 [1] = selectedSummonAmount,
                 [2] = selectedSummonBanner,
-                [3] = {}
+                [3] = {
+                    Rare = autoSellRarities.Rare,
+                    Epic = autoSellRarities.Epic,
+                    Legendary = autoSellRarities.Legendary
+                }
             }
             
             Remote:FireServer(unpack(args))
-            print("Đã summon: " .. selectedSummonAmount .. " - " .. selectedSummonBanner)
+            
+            local autoSellInfo = ""
+            if autoSellRarities.Rare or autoSellRarities.Epic or autoSellRarities.Legendary then
+                autoSellInfo = " với Auto Sell: "
+                local sellTypes = {}
+                if autoSellRarities.Rare then table.insert(sellTypes, "Rare") end
+                if autoSellRarities.Epic then table.insert(sellTypes, "Epic") end
+                if autoSellRarities.Legendary then table.insert(sellTypes, "Legendary") end
+                autoSellInfo = autoSellInfo .. table.concat(sellTypes, ", ")
+            end
+            
+            print("Đã summon: " .. selectedSummonAmount .. " - " .. selectedSummonBanner .. autoSellInfo)
         else
             warn("Không tìm thấy Remote UnitsGacha")
         end
@@ -1277,6 +1299,41 @@ SummonSection:AddDropdown("SummonBannerDropdown", {
         ConfigSystem.CurrentConfig.SummonBanner = Value
         ConfigSystem.SaveConfig()
         print("Đã chọn banner: " .. Value)
+    end
+})
+
+-- Dropdown cho Auto Sell
+SummonSection:AddDropdown("AutoSellDropdown", {
+    Title = "Auto Sell",
+    Values = {"Rare", "Epic", "Legendary"},
+    Multi = true,
+    Default = {
+        Rare = ConfigSystem.CurrentConfig.AutoSellRare or false,
+        Epic = ConfigSystem.CurrentConfig.AutoSellEpic or false,
+        Legendary = ConfigSystem.CurrentConfig.AutoSellLegendary or false
+    },
+    Callback = function(Values)
+        autoSellRarities.Rare = Values.Rare or false
+        autoSellRarities.Epic = Values.Epic or false
+        autoSellRarities.Legendary = Values.Legendary or false
+        
+        -- Lưu cấu hình
+        ConfigSystem.CurrentConfig.AutoSellRare = autoSellRarities.Rare
+        ConfigSystem.CurrentConfig.AutoSellEpic = autoSellRarities.Epic
+        ConfigSystem.CurrentConfig.AutoSellLegendary = autoSellRarities.Legendary
+        ConfigSystem.SaveConfig()
+        
+        -- Hiển thị thông báo
+        local selectedTypes = {}
+        if autoSellRarities.Rare then table.insert(selectedTypes, "Rare") end
+        if autoSellRarities.Epic then table.insert(selectedTypes, "Epic") end
+        if autoSellRarities.Legendary then table.insert(selectedTypes, "Legendary") end
+        
+        if #selectedTypes > 0 then
+            print("Đã bật Auto Sell cho: " .. table.concat(selectedTypes, ", "))
+        else
+            print("Đã tắt Auto Sell")
+        end
     end
 })
 

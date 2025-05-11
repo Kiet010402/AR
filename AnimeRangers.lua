@@ -813,89 +813,87 @@ InfoSection:AddParagraph({
     Content = "Script được phát triển bởi Dương Tuấn và ghjiukliop"
 })
 
--- Thêm paragraph cho Challenge Info
-local ChallengeInfoParagraph = InfoSection:AddParagraph({
+-- Tạo Paragraph để hiển thị thông tin Challenge
+local challengeInfoParagraph = InfoSection:AddParagraph({
     Title = "Current Challenge Info",
-    Content = "Đang tải thông tin challenge..."
+    Content = "Đang tải thông tin Challenge..."
 })
 
--- Hàm cập nhật thông tin Challenge
+-- Hàm để cập nhật thông tin Challenge
 local function updateChallengeInfo()
-    spawn(function()
-        while wait(3) do -- Cập nhật mỗi 3 giây
-            local content = "Không có challenge nào đang diễn ra"
-            
-            local success, challengeInfo = pcall(function()
-                local challengeFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Gameplay")
-                
-                if challengeFolder then
-                    challengeFolder = challengeFolder:FindFirstChild("Game")
-                    if challengeFolder then
-                        challengeFolder = challengeFolder:FindFirstChild("Challenge")
-                    end
-                end
-                
-                return challengeFolder
-            end)
-            
-            if success and challengeInfo then
-                content = ""
-                
-                -- ChallengeName
-                local challengeName = challengeInfo:FindFirstChild("ChallengeName")
-                if challengeName and challengeName:IsA("StringValue") then
-                    content = content .. "ChallengeName: " .. challengeName.Value .. "\n"
-                end
-                
-                -- Chapter (Chỉ hiển thị số)
-                local chapter = challengeInfo:FindFirstChild("Chapter")
-                if chapter and chapter:IsA("StringValue") then
-                    local chapterValue = chapter.Value
-                    local chapterNum = chapterValue:match("Chapter(%d+)")
-                    
-                    if chapterNum then
-                        content = content .. "Chapter: " .. chapterNum .. "\n"
-                    else
-                        content = content .. "Chapter: " .. chapterValue .. "\n"
-                    end
-                end
-                
-                -- World (Hiển thị tên map thân thiện)
-                local world = challengeInfo:FindFirstChild("World")
-                if world and world:IsA("StringValue") then
-                    local worldValue = world.Value
-                    local displayName = reverseMapNameMapping[worldValue] or worldValue
-                    
-                    content = content .. "World: " .. displayName .. "\n"
-                end
-                
-                -- Items
-                local items = challengeInfo:FindFirstChild("Items")
-                if items then
-                    content = content .. "Items:\n"
-                    for _, item in pairs(items:GetChildren()) do
-                        if item:IsA("StringValue") then
-                            content = content .. "- " .. item.Name .. ": " .. item.Value .. "\n"
-                        else
-                            content = content .. "- " .. item.Name .. "\n"
-                        end
-                    end
-                end
+    -- Đảm bảo đường dẫn là đúng
+    local challengePath = game:GetService("ReplicatedStorage"):FindFirstChild("Gameplay")
+    if not challengePath then
+        challengeInfoParagraph:SetDesc("Không tìm thấy thông tin Challenge")
+        return
+    end
+    
+    challengePath = challengePath:FindFirstChild("Game")
+    if not challengePath then
+        challengeInfoParagraph:SetDesc("Không tìm thấy thông tin Challenge")
+        return
+    end
+    
+    challengePath = challengePath:FindFirstChild("Challenge")
+    if not challengePath then
+        challengeInfoParagraph:SetDesc("Không tìm thấy thông tin Challenge")
+        return
+    end
+    
+    -- Lấy các giá trị
+    local challengeName = challengePath:FindFirstChild("ChallengeName") and challengePath.ChallengeName.Value or "N/A"
+    local chapter = challengePath:FindFirstChild("Chapter") and challengePath.Chapter.Value or "N/A"
+    local world = challengePath:FindFirstChild("World") and challengePath.World.Value or "N/A"
+    
+    -- Xử lý hiển thị Chapter (chỉ lấy số nếu là dạng World_ChapterX)
+    local chapterNumber = chapter:match("Chapter(%d+)")
+    if chapterNumber then
+        chapter = chapterNumber
+    end
+    
+    -- Xử lý hiển thị World (chuyển từ tên thật sang tên hiển thị)
+    if reverseMapNameMapping[world] then
+        world = reverseMapNameMapping[world]
+    end
+    
+    -- Quét và hiển thị Items
+    local itemsText = ""
+    local itemsFolder = challengePath:FindFirstChild("Items")
+    if itemsFolder then
+        for _, item in pairs(itemsFolder:GetChildren()) do
+            -- Lấy tên item và số lượng nếu có
+            local itemValue = ""
+            if item:IsA("StringValue") or item:IsA("NumberValue") or item:IsA("IntValue") then
+                itemValue = tostring(item.Value)
+            else
+                itemValue = item.Name
             end
             
-            -- Cập nhật nội dung paragraph
-            if ChallengeInfoParagraph and ChallengeInfoParagraph.Set then
-                ChallengeInfoParagraph:Set({
-                    Title = "Current Challenge Info",
-                    Content = content
-                })
+            itemsText = itemsText .. "• " .. item.Name
+            if itemValue ~= item.Name then
+                itemsText = itemsText .. ": " .. itemValue
             end
+            itemsText = itemsText .. "\n"
         end
-    end)
+    else
+        itemsText = "Không có item nào"
+    end
+    
+    -- Cập nhật nội dung Paragraph
+    local content = "ChallengeName: " .. challengeName .. "\n" ..
+                  "Chapter: " .. chapter .. "\n" ..
+                  "World: " .. world .. "\n" ..
+                  "Items:\n" .. itemsText
+                  
+    challengeInfoParagraph:SetDesc(content)
 end
 
--- Gọi hàm cập nhật khi script khởi động
-updateChallengeInfo()
+-- Thiết lập vòng lặp cập nhật thông tin Challenge
+spawn(function()
+    while wait(1) do -- Cập nhật mỗi 1 giây
+        pcall(updateChallengeInfo)
+    end
+end)
 
 -- Kiểm tra xem người chơi đã ở trong map chưa
 local function isPlayerInMap()

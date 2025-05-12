@@ -1409,7 +1409,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
                 simulateClick()
                 
                 -- Tiếp tục vòng lặp click
-                while autoSummonEnabled and wait(0.3) do -- Click mỗi 0.3 giây
+                while autoSummonEnabled and wait(8) do -- Click mỗi 8 giây
                     simulateClick()
                 end
             end)

@@ -1401,8 +1401,11 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Tạo vòng lặp riêng cho Auto Summon
             spawn(function()
-                while autoSummonEnabled and wait(5) do -- Summon mỗi 5 giây
+                while autoSummonEnabled do
+                    -- Thời gian chờ dựa trên số lượng summon đã chọn
+                    local waitTime = selectedSummonAmount == "x1" and 2 or 10
                     performSummon()
+                    wait(waitTime) -- Đợi 2 giây nếu x1, 10 giây nếu x10
                 end
             end)
             

@@ -1409,7 +1409,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
                     wait(5)
                     
                     -- Bước 3: Click nhiều lần dựa trên loại summon
-                    local clickCount = selectedSummonAmount == "x1" and 2 or 13
+                    local clickCount = selectedSummonAmount == "x1" and 1 or 10
                     print("Đang thực hiện " .. clickCount .. " lần click cho summon " .. selectedSummonAmount)
                     
                     for i = 1, clickCount do

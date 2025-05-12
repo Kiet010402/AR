@@ -1402,10 +1402,26 @@ SummonSection:AddToggle("AutoSummonToggle", {
             -- Tạo vòng lặp riêng cho Auto Summon
             spawn(function()
                 while autoSummonEnabled do
-                    -- Thời gian chờ dựa trên số lượng summon đã chọn
-                    local waitTime = selectedSummonAmount == "x1" and 2 or 10
+                    -- Bước 1: Thực hiện summon ngay lập tức
                     performSummon()
-                    wait(waitTime) -- Đợi 2 giây nếu x1, 10 giây nếu x10
+                    
+                    -- Bước 2: Đợi 5 giây
+                    wait(5)
+                    
+                    -- Bước 3: Click nhiều lần dựa trên loại summon
+                    local clickCount = selectedSummonAmount == "x1" and 2 or 13
+                    print("Đang thực hiện " .. clickCount .. " lần click cho summon " .. selectedSummonAmount)
+                    
+                    for i = 1, clickCount do
+                        if not autoSummonEnabled then break end
+                        simulateClick()
+                        wait(0.5) -- Đợi 0.5 giây giữa các lần click
+                    end
+                    
+                    -- Kiểm tra lại xem Auto Summon có còn được bật không
+                    if not autoSummonEnabled then break end
+                    
+                    -- Bước 4: Tiếp tục vòng lặp (không cần wait thêm, vì lúc này sẽ bắt đầu lại từ đầu)
                 end
             end)
             

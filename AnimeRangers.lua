@@ -1346,6 +1346,9 @@ SummonSection:AddToggle("AutoSummonToggle", {
         ConfigSystem.CurrentConfig.AutoSummon = Value
         ConfigSystem.SaveConfig()
         
+        -- Tạo biến mới để kiểm soát click độc lập
+        local autoClickEnabled = true
+        
         if autoSummonEnabled then
             print("Auto Summon đã được bật")
             
@@ -1398,7 +1401,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Tạo vòng lặp riêng cho Auto Summon
             spawn(function()
-                while autoSummonEnabled and wait(5) do -- Summon mỗi 8 giây
+                while autoSummonEnabled and wait(5) do -- Summon mỗi 5 giây
                     performSummon()
                 end
             end)
@@ -1408,9 +1411,14 @@ SummonSection:AddToggle("AutoSummonToggle", {
                 -- Gọi simulateClick ngay lập tức không cần đợi
                 simulateClick()
                 
-                -- Tiếp tục vòng lặp click
-                while autoSummonEnabled and wait(0.1) do -- Click mỗi 0.1 giây
+                -- Tiếp tục vòng lặp click mà không phụ thuộc vào autoSummonEnabled
+                while autoClickEnabled and wait(0.1) do -- Click mỗi 0.1 giây
                     simulateClick()
+                    
+                    -- Kiểm tra nếu Auto Summon đã bị tắt thì dừng vòng lặp
+                    if not autoSummonEnabled then
+                        autoClickEnabled = false
+                    end
                 end
             end)
             
@@ -1421,6 +1429,9 @@ SummonSection:AddToggle("AutoSummonToggle", {
                 autoSummonLoop:Disconnect()
                 autoSummonLoop = nil
             end
+            
+            -- Đảm bảo dừng vòng lặp click khi tắt Auto Summon
+            autoClickEnabled = false
         end
     end
 })

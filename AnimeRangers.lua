@@ -1355,55 +1355,61 @@ SummonSection:AddToggle("AutoSummonToggle", {
                 autoSummonLoop = nil
             end
             
-            -- Sử dụng spawn thay vì coroutine
-            spawn(function()
-                while autoSummonEnabled and wait(1) do -- Summon mỗi 1 giây
-                    performSummon()
-                    
-                    -- Thêm chức năng mô phỏng click chuột
-                    -- Hàm để mô phỏng một click chuột
-                    local function simulateClick()
-                        local VirtualInputManager = game:GetService("VirtualInputManager")
-                        local Players = game:GetService("Players")
-                        local LocalPlayer = Players.LocalPlayer
-                        local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-                        
-                        -- Lấy kích thước màn hình hiện tại
-                        local guiInset = game:GetService("GuiService"):GetGuiInset()
-                        local screenSize = workspace.CurrentCamera.ViewportSize
-                        
-                        -- Tính toán vị trí trung tâm màn hình (vị trí tốt nhất để click)
-                        local centerX = screenSize.X / 2
-                        local centerY = screenSize.Y / 2
-                        
-                        -- Tạo click tại trung tâm màn hình
-                        VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-                        wait(0.05) -- Độ trễ nhỏ
-                        VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
-                        
-                        -- Thử click thêm vài vị trí nếu cần thiết (4 góc màn hình)
-                        local testPositions = {
-                            {X = centerX, Y = centerY}, -- Trung tâm
-                            {X = centerX * 0.9, Y = centerY * 1.5}, -- Phía dưới 
-                            {X = centerX * 1.5, Y = centerY * 0.9}, -- Phía phải
-                            {X = centerX * 0.5, Y = centerY * 0.5}  -- Phía trên bên trái
-                        }
-                        
-                        for _, pos in ipairs(testPositions) do
-                            if pos.X > 0 and pos.X < screenSize.X and pos.Y > 0 and pos.Y < screenSize.Y then
-                                VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-                                wait(0.05)
-                                VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-                                wait(0.05)
-                            end
-                        end
-                        
-                        -- Thông báo debug
-                        print("Đã thực hiện click tự động trên màn hình " .. screenSize.X .. "x" .. screenSize.Y)
+            -- Hàm để mô phỏng một click chuột
+            local function simulateClick()
+                local VirtualInputManager = game:GetService("VirtualInputManager")
+                local Players = game:GetService("Players")
+                local LocalPlayer = Players.LocalPlayer
+                local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+                
+                -- Lấy kích thước màn hình hiện tại
+                local guiInset = game:GetService("GuiService"):GetGuiInset()
+                local screenSize = workspace.CurrentCamera.ViewportSize
+                
+                -- Tính toán vị trí trung tâm màn hình (vị trí tốt nhất để click)
+                local centerX = screenSize.X / 2
+                local centerY = screenSize.Y / 2
+                
+                -- Tạo click tại trung tâm màn hình
+                VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+                wait(0.05) -- Độ trễ nhỏ
+                VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+                
+                -- Thử click thêm vài vị trí nếu cần thiết (4 góc màn hình)
+                local testPositions = {
+                    {X = centerX, Y = centerY}, -- Trung tâm
+                    {X = centerX * 0.9, Y = centerY * 1.5}, -- Phía dưới 
+                    {X = centerX * 1.5, Y = centerY * 0.9}, -- Phía phải
+                    {X = centerX * 0.5, Y = centerY * 0.5}  -- Phía trên bên trái
+                }
+                
+                for _, pos in ipairs(testPositions) do
+                    if pos.X > 0 and pos.X < screenSize.X and pos.Y > 0 and pos.Y < screenSize.Y then
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                        wait(0.05)
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                        wait(0.05)
                     end
-                    
-                    -- Gọi hàm simulateClick sau khi thực hiện summon
-                    wait(0.1) -- Đợi một chút trước khi click
+                end
+                
+                -- Thông báo debug
+                print("Đã thực hiện click tự động trên màn hình " .. screenSize.X .. "x" .. screenSize.Y)
+            end
+            
+            -- Tạo vòng lặp riêng cho Auto Summon
+            spawn(function()
+                while autoSummonEnabled and wait(8) do -- Summon mỗi 8 giây
+                    performSummon()
+                end
+            end)
+            
+            -- Tạo vòng lặp riêng cho Auto Click
+            spawn(function()
+                -- Gọi simulateClick ngay lập tức không cần đợi
+                simulateClick()
+                
+                -- Tiếp tục vòng lặp click
+                while autoSummonEnabled and wait(0.3) do -- Click mỗi 0.3 giây
                     simulateClick()
                 end
             end)

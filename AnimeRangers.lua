@@ -1398,7 +1398,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Tạo vòng lặp riêng cho Auto Summon
             spawn(function()
-                while autoSummonEnabled and wait(8) do -- Summon mỗi 8 giây
+                while autoSummonEnabled and wait(5) do -- Summon mỗi 8 giây
                     performSummon()
                 end
             end)
@@ -1409,7 +1409,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
                 simulateClick()
                 
                 -- Tiếp tục vòng lặp click
-                while autoSummonEnabled and wait(8) do -- Click mỗi 8 giây
+                while autoSummonEnabled and wait(0.1) do -- Click mỗi 0.1 giây
                     simulateClick()
                 end
             end)

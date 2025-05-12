@@ -1357,7 +1357,9 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Sử dụng spawn thay vì coroutine
             spawn(function()
-                while autoSummonEnabled and wait(8) do -- Summon mỗi 8 giây
+                while autoSummonEnabled and wait(1) do -- Summon mỗi 1 giây
+                    performSummon()
+                    
                     -- Thêm chức năng mô phỏng click chuột
                     -- Hàm để mô phỏng một click chuột
                     local function simulateClick()
@@ -1400,10 +1402,9 @@ SummonSection:AddToggle("AutoSummonToggle", {
                         print("Đã thực hiện click tự động trên màn hình " .. screenSize.X .. "x" .. screenSize.Y)
                     end
                     
-                    -- Gọi hàm simulateClick trước khi thực hiện summon
+                    -- Gọi hàm simulateClick sau khi thực hiện summon
+                    wait(0.1) -- Đợi một chút trước khi click
                     simulateClick()
-                    wait(0.1) -- Đợi một chút sau khi click trước khi summon
-                    performSummon()
                 end
             end)
             

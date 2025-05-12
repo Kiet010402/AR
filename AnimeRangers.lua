@@ -1405,8 +1405,8 @@ SummonSection:AddToggle("AutoSummonToggle", {
                     -- Bước 1: Thực hiện summon ngay lập tức
                     performSummon()
                     
-                    -- Bước 2: Đợi 5 giây
-                    wait(5)
+                    -- Bước 2: Đợi 2 giây
+                    wait(2)
                     
                     -- Bước 3: Click nhiều lần dựa trên loại summon
                     local clickCount = selectedSummonAmount == "x1" and 1 or 10

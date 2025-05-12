@@ -1357,7 +1357,7 @@ SummonSection:AddToggle("AutoSummonToggle", {
             
             -- Sử dụng spawn thay vì coroutine
             spawn(function()
-                while autoSummonEnabled and wait(5) do -- Summon mỗi 5 giây
+                while autoSummonEnabled and wait(8) do -- Summon mỗi 8 giây
                     performSummon()
                     
                     -- Thêm chức năng mô phỏng click chuột

@@ -477,9 +477,6 @@ ConfigSystem.DefaultConfig = {
     -- Cài đặt Easter Egg
     AutoJoinEasterEgg = false,
     EasterEggTimeDelay = 5,
-
-    -- Cài đặt Auto Join Priority
-    AutoJoinPriority = false,
     
     -- Cài đặt Anti AFK
     AntiAFK = true, -- Mặc định bật
@@ -716,11 +713,6 @@ local InGameTab = Window:AddTab({
     Icon = "rbxassetid://7733799901"
 })
 
--- Tạo tab Priority
-local PriorityTab = Window:AddTab({
-    Title = "Priority",
-    Icon = "rbxassetid://7733734848"
-})
 
 -- Tạo tab Event
 local EventTab = Window:AddTab({
@@ -5234,142 +5226,251 @@ end
 -- Gọi hàm theo dõi RewardsUI khi script khởi động
 setupRewardsUIWatcher()
 
--- Priority tab
-local PrioritySection = PriorityTab:AddSection("Priority Settings")
+-- end 
+print("HT Hub | Anime Rangers X đã được tải thành công!")
 
--- Biến lưu trạng thái Auto Join Priority
-local autoJoinPriorityEnabled = ConfigSystem.CurrentConfig.AutoJoinPriority or false
-local autoJoinPriorityLoop = nil
--- Danh sách các mode
-local availableModes = {"Story", "Ranger Stage", "Boss Event", "Challenge", "Easter Egg", "None"}
+-- Thêm section Trait Reroll trong tab Unit
+local TraitRerollSection = UnitTab:AddSection("Trait Reroll")
 
--- Biến lưu thứ tự ưu tiên
-local priorityOrder = {"None", "None", "None", "None", "None"}
+-- Biến lưu trạng thái
+local selectedUnit = nil
+local selectedUnitDisplay = ""
+local selectedTraits = {}
+local autoTraitRerollEnabled = false
+local autoTraitRerollLoop = nil
+local unitCollectionCache = {}
 
--- Tạo 5 dropdown cho thứ tự ưu tiên
-for i = 1, 5 do
-    PrioritySection:AddDropdown("PriorityDropdown" .. i, {
-        Title = "Priority Slot " .. i,
-        Values = availableModes,
-        Multi = false,
-        Default = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None", -- Lấy giá trị từ JSON hoặc mặc định là "None"
-        Callback = function(Value)
-            priorityOrder[i] = Value -- Cập nhật thứ tự ưu tiên
-            ConfigSystem.CurrentConfig["PrioritySlot" .. i] = Value -- Lưu vào cấu hình
-            ConfigSystem.SaveConfig() -- Lưu cấu hình vào file JSON
+-- Hàm để quét danh sách unit từ Collection
+local function scanUnitCollection()
+    unitCollectionCache = {}
+    local displayUnits = {}
+    
+    local success, result = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local collectionPath = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data", 2):WaitForChild(playerName, 2):WaitForChild("Collection", 2)
+        
+        if not collectionPath then
+            print("❌ Không tìm thấy Collection")
+            return {}
+        end
+        
+        for _, unit in pairs(collectionPath:GetChildren()) do
+            local unitName = unit.Name
+            local level = unit:FindFirstChild("Level") and unit.Level.Value or 0
             
-            print("Đã chọn Priority Slot " .. i .. ": " .. Value)
+            -- Tạo key hiển thị gồm tên và level
+            local displayKey = unitName .. " Lv: " .. level
+            
+            -- Lưu vào cache để sử dụng sau
+            unitCollectionCache[displayKey] = unit
+            table.insert(displayUnits, displayKey)
         end
-    })
+        
+        return displayUnits
+    end)
+    
+    if not success then
+        warn("Lỗi khi quét unit collection: " .. tostring(result))
+        return {}
+    end
+    
+    table.sort(displayUnits) -- Sắp xếp theo thứ tự bảng chữ cái
+    return displayUnits
 end
 
--- Cập nhật hàm Auto Join Priority để bỏ qua "None"
-local function autoJoinPriority()
-    if not autoJoinPriorityEnabled or isPlayerInMap() then
-        return
-    end
-
-    -- Duyệt qua thứ tự ưu tiên và bỏ qua "None"
-    for _, mode in ipairs(priorityOrder) do
-        if mode ~= "None" then
-            local success = false
-            if mode == "Story" then
-                success = joinMap()
-            elseif mode == "Ranger Stage" then
-                success = joinRangerStage()
-            elseif mode == "Boss Event" then
-                success = joinBossEvent()
-            elseif mode == "Challenge" then
-                success = joinChallenge()
-            elseif mode == "Easter Egg" then
-                success = joinEasterEggEvent()
-            end
-
-            -- Nếu tham gia thành công, dừng vòng lặp
-            if success then
-                print("Đã tham gia mode: " .. mode)
-                return
-            else
-                print("Không thể tham gia mode: " .. mode .. ", chuyển sang mode tiếp theo.")
-            end
+-- Hàm để thực hiện reroll trait
+local function rerollTrait(unitObject)
+    if not unitObject then return false end
+    
+    local success, result = pcall(function()
+        local rerollRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote", 2):WaitForChild("Server", 2):WaitForChild("Gambling", 2):WaitForChild("RerollTrait", 2)
+        
+        if not rerollRemote then
+            warn("Không tìm thấy RerollTrait Remote")
+            return false
         end
+        
+        local args = {
+            unitObject,
+            "Reroll",
+            "Main",
+            "Shards"
+        }
+        
+        rerollRemote:FireServer(unpack(args))
+        return true
+    end)
+    
+    if not success then
+        warn("Lỗi khi reroll trait: " .. tostring(result))
+        return false
     end
-
-    print("Không có mode nào khả dụng để tham gia.")
+    
+    return result
 end
 
--- Tự động tải thứ tự ưu tiên từ cấu hình khi khởi động
-spawn(function()
-    wait(1) -- Đợi game load
-    for i = 1, 5 do
-        priorityOrder[i] = ConfigSystem.CurrentConfig["PrioritySlot" .. i] or "None"
-    end
-    print("Đã tải thứ tự ưu tiên từ cấu hình:", table.concat(priorityOrder, ", "))
-end)
-
--- Toggle Auto Join Priority
-PrioritySection:AddToggle("AutoJoinPriorityToggle", {
-    Title = "Enable Auto Join Priority",
-    Default = autoJoinPriorityEnabled,
-    Callback = function(Value)
-        autoJoinPriorityEnabled = Value
-        ConfigSystem.CurrentConfig.AutoJoinPriority = Value
-        ConfigSystem.SaveConfig()
-
-        if Value then
-            Fluent:Notify({
-                Title = "Auto Join Priority",
-                Content = "Auto Join Priority đã được bật.",
-                Duration = 3
-            })
-
-            -- Gọi hàm autoJoinPriority ngay lập tức
-            autoJoinPriority()
-
-            -- Tạo vòng lặp Auto Join Priority
-            if autoJoinPriorityLoop then
-                autoJoinPriorityLoop:Disconnect()
-                autoJoinPriorityLoop = nil
-            end
-
-            spawn(function()
-                while autoJoinPriorityEnabled and wait(5) do
-                    autoJoinPriority()
+-- Hàm kiểm tra xem unit hiện tại có trait mong muốn không
+local function checkTraitMatch(unitObject)
+    if not unitObject then return false end
+    
+    local success, result = pcall(function()
+        local primaryTrait = unitObject:FindFirstChild("PrimaryTrait") and unitObject.PrimaryTrait.Value or ""
+        local secondaryTrait = unitObject:FindFirstChild("SecondaryTrait") and unitObject.SecondaryTrait.Value or ""
+        
+        -- Kiểm tra xem có bất kỳ trait nào khớp với danh sách đã chọn
+        for trait, isSelected in pairs(selectedTraits) do
+            if isSelected then
+                if primaryTrait == trait or secondaryTrait == trait then
+                    print("✅ Đã tìm thấy trait mong muốn: " .. trait .. " (Primary: " .. primaryTrait .. ", Secondary: " .. secondaryTrait .. ")")
+                    return true
                 end
-            end)
-        else
-            Fluent:Notify({
-                Title = "Auto Join Priority",
-                Content = "Auto Join Priority đã được tắt.",
-                Duration = 3
-            })
-
-            -- Hủy vòng lặp nếu có
-            if autoJoinPriorityLoop then
-                autoJoinPriorityLoop:Disconnect()
-                autoJoinPriorityLoop = nil
             end
+        end
+        
+        return false
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra trait: " .. tostring(result))
+        return false
+    end
+    
+    return result
+end
+
+-- Quét unit collection ban đầu
+local unitDisplayList = scanUnitCollection()
+
+-- Dropdown để chọn Unit
+local unitDropdown = TraitRerollSection:AddDropdown("UnitDropdown", {
+    Title = "Choose Unit",
+    Values = unitDisplayList,
+    Multi = false,
+    Default = "",
+    Callback = function(Value)
+        selectedUnitDisplay = Value
+        selectedUnit = unitCollectionCache[Value]
+        
+        if selectedUnit then
+            local primaryTrait = selectedUnit:FindFirstChild("PrimaryTrait") and selectedUnit.PrimaryTrait.Value or "None"
+            local secondaryTrait = selectedUnit:FindFirstChild("SecondaryTrait") and selectedUnit.SecondaryTrait.Value or "None"
+            
+            print("Đã chọn unit: " .. selectedUnitDisplay)
+            print("Current Traits - Primary: " .. primaryTrait .. ", Secondary: " .. secondaryTrait)
+        else
+            print("Không tìm thấy thông tin về unit đã chọn")
         end
     end
 })
 
--- Tự động tải trạng thái Auto Join Priority và Priority List khi khởi động
-spawn(function()
-    wait(1) -- Đợi game load
+-- Dropdown để chọn Trait
+TraitRerollSection:AddDropdown("TraitDropdown", {
+    Title = "Choose Trait",
+    Values = {"Seraph", "Capitalist", "Duplicator", "Soversign"},
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedTraits = Values
+        
+        local selectedTraitsList = {}
+        for trait, isSelected in pairs(Values) do
+            if isSelected then
+                table.insert(selectedTraitsList, trait)
+            end
+        end
+        
+        if #selectedTraitsList > 0 then
+            print("Đã chọn trait: " .. table.concat(selectedTraitsList, ", "))
+        else
+            print("Chưa chọn trait nào")
+        end
+    end
+})
 
-    -- Tải trạng thái Auto Join Priority
-    autoJoinPriorityEnabled = ConfigSystem.CurrentConfig.AutoJoinPriority or false
+-- Toggle Auto Roll Trait
+TraitRerollSection:AddToggle("RollTraitToggle", {
+    Title = "Roll Trait",
+    Default = false,
+    Callback = function(Value)
+        autoTraitRerollEnabled = Value
+        
+        if Value then
+            if not selectedUnit then
+                print("❌ Vui lòng chọn unit trước khi bật Roll Trait")
+                -- Reset toggle về false
+                TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
+                return
+            end
+            
+            local hasSelectedTrait = false
+            for _, isSelected in pairs(selectedTraits) do
+                if isSelected then
+                    hasSelectedTrait = true
+                    break
+                end
+            end
+            
+            if not hasSelectedTrait then
+                print("❌ Vui lòng chọn ít nhất một trait để roll")
+                -- Reset toggle về false
+                TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
+                return
+            end
+            
+            print("🔄 Bắt đầu Roll Trait cho " .. selectedUnitDisplay)
+            
+            -- Kiểm tra ngay lập tức nếu unit đã có trait mong muốn
+            if checkTraitMatch(selectedUnit) then
+                print("✅ Unit đã có trait mong muốn. Không cần roll thêm.")
+                -- Reset toggle về false
+                TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
+                return
+            end
+            
+            -- Bắt đầu vòng lặp roll trait
+            spawn(function()
+                while autoTraitRerollEnabled do
+                    -- Thực hiện reroll
+                    local success = rerollTrait(selectedUnit)
+                    
+                    if success then
+                        -- Đợi một chút để dữ liệu cập nhật
+                        wait(0.2)
+                        
+                        -- Kiểm tra trait sau khi roll
+                        if checkTraitMatch(selectedUnit) then
+                            print("✅ Đã roll được trait mong muốn! Dừng tự động roll.")
+                            autoTraitRerollEnabled = false
+                            -- Reset toggle về false
+                            TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
+                            break
+                        end
+                    else
+                        -- Nếu reroll thất bại, đợi thêm thời gian
+                        wait(1)
+                    end
+                    
+                    -- Đợi một chút giữa các lần roll để tránh spam
+                    wait(0.3)
+                end
+            end)
+        else
+            print("❌ Đã dừng Roll Trait")
+        end
+    end
+})
 
-    -- Tải danh sách Priority List
-    priorityOrder = {
-        ConfigSystem.CurrentConfig["PrioritySlot1"] or "None",
-        ConfigSystem.CurrentConfig["PrioritySlot2"] or "None",
-        ConfigSystem.CurrentConfig["PrioritySlot3"] or "None",
-        ConfigSystem.CurrentConfig["PrioritySlot4"] or "None",
-        ConfigSystem.CurrentConfig["PrioritySlot5"] or "None"
-    }
-
-    print("Đã tải trạng thái Auto Join Priority và Priority List từ cấu hình.")
-end)
--- end 
-print("HT Hub | Anime Rangers X đã được tải thành công!")
+-- Button Refresh Unit List
+TraitRerollSection:AddButton({
+    Title = "Refresh",
+    Callback = function()
+        local newUnitList = scanUnitCollection()
+        
+        if #newUnitList > 0 then
+            unitDropdown:SetValues(newUnitList)
+            print("✅ Đã làm mới danh sách unit: " .. #newUnitList .. " unit")
+        else
+            print("❌ Không tìm thấy unit nào trong Collection")
+        end
+    end
+})

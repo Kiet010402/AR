@@ -5374,138 +5374,83 @@ end)
 -- end 
 print("HT Hub | Anime Rangers X đã được tải thành công!")
 
--- Thêm section Trait Reroll trong tab Unit
-local TraitRerollSection = UnitTab:AddSection("Trait Reroll")
+-- Thêm section Trait Reroll vào tab Shop
+local TraitRerollSection = ShopTab:AddSection("Trait Reroll")
 
--- Biến cục bộ cho tính năng Trait Reroll
-local availableUnits = {}
-local selectedUnitForTrait = nil
-local selectedUnitPathForTrait = nil
+-- Biến lưu trữ
+local selectedUnit = nil
+local selectedUnitPath = nil  
 local selectedTraits = {}
-local isTraitRolling = false
-local traitRollLoop = nil
+local autoRollTraitEnabled = false
+local autoRollTraitLoop = nil
 
--- Hàm quét units từ Collection của người chơi
+-- Hàm để quét danh sách unit trong Collection
 local function scanUnitsCollection()
-    availableUnits = {}
-    
-    local success, result = pcall(function()
-        local Players = game:GetService("Players")
-        local player = Players.LocalPlayer
-        if not player then return "Không tìm thấy LocalPlayer" end
+    local units = {}
+    local success, err = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local collectionPath = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data"):WaitForChild(playerName):WaitForChild("Collection")
         
-        local playerName = player.Name
-        local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
-        if not playerData then return "Không tìm thấy Player_Data" end
-        
-        local playerFolder = playerData:FindFirstChild(playerName)
-        if not playerFolder then return "Không tìm thấy dữ liệu người chơi" end
-        
-        local collectionFolder = playerFolder:FindFirstChild("Collection")
-        if not collectionFolder then return "Không tìm thấy Collection" end
-        
-        -- Quét qua từng unit trong Collection
-        for _, unit in pairs(collectionFolder:GetChildren()) do
-            local unitName = unit.Name
-            local level = unit:FindFirstChild("Level") and unit.Level.Value or "N/A"
-            
-            -- Tạo entry mới cho unit với đường dẫn và thông tin
-            table.insert(availableUnits, {
-                name = unitName .. " Lv: " .. level,
-                unit = unit,
-                path = playerFolder.Name .. ".Collection." .. unitName
-            })
+        for _, unit in pairs(collectionPath:GetChildren()) do
+            if unit:IsA("Folder") then
+                local level = unit:FindFirstChild("Level") and unit.Level.Value or 0
+                table.insert(units, {
+                    name = unit.Name .. " Lv: " .. level,
+                    path = unit
+                })
+            end
         end
-        
-        -- Sắp xếp units theo tên
-        table.sort(availableUnits, function(a, b)
-            return a.name < b.name
-        end)
-        
-        return #availableUnits .. " units found"
     end)
     
-    if success then
-        print("✅ " .. result)
-    else
-        warn("❌ Lỗi khi quét units: " .. tostring(result))
+    if not success then
+        warn("Lỗi khi quét unit: " .. tostring(err))
     end
     
-    return availableUnits
+    return units
 end
 
--- Hàm lấy danh sách tên units để hiển thị trong dropdown
-local function getUnitNamesList()
-    local unitNames = {}
+-- Hàm kiểm tra trait hiện tại
+local function checkCurrentTraits()
+    if not selectedUnitPath then return nil, nil end
     
-    for _, unit in ipairs(availableUnits) do
-        table.insert(unitNames, unit.name)
-    end
+    local primaryTrait = selectedUnitPath:FindFirstChild("PrimaryTrait") and selectedUnitPath.PrimaryTrait.Value or "None"
+    local secondaryTrait = selectedUnitPath:FindFirstChild("SecondaryTrait") and selectedUnitPath.SecondaryTrait.Value or "None"
     
-    if #unitNames == 0 then
-        table.insert(unitNames, "No units found")
-    end
-    
-    return unitNames
+    return primaryTrait, secondaryTrait
 end
 
--- Hàm kiểm tra trait của unit
-local function checkUnitTraits(unit)
-    local success, result = pcall(function()
-        if not unit then return nil, nil end
-        
-        local primaryTrait = unit:FindFirstChild("PrimaryTrait")
-        local secondaryTrait = unit:FindFirstChild("SecondaryTrait")
-        
-        local primary = primaryTrait and primaryTrait.Value or "None"
-        local secondary = secondaryTrait and secondaryTrait.Value or "None"
-        
-        return primary, secondary
-    end)
-    
-    if success then
-        return result
-    else
-        warn("❌ Lỗi khi kiểm tra traits: " .. tostring(result))
-        return "Error", "Error"
+-- Hàm thực hiện reroll trait
+local function rerollTrait()
+    if not selectedUnitPath then
+        print("⚠️ Vui lòng chọn unit trước khi reroll trait")
+        return false
     end
-end
-
--- Hàm reroll trait cho unit
-local function rerollTrait(unit)
-    local success, result = pcall(function()
-        if not unit then return "Không có unit nào được chọn" end
-        
-        local RerollTraitRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gambling"):WaitForChild("RerollTrait")
-        
+    
+    local success, err = pcall(function()
         local args = {
-            unit,
+            selectedUnitPath,
             "Reroll",
             "Main",
             "Shards"
         }
         
-        RerollTraitRemote:FireServer(unpack(args))
-        return "Đã reroll trait cho " .. unit.Name
+        game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gambling"):WaitForChild("RerollTrait"):FireServer(unpack(args))
     end)
     
-    if success then
-        print("✅ " .. result)
-    else
-        warn("❌ Lỗi khi reroll trait: " .. tostring(result))
+    if not success then
+        warn("Lỗi khi reroll trait: " .. tostring(err))
+        return false
     end
+    
+    return true
 end
 
--- Hàm kiểm tra nếu trait đã đạt mục tiêu
-local function checkIfTraitReached(unit)
-    if not unit or not selectedTraits or #selectedTraits == 0 then return false end
+-- Hàm kiểm tra xem trait có phù hợp không
+local function isDesiredTrait(trait)
+    if not trait or trait == "None" then return false end
     
-    local primaryTrait, secondaryTrait = checkUnitTraits(unit)
-    
-    -- Kiểm tra xem trait hiện tại có nằm trong danh sách mục tiêu không
-    for trait, isSelected in pairs(selectedTraits) do
-        if isSelected and (primaryTrait == trait or secondaryTrait == trait) then
-            print("🎯 Đã đạt được trait mục tiêu: " .. trait)
+    for targetTrait, isSelected in pairs(selectedTraits) do
+        if isSelected and trait == targetTrait then
             return true
         end
     end
@@ -5513,34 +5458,31 @@ local function checkIfTraitReached(unit)
     return false
 end
 
--- Quét units khi khởi động script
-scanUnitsCollection()
-
--- Dropdown để chọn Unit
-local unitDropdown = TraitRerollSection:AddDropdown("UnitTraitDropdown", {
+-- Dropdown để chọn unit
+local unitDropdown = TraitRerollSection:AddDropdown("UnitDropdown", {
     Title = "Choose Unit",
-    Values = getUnitNamesList(),
+    Values = {},
     Multi = false,
-    Default = "",
+    Default = nil,
     Callback = function(Value)
-        -- Tìm unit được chọn
-        for _, unit in ipairs(availableUnits) do
+        -- Tìm unit tương ứng
+        local units = scanUnitsCollection()
+        for _, unit in ipairs(units) do
             if unit.name == Value then
-                selectedUnitForTrait = unit.unit
-                selectedUnitPathForTrait = unit.path
+                selectedUnit = unit.name
+                selectedUnitPath = unit.path
+                print("Đã chọn unit: " .. selectedUnit)
                 
-                -- Hiển thị thông tin về trait hiện tại
-                local primaryTrait, secondaryTrait = checkUnitTraits(selectedUnitForTrait)
-                print("📋 Unit: " .. unit.name)
-                print("📋 Primary Trait: " .. primaryTrait)
-                print("📋 Secondary Trait: " .. secondaryTrait)
+                -- Hiển thị trait hiện tại
+                local primaryTrait, secondaryTrait = checkCurrentTraits()
+                print("Trait hiện tại: Primary = " .. primaryTrait .. ", Secondary = " .. secondaryTrait)
                 break
             end
         end
     end
 })
 
--- Dropdown để chọn Trait
+-- Dropdown để chọn trait
 TraitRerollSection:AddDropdown("TraitDropdown", {
     Title = "Choose Trait",
     Values = {"Seraph", "Capitalist", "Duplicator", "Soversign"},
@@ -5549,18 +5491,18 @@ TraitRerollSection:AddDropdown("TraitDropdown", {
     Callback = function(Values)
         selectedTraits = Values
         
-        local selectedTraitsText = ""
+        local selectedText = ""
         for trait, isSelected in pairs(Values) do
             if isSelected then
-                selectedTraitsText = selectedTraitsText .. trait .. ", "
+                selectedText = selectedText .. trait .. ", "
             end
         end
         
-        if selectedTraitsText ~= "" then
-            selectedTraitsText = selectedTraitsText:sub(1, -3) -- Xóa dấu phẩy và khoảng trắng cuối
-            print("🎯 Trait mục tiêu: " .. selectedTraitsText)
+        if selectedText ~= "" then
+            selectedText = selectedText:sub(1, -3)
+            print("Đã chọn trait: " .. selectedText)
         else
-            print("⚠️ Chưa chọn trait mục tiêu nào")
+            print("Chưa chọn trait nào")
         end
     end
 })
@@ -5570,78 +5512,94 @@ TraitRerollSection:AddToggle("RollTraitToggle", {
     Title = "Roll Trait",
     Default = false,
     Callback = function(Value)
-        isTraitRolling = Value
+        autoRollTraitEnabled = Value
         
         if Value then
-            if not selectedUnitForTrait then
-                print("⚠️ Vui lòng chọn unit trước khi bật Roll Trait")
+            if not selectedUnitPath then
+                print("⚠️ Vui lòng chọn unit trước")
                 TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
                 return
             end
             
-            if not selectedTraits or not next(selectedTraits) then
+            if not next(selectedTraits) then
                 print("⚠️ Vui lòng chọn ít nhất một trait mục tiêu")
                 TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
                 return
             end
             
-            print("🔄 Bắt đầu roll trait cho " .. selectedUnitForTrait.Name)
+            print("🔄 Bắt đầu roll trait cho " .. selectedUnit)
             
-            -- Hủy vòng lặp cũ nếu có
-            if traitRollLoop then
-                traitRollLoop:Disconnect()
-                traitRollLoop = nil
+            -- Tạo vòng lặp roll trait
+            if autoRollTraitLoop then
+                autoRollTraitLoop:Disconnect()
+                autoRollTraitLoop = nil
             end
             
-            -- Tạo vòng lặp roll trait mới
             spawn(function()
-                while isTraitRolling and wait(0.5) do
-                    if not selectedUnitForTrait then
-                        print("⚠️ Unit không còn tồn tại")
-                        isTraitRolling = false
+                while autoRollTraitEnabled and wait(0.5) do
+                    -- Kiểm tra trait hiện tại
+                    local primaryTrait, secondaryTrait = checkCurrentTraits()
+                    
+                    -- Kiểm tra nếu đã có trait mong muốn
+                    if isDesiredTrait(primaryTrait) or isDesiredTrait(secondaryTrait) then
+                        print("✅ Đã roll được trait mong muốn!")
+                        print("Primary: " .. primaryTrait .. ", Secondary: " .. secondaryTrait)
+                        
+                        -- Tắt auto roll
+                        autoRollTraitEnabled = false
                         TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
                         break
+                    else
+                        -- Hiển thị trait hiện tại và tiếp tục roll
+                        print("🔄 Reroll... (Primary: " .. primaryTrait .. ", Secondary: " .. secondaryTrait .. ")")
+                        rerollTrait()
                     end
-                    
-                    -- Kiểm tra nếu đã đạt được trait mục tiêu
-                    if checkIfTraitReached(selectedUnitForTrait) then
-                        print("✅ Đã đạt được trait mục tiêu! Dừng roll")
-                        isTraitRolling = false
-                        TraitRerollSection:GetComponent("RollTraitToggle"):Set(false)
-                        break
-                    end
-                    
-                    -- Reroll trait
-                    rerollTrait(selectedUnitForTrait)
-                    
-                    -- Hiển thị trait hiện tại sau mỗi lần roll
-                    wait(0.2)
-                    local primaryTrait, secondaryTrait = checkUnitTraits(selectedUnitForTrait)
-                    print("🔄 Roll: Primary=" .. primaryTrait .. ", Secondary=" .. secondaryTrait)
                 end
             end)
         else
-            print("⏹️ Đã dừng roll trait")
+            print("Đã dừng roll trait")
             
-            -- Hủy vòng lặp nếu có
-            if traitRollLoop then
-                traitRollLoop:Disconnect()
-                traitRollLoop = nil
+            if autoRollTraitLoop then
+                autoRollTraitLoop:Disconnect()
+                autoRollTraitLoop = nil
             end
         end
     end
 })
 
--- Nút Refresh để làm mới danh sách units
+-- Nút Refresh
 TraitRerollSection:AddButton({
     Title = "Refresh Units",
     Callback = function()
-        print("🔄 Đang làm mới danh sách units...")
-        scanUnitsCollection()
-        unitDropdown:SetValues(getUnitNamesList())
-        print("✅ Đã làm mới danh sách units")
+        local units = scanUnitsCollection()
+        local unitNames = {}
+        
+        for _, unit in ipairs(units) do
+            table.insert(unitNames, unit.name)
+        end
+        
+        -- Cập nhật dropdown
+        unitDropdown:SetValues(unitNames)
+        print("Đã làm mới danh sách unit")
+        
+        -- Hiển thị trait của unit đã chọn nếu có
+        if selectedUnitPath then
+            local primaryTrait, secondaryTrait = checkCurrentTraits()
+            print("Trait hiện tại: Primary = " .. primaryTrait .. ", Secondary = " .. secondaryTrait)
+        end
     end
 })
 
--- In thông báo khi hoàn tất
-print("HT Hub | Anime Rangers X đã được tải thành công!")
+-- Khởi tạo danh sách unit lần đầu
+spawn(function()
+    wait(3) -- Đợi một chút để script khởi động hoàn tất
+    local units = scanUnitsCollection()
+    local unitNames = {}
+    
+    for _, unit in ipairs(units) do
+        table.insert(unitNames, unit.name)
+    end
+    
+    -- Cập nhật dropdown
+    unitDropdown:SetValues(unitNames)
+end)

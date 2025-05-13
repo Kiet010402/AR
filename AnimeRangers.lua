@@ -734,6 +734,256 @@ local UnitTab = Window:AddTab({
     Icon = "rbxassetid://7743866529"
 })
 
+-- Thêm section Trait Reroll trong tab Unit
+local TraitRerollSection = UnitTab:AddSection("Trait Reroll")
+
+-- Biến lưu trạng thái Trait Reroll
+local selectedUnit = nil
+local selectedTraits = {}
+local isRollingTrait = false
+local rollTraitLoop = nil
+
+-- Hàm để quét danh sách unit từ Collection
+local function scanUnitsFromCollection()
+    local player = game:GetService("Players").LocalPlayer
+    local playerName = player.Name
+    local unitList = {}
+    
+    local success, result = pcall(function()
+        local collectionPath = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data", 2):WaitForChild(playerName, 2):WaitForChild("Collection", 2)
+        if not collectionPath then return {} end
+        
+        for _, unit in pairs(collectionPath:GetChildren()) do
+            if unit:IsA("Folder") or unit:IsA("Configuration") then
+                local level = unit:FindFirstChild("Level")
+                local levelValue = level and level.Value or 0
+                
+                -- Thêm unit vào danh sách với format tên và level
+                table.insert(unitList, {
+                    name = unit.Name,
+                    displayName = unit.Name .. " Lv: " .. levelValue,
+                    ref = unit
+                })
+            end
+        end
+        
+        -- Sắp xếp theo level cao đến thấp
+        table.sort(unitList, function(a, b)
+            local levelA = a.ref:FindFirstChild("Level")
+            local levelB = b.ref:FindFirstChild("Level")
+            
+            local valueA = levelA and levelA.Value or 0
+            local valueB = levelB and levelB.Value or 0
+            
+            return valueA > valueB
+        end)
+        
+        return unitList
+    end)
+    
+    if not success then
+        warn("Lỗi khi quét Collection: " .. tostring(result))
+        return {}
+    end
+    
+    return result
+end
+
+-- Hàm để reroll trait
+local function rerollTrait(unitRef)
+    if not unitRef then return false end
+    
+    local success, result = pcall(function()
+        local rerollRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote", 2):WaitForChild("Server", 2):WaitForChild("Gambling", 2):WaitForChild("RerollTrait", 2)
+        
+        if rerollRemote then
+            local args = {
+                unitRef,
+                "Reroll",
+                "Main",
+                "Shards"
+            }
+            
+            rerollRemote:FireServer(unpack(args))
+            return true
+        end
+        
+        return false
+    end)
+    
+    if not success then
+        warn("Lỗi khi reroll trait: " .. tostring(result))
+        return false
+    end
+    
+    return result
+end
+
+-- Hàm để kiểm tra trait hiện tại
+local function checkCurrentTraits(unitRef)
+    if not unitRef then return nil, nil end
+    
+    local primaryTrait = unitRef:FindFirstChild("PrimaryTrait")
+    local secondaryTrait = unitRef:FindFirstChild("SecondaryTrait")
+    
+    local primary = primaryTrait and primaryTrait.Value or "None"
+    local secondary = secondaryTrait and secondaryTrait.Value or "None"
+    
+    return primary, secondary
+end
+
+-- Hàm kiểm tra xem trait hiện tại có phải là trait mong muốn không
+local function hasDesiredTrait(primary, secondary)
+    if #selectedTraits == 0 then return false end
+    
+    for _, trait in pairs(selectedTraits) do
+        if primary == trait or secondary == trait then
+            return true
+        end
+    end
+    
+    return false
+end
+
+-- Danh sách unit ban đầu
+local unitOptions = {}
+local displayOptions = {}
+
+-- Quét units ban đầu
+local unitCollection = scanUnitsFromCollection()
+for _, unit in ipairs(unitCollection) do
+    table.insert(unitOptions, unit)
+    table.insert(displayOptions, unit.displayName)
+end
+
+-- Dropdown để chọn Unit
+local unitDropdown = TraitRerollSection:AddDropdown("UnitDropdown", {
+    Title = "Choose Unit",
+    Values = displayOptions,
+    Multi = false,
+    Default = "",
+    Callback = function(Value)
+        for _, unit in ipairs(unitOptions) do
+            if unit.displayName == Value then
+                selectedUnit = unit.ref
+                print("Đã chọn unit: " .. unit.name)
+                break
+            end
+        end
+    end
+})
+
+-- Dropdown để chọn Trait
+TraitRerollSection:AddDropdown("TraitDropdown", {
+    Title = "Choose Trait",
+    Values = {"Seraph", "Capitalist", "Duplicator", "Soversign"},
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedTraits = {}
+        for trait, selected in pairs(Values) do
+            if selected then
+                table.insert(selectedTraits, trait)
+            end
+        end
+        
+        print("Các trait đã chọn: " .. table.concat(selectedTraits, ", "))
+    end
+})
+
+-- Toggle Roll Trait
+TraitRerollSection:AddToggle("RollTraitToggle", {
+    Title = "Roll Trait",
+    Default = false,
+    Callback = function(Value)
+        isRollingTrait = Value
+        ConfigSystem.CurrentConfig.RollTraitEnabled = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            if not selectedUnit then
+                print("Vui lòng chọn unit trước!")
+                return
+            end
+            
+            if #selectedTraits == 0 then
+                print("Vui lòng chọn ít nhất một trait mong muốn!")
+                return
+            end
+            
+            print("Bắt đầu roll trait cho " .. selectedUnit.Name)
+            
+            -- Hủy vòng lặp cũ nếu có
+            if rollTraitLoop then
+                rollTraitLoop:Disconnect()
+                rollTraitLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            rollTraitLoop = spawn(function()
+                local rollCount = 0
+                while isRollingTrait do
+                    -- Kiểm tra trait hiện tại
+                    local primary, secondary = checkCurrentTraits(selectedUnit)
+                    
+                    -- Hiển thị trạng thái hiện tại
+                    rollCount = rollCount + 1
+                    print("Roll #" .. rollCount .. " - Primary: " .. primary .. ", Secondary: " .. secondary)
+                    
+                    -- Kiểm tra nếu đã đạt được trait mong muốn
+                    if hasDesiredTrait(primary, secondary) then
+                        print("🎉 Đã roll được trait mong muốn! Primary: " .. primary .. ", Secondary: " .. secondary)
+                        isRollingTrait = false
+                        break
+                    end
+                    
+                    -- Reroll nếu chưa đạt được trait mong muốn
+                    rerollTrait(selectedUnit)
+                    
+                    -- Đợi một khoảng thời gian ngắn để tránh spam quá nhiều
+                    wait(0.1)
+                end
+                
+                -- Cập nhật trạng thái toggle
+                if not isRollingTrait and TraitRerollSection._components.RollTraitToggle.Set then
+                    TraitRerollSection._components.RollTraitToggle:Set(false)
+                end
+            end)
+        else
+            print("Đã dừng roll trait")
+            
+            -- Hủy vòng lặp nếu có
+            if rollTraitLoop then
+                rollTraitLoop:Disconnect()
+                rollTraitLoop = nil
+            end
+        end
+    end
+})
+
+-- Nút Refresh
+TraitRerollSection:AddButton({
+    Title = "Refresh Units",
+    Callback = function()
+        -- Quét lại danh sách unit
+        unitOptions = {}
+        displayOptions = {}
+        
+        local unitCollection = scanUnitsFromCollection()
+        for _, unit in ipairs(unitCollection) do
+            table.insert(unitOptions, unit)
+            table.insert(displayOptions, unit.displayName)
+        end
+        
+        -- Cập nhật dropdown
+        if unitDropdown and unitDropdown.Set then
+            unitDropdown:SetValues(displayOptions)
+        end
+        
+        print("Đã làm mới danh sách unit!")
+    end
+})
+
 -- Tạo tab Shop
 local ShopTab = Window:AddTab({
     Title = "Shop",

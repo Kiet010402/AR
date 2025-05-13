@@ -5254,12 +5254,55 @@ local function scanUnitCollection()
             return {}
         end
         
+        -- Tạo bản đồ đếm số lượng unit trùng tên
+        local unitCountMap = {}
+        
+        -- Quét lần đầu để đếm số lượng unit cùng tên
         for _, unit in pairs(collectionPath:GetChildren()) do
             local unitName = unit.Name
             local level = unit:FindFirstChild("Level") and unit.Level.Value or 0
             
-            -- Tạo key hiển thị gồm tên và level
-            local displayKey = unitName .. " Lv: " .. level
+            local baseKey = unitName .. " Lv: " .. level
+            unitCountMap[baseKey] = (unitCountMap[baseKey] or 0) + 1
+        end
+        
+        -- Quét lần thứ hai để tạo key hiển thị duy nhất
+        local unitIndexMap = {} -- Bản đồ lưu index hiện tại của mỗi loại unit
+        
+        for _, unit in pairs(collectionPath:GetChildren()) do
+            local unitName = unit.Name
+            local level = unit:FindFirstChild("Level") and unit.Level.Value or 0
+            
+            local baseKey = unitName .. " Lv: " .. level
+            
+            -- Khởi tạo index nếu chưa tồn tại
+            if not unitIndexMap[baseKey] then
+                unitIndexMap[baseKey] = 0
+            end
+            
+            -- Tăng index lên 1
+            unitIndexMap[baseKey] = unitIndexMap[baseKey] + 1
+            
+            -- Tạo key hiển thị
+            local displayKey = baseKey
+            
+            -- Tìm thêm thuộc tính phụ để phân biệt
+            local primaryTrait = unit:FindFirstChild("PrimaryTrait") and unit.PrimaryTrait.Value or "None"
+            local secondaryTrait = unit:FindFirstChild("SecondaryTrait") and unit.SecondaryTrait.Value or "None"
+            
+            -- Nếu có trait, thêm vào key để dễ phân biệt
+            if primaryTrait ~= "None" or secondaryTrait ~= "None" then
+                displayKey = displayKey .. " (" .. primaryTrait
+                if secondaryTrait ~= "None" then
+                    displayKey = displayKey .. ", " .. secondaryTrait
+                end
+                displayKey = displayKey .. ")"
+            end
+            
+            -- Nếu có nhiều unit trùng tên, thêm index vào cuối
+            if unitCountMap[baseKey] > 1 then
+                displayKey = displayKey .. " #" .. unitIndexMap[baseKey]
+            end
             
             -- Lưu vào cache để sử dụng sau
             unitCollectionCache[displayKey] = unit

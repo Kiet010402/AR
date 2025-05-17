@@ -711,9 +711,9 @@ local InGameTab = Window:AddTab({
 })
 
 
--- Tạo tab Event
-local EventTab = Window:AddTab({
-    Title = "Event",
+-- Tạo tab Portal
+local PortalTab = Window:AddTab({
+    Title = "Portal",
     Icon = "rbxassetid://7734068321"
 })
 
@@ -1911,7 +1911,7 @@ RangerSection:AddDropdown("RangerMapDropdown", {
 -- Dropdown để chọn Act
 RangerSection:AddDropdown("ActDropdown", {
     Title = "Act",
-    Values = {"RangerStage1", "RangerStage2", "RangerStage3"},
+    Values = {"RangerStage1", "RangerStage2", "RangerStage3", "RangerStage4", "RangerStage5"},
     Multi = true,
     Default = ConfigSystem.CurrentConfig.SelectedActs or {RangerStage1 = true},
     Callback = function(Values)
@@ -5171,6 +5171,123 @@ TraitRerollSection:AddButton({
             print("✅ Đã làm mới danh sách unit: " .. #newUnitList .. " unit")
         else
             print("❌ Không tìm thấy unit nào trong Collection")
+        end
+    end
+})
+
+-- Thêm section Portal trong tab Portal
+local PortalSection = PortalTab:AddSection("Portal")
+
+-- Biến lưu trạng thái Portal
+local selectedPortals = {}
+local autoOpenPortalEnabled = false
+local autoOpenPortalLoop = nil
+
+-- Dropdown để chọn Portal
+PortalSection:AddDropdown("PortalDropdown", {
+    Title = "Choose Portal",
+    Values = {"Ghoul City Portal I", "Ghoul City Portal II", "Ghoul City Portal III"},
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        selectedPortals = Values
+        ConfigSystem.CurrentConfig.SelectedPortals = Values
+        ConfigSystem.SaveConfig()
+        
+        local selectedPortalsList = {}
+        for portal, isSelected in pairs(Values) do
+            if isSelected then
+                table.insert(selectedPortalsList, portal)
+            end
+        end
+        
+        if #selectedPortalsList > 0 then
+            print("Đã chọn portal: " .. table.concat(selectedPortalsList, ", "))
+        else
+            print("Chưa chọn portal nào")
+        end
+    end
+})
+
+-- Hàm để mở Portal
+local function openPortal(portalName)
+    local success, err = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local portalItem = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data"):WaitForChild(playerName):WaitForChild("Items"):WaitForChild(portalName)
+        
+        if portalItem then
+            local args = {portalItem}
+            game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Lobby"):WaitForChild("ItemUse"):FireServer(unpack(args))
+            print("Đã mở: " .. portalName)
+            return true
+        else
+            print("Không tìm thấy portal: " .. portalName)
+            return false
+        end
+    end)
+    
+    if not success then
+        warn("Lỗi khi mở portal: " .. tostring(err))
+        return false
+    end
+    
+    return success
+end
+
+-- Toggle Auto Open Portal
+PortalSection:AddToggle("OpenPortalToggle", {
+    Title = "Open Portal",
+    Default = false,
+    Callback = function(Value)
+        autoOpenPortalEnabled = Value
+        ConfigSystem.CurrentConfig.AutoOpenPortal = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            local hasSelectedPortal = false
+            for _, isSelected in pairs(selectedPortals) do
+                if isSelected then
+                    hasSelectedPortal = true
+                    break
+                end
+            end
+            
+            if not hasSelectedPortal then
+                print("Vui lòng chọn ít nhất một portal trước khi bật Open Portal")
+                -- Reset toggle về false
+                PortalSection:GetComponent("OpenPortalToggle"):Set(false)
+                return
+            end
+            
+            print("Auto Open Portal đã được bật")
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoOpenPortalLoop then
+                autoOpenPortalLoop:Disconnect()
+                autoOpenPortalLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoOpenPortalEnabled and wait(1) do
+                    for portal, isSelected in pairs(selectedPortals) do
+                        if isSelected then
+                            openPortal(portal)
+                            wait(0.5) -- Đợi 0.5 giây giữa các lần mở portal
+                        end
+                    end
+                    
+                    wait(10) -- Đợi 10 giây trước khi bắt đầu vòng lặp mới
+                end
+            end)
+        else
+            print("Auto Open Portal đã được tắt")
+            
+            -- Hủy vòng lặp nếu có
+            if autoOpenPortalLoop then
+                autoOpenPortalLoop:Disconnect()
+                autoOpenPortalLoop = nil
+            end
         end
     end
 })

@@ -2540,15 +2540,8 @@ InGameSection:AddToggle("AutoPlayToggle", {
         -- Chỉ toggle khi trạng thái mong muốn khác với trạng thái hiện tại
         if Value ~= actualState then
             if Value then
-                print("Auto Play sẽ bật sau 3 giây...")
-                -- Đợi 3 giây trước khi kích hoạt Auto Play
-                spawn(function()
-                    wait(3)
-                    if autoPlayEnabled then -- Kiểm tra lại xem có còn bật không sau 3 giây
-                        toggleAutoPlay()
-                        print("Auto Play đã được bật")
-                    end
-                end)
+                toggleAutoPlay()
+                print("Auto Play đã được bật")
             else
                 toggleAutoPlay()
                 print("Auto Play đã được tắt")

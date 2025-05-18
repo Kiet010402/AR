@@ -1554,7 +1554,7 @@ end
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({InfoTab, PlayTab, ShopTab, SettingsTab}) do
+    for _, tab in pairs({InfoTab, PlayTab, ShopTab, SettingsTab, PortalTab, UnitTab, InGameTab, WebhookTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then
@@ -2179,7 +2179,7 @@ RangerSection:AddToggle("AutoLeaveToggle", {
             -- Tạo vòng lặp tối ưu để kiểm tra folders
             autoLeaveLoop = spawn(function()
                 local checkInterval = 1 -- Kiểm tra mỗi 1 giây
-                local maxEmptyTime = 15 -- Thời gian tối đa folder trống trước khi leave
+                local maxEmptyTime = 10 -- Thời gian tối đa folder trống trước khi leave
                 local emptyTime = 0
                 
                 while autoLeaveEnabled do
@@ -5251,6 +5251,14 @@ PortalSection:AddToggle("OpenPortalToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
+            -- Kiểm tra nếu người chơi đang ở trong map
+            if isPlayerInMap() then
+                print("Đang ở trong map, không thể kích hoạt Open Portal. Vui lòng trở về lobby trước.")
+                -- Reset toggle về false
+                PortalSection:GetComponent("OpenPortalToggle"):Set(false)
+                return
+            end
+            
             local hasSelectedPortal = false
             for _, isSelected in pairs(selectedPortals) do
                 if isSelected then
@@ -5277,6 +5285,14 @@ PortalSection:AddToggle("OpenPortalToggle", {
             -- Tạo vòng lặp mới
             spawn(function()
                 while autoOpenPortalEnabled and wait(1) do
+                    -- Kiểm tra liên tục xem người chơi có vào map không
+                    if isPlayerInMap() then
+                        print("Đã phát hiện người chơi vào map, tự động tắt Open Portal")
+                        autoOpenPortalEnabled = false
+                        PortalSection:GetComponent("OpenPortalToggle"):Set(false)
+                        break
+                    end
+                    
                     for portal, isSelected in pairs(selectedPortals) do
                         if isSelected then
                             openPortal(portal)

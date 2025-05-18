@@ -486,6 +486,13 @@ ConfigSystem.DefaultConfig = {
     
     -- Cài đặt Auto Movement
     AutoMovement = false,
+    
+    -- Cài đặt Portal
+    SelectedPortals = {},
+    AutoOpenPortal = false,
+    
+    -- Cài đặt RC Exchange
+    AutoBuyQuinque = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -801,7 +808,7 @@ local InfoSection = InfoTab:AddSection("Thông tin")
 
 InfoSection:AddParagraph({
     Title = "Anime Rangers X",
-    Content = "Phiên bản: 0.5 Beta\nTrạng thái: Hoạt động"
+    Content = "Phiên bản: 0.6 Beta\nTrạng thái: Hoạt động"
 })
 
 InfoSection:AddParagraph({
@@ -5190,8 +5197,8 @@ TraitRerollSection:AddButton({
 local PortalSection = PortalTab:AddSection("Portal")
 
 -- Biến lưu trạng thái Portal
-local selectedPortals = {}
-local autoOpenPortalEnabled = false
+local selectedPortals = ConfigSystem.CurrentConfig.SelectedPortals or {}
+local autoOpenPortalEnabled = ConfigSystem.CurrentConfig.AutoOpenPortal or false
 local autoOpenPortalLoop = nil
 
 -- Dropdown để chọn Portal
@@ -5199,7 +5206,7 @@ PortalSection:AddDropdown("PortalDropdown", {
     Title = "Choose Portal",
     Values = {"Ghoul City Portal I", "Ghoul City Portal II", "Ghoul City Portal III"},
     Multi = true,
-    Default = {},
+    Default = ConfigSystem.CurrentConfig.SelectedPortals or {},
     Callback = function(Values)
         selectedPortals = Values
         ConfigSystem.CurrentConfig.SelectedPortals = Values
@@ -5248,7 +5255,7 @@ end
 -- Toggle Auto Open Portal
 PortalSection:AddToggle("OpenPortalToggle", {
     Title = "Open Portal",
-    Default = false,
+    Default = ConfigSystem.CurrentConfig.AutoOpenPortal or false,
     Callback = function(Value)
         autoOpenPortalEnabled = Value
         ConfigSystem.CurrentConfig.AutoOpenPortal = Value
@@ -5314,6 +5321,66 @@ PortalSection:AddToggle("OpenPortalToggle", {
             if autoOpenPortalLoop then
                 autoOpenPortalLoop:Disconnect()
                 autoOpenPortalLoop = nil
+            end
+        end
+    end
+})
+
+-- Thêm section RC Exchange trong tab Shop
+local RCExchangeSection = ShopTab:AddSection("RC Exchange")
+
+-- Biến lưu trạng thái Buy Quinque
+local autoBuyQuinqueEnabled = ConfigSystem.CurrentConfig.AutoBuyQuinque or false
+local autoBuyQuinqueLoop = nil
+
+-- Hàm để mua Quinque Box
+local function buyQuinqueBox()
+    local success, err = pcall(function()
+        local args = {
+            "Quinque Box",
+            1
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Gameplay"):WaitForChild("RCExchange"):FireServer(unpack(args))
+        print("Đã mua Quinque Box")
+    end)
+    
+    if not success then
+        warn("Lỗi khi mua Quinque Box: " .. tostring(err))
+    end
+end
+
+-- Toggle Buy Quinque
+RCExchangeSection:AddToggle("BuyQuinqueToggle", {
+    Title = "Buy Quinque",
+    Default = autoBuyQuinqueEnabled,
+    Callback = function(Value)
+        autoBuyQuinqueEnabled = Value
+        ConfigSystem.CurrentConfig.AutoBuyQuinque = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            print("Auto Buy Quinque đã được bật")
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoBuyQuinqueLoop then
+                autoBuyQuinqueLoop:Disconnect()
+                autoBuyQuinqueLoop = nil
+            end
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoBuyQuinqueEnabled do
+                    buyQuinqueBox()
+                    wait(0.5) -- Đợi 0.5 giây giữa các lần mua
+                end
+            end)
+        else
+            print("Auto Buy Quinque đã được tắt")
+            
+            -- Hủy vòng lặp nếu có
+            if autoBuyQuinqueLoop then
+                autoBuyQuinqueLoop:Disconnect()
+                autoBuyQuinqueLoop = nil
             end
         end
     end

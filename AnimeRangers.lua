@@ -2135,6 +2135,12 @@ end
 
 -- Hàm kiểm tra EnemyT folder và Agent folder
 local function checkEnemyFolder()
+    -- Kiểm tra xem người chơi có đang ở Lobby không
+    if workspace:FindFirstChild("Lobby") and game.Players.LocalPlayer.Character and workspace.Lobby:IsAncestorOf(game.Players.LocalPlayer.Character) then
+        print("Người chơi đang ở Lobby, Auto Leave sẽ không kích hoạt")
+        return false
+    end
+    
     -- Kiểm tra thật nhanh trước với pcall để tránh lỗi
     if not workspace:FindFirstChild("Agent") then
         return true

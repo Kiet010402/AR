@@ -6,8 +6,8 @@ local allowedPlaceId = 72829404259339
 
 -- Hệ thống kiểm soát logs
 local LogSystem = {
-    Enabled = false, -- Mặc định tắt logs
-    WarningsEnabled = false -- Mặc định tắt cả warnings
+    Enabled = true, -- Mặc định tắt logs
+    WarningsEnabled = true -- Mặc định tắt cả warnings
 }
 
 -- Ghi đè hàm print để kiểm soát logs
@@ -406,8 +406,8 @@ ConfigSystem.DefaultConfig = {
     UITheme = "Amethyst",
     
     -- Cài đặt log
-    LogsEnabled = false,
-    WarningsEnabled = false,
+    LogsEnabled = true,
+    WarningsEnabled = true,
     
     -- Cài đặt Shop/Summon
     SummonAmount = "x1",
@@ -493,6 +493,9 @@ ConfigSystem.DefaultConfig = {
     
     -- Cài đặt RC Exchange
     AutoBuyQuinque = false,
+    
+    -- Cài đặt Portal
+    AutoStartPortal = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -5193,6 +5196,8 @@ local PortalSection = PortalTab:AddSection("Portal")
 local selectedPortals = ConfigSystem.CurrentConfig.SelectedPortals or {}
 local autoOpenPortalEnabled = ConfigSystem.CurrentConfig.AutoOpenPortal or false
 local autoOpenPortalLoop = nil
+local autoStartPortalEnabled = ConfigSystem.CurrentConfig.AutoStartPortal or false
+local autoStartPortalLoop = nil
 
 -- Dropdown để chọn Portal
 PortalSection:AddDropdown("PortalDropdown", {
@@ -5374,6 +5379,81 @@ RCExchangeSection:AddToggle("BuyQuinqueToggle", {
             if autoBuyQuinqueLoop then
                 autoBuyQuinqueLoop:Disconnect()
                 autoBuyQuinqueLoop = nil
+            end
+        end
+    end
+})
+
+-- Hàm để bắt đầu Portal
+local function startPortal()
+    local success, err = pcall(function()
+        local args = {
+            "Start"
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild("Lobby"):WaitForChild("PortalEvent"):FireServer(unpack(args))
+        print("Đã gửi lệnh Start Portal")
+    end)
+    
+    if not success then
+        warn("Lỗi khi bắt đầu Portal: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
+-- Toggle Start Portal
+PortalSection:AddToggle("StartPortalToggle", {
+    Title = "Start Portal",
+    Default = autoStartPortalEnabled,
+    Callback = function(Value)
+        autoStartPortalEnabled = Value
+        ConfigSystem.CurrentConfig.AutoStartPortal = Value
+        ConfigSystem.SaveConfig()
+        
+        if Value then
+            -- Kiểm tra nếu người chơi đang ở trong map
+            if isPlayerInMap() then
+                print("Đang ở trong map, không thể kích hoạt Start Portal. Vui lòng trở về lobby trước.")
+                -- Reset toggle về false
+                PortalSection:GetComponent("StartPortalToggle"):Set(false)
+                return
+            end
+            
+            print("Auto Start Portal đã được bật")
+            
+            -- Hủy vòng lặp cũ nếu có
+            if autoStartPortalLoop then
+                autoStartPortalLoop:Disconnect()
+                autoStartPortalLoop = nil
+            end
+            
+            -- Gọi ngay một lần
+            startPortal()
+            
+            -- Tạo vòng lặp mới
+            spawn(function()
+                while autoStartPortalEnabled and wait(1) do
+                    -- Kiểm tra liên tục xem người chơi có vào map không
+                    if isPlayerInMap() then
+                        print("Đã phát hiện người chơi vào map, tự động tắt Start Portal")
+                        autoStartPortalEnabled = false
+                        PortalSection:GetComponent("StartPortalToggle"):Set(false)
+                        break
+                    end
+                    
+                    -- Gửi lệnh Start Portal mỗi 3 giây
+                    startPortal()
+                    wait(3) -- Đợi 3 giây giữa các lần gửi lệnh Start
+                end
+            end)
+        else
+            print("Auto Start Portal đã được tắt")
+            
+            -- Hủy vòng lặp nếu có
+            if autoStartPortalLoop then
+                autoStartPortalLoop:Disconnect()
+                autoStartPortalLoop = nil
             end
         end
     end

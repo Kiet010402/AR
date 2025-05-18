@@ -2183,27 +2183,21 @@ RangerSection:AddToggle("AutoLeaveToggle", {
                 local emptyTime = 0
                 
                 while autoLeaveEnabled do
-                    -- Chỉ kiểm tra nếu đang ở trong map Ranger Stage
-                    if isPlayerInRangerStageMap() then
-                        local areEmpty = checkEnemyFolder()
-                        
-                        if areEmpty then
-                            emptyTime = emptyTime + checkInterval
-                            if emptyTime >= maxEmptyTime then
-                                leaveMap()
-                                break -- Thoát vòng lặp sau khi leave
-                            end
-                            print("EnemyT và Agent folder trống: " .. emptyTime .. "/" .. maxEmptyTime .. " giây")
-                        else
-                            -- Reset counter nếu folders không trống
-                            if emptyTime > 0 then
-                                emptyTime = 0
-                                print("Folders không còn trống, reset bộ đếm")
-                            end
+                    local areEmpty = checkEnemyFolder()
+                    
+                    if areEmpty then
+                        emptyTime = emptyTime + checkInterval
+                        if emptyTime >= maxEmptyTime then
+                            leaveMap()
+                            break -- Thoát vòng lặp sau khi leave
                         end
+                        print("EnemyT và Agent folder trống: " .. emptyTime .. "/" .. maxEmptyTime .. " giây")
                     else
-                        -- Reset counter khi không ở trong map
-                        emptyTime = 0
+                        -- Reset counter nếu folders không trống
+                        if emptyTime > 0 then
+                            emptyTime = 0
+                            print("Folders không còn trống, reset bộ đếm")
+                        end
                     end
                     
                     wait(checkInterval)
@@ -2225,6 +2219,7 @@ RangerSection:AddToggle("AutoLeaveToggle", {
         end
     end
 })
+
 -- Thêm section Challenge trong tab Play
 local ChallengeSection = PlayTab:AddSection("Challenge")
 

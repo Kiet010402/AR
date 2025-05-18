@@ -2135,12 +2135,6 @@ end
 
 -- Hàm kiểm tra EnemyT folder và Agent folder
 local function checkEnemyFolder()
-    -- Kiểm tra xem người chơi có đang ở Lobby không
-    if workspace:FindFirstChild("Lobby") and game.Players.LocalPlayer.Character and workspace.Lobby:IsAncestorOf(game.Players.LocalPlayer.Character) then
-        print("Người chơi đang ở Lobby, Auto Leave sẽ không kích hoạt")
-        return false
-    end
-    
     -- Kiểm tra thật nhanh trước với pcall để tránh lỗi
     if not workspace:FindFirstChild("Agent") then
         return true
@@ -2174,7 +2168,7 @@ RangerSection:AddToggle("AutoLeaveToggle", {
         ConfigSystem.SaveConfig()
         
         if Value then
-            print("Auto Leave đã được bật. Sẽ tự động rời map nếu không có kẻ địch và agent trong 10 giây")
+            print("Auto Leave đã được bật. Sẽ tự động rời map nếu không có kẻ địch và agent trong 10 giây (chỉ khi đang ở trong map)")
             
             -- Hủy vòng lặp cũ nếu có
             if autoLeaveLoop then
@@ -2189,21 +2183,30 @@ RangerSection:AddToggle("AutoLeaveToggle", {
                 local emptyTime = 0
                 
                 while autoLeaveEnabled do
-                    local areEmpty = checkEnemyFolder()
-                    
-                    if areEmpty then
-                        emptyTime = emptyTime + checkInterval
-                        if emptyTime >= maxEmptyTime then
-                            leaveMap()
-                            break -- Thoát vòng lặp sau khi leave
+                    -- Chỉ kiểm tra khi người chơi đang ở trong map
+                    if isPlayerInMap() then
+                        local areEmpty = checkEnemyFolder()
+                        
+                        if areEmpty then
+                            emptyTime = emptyTime + checkInterval
+                            if emptyTime >= maxEmptyTime then
+                                leaveMap()
+                                break -- Thoát vòng lặp sau khi leave
+                            end
+                            print("EnemyT và Agent folder trống: " .. emptyTime .. "/" .. maxEmptyTime .. " giây")
+                        else
+                            -- Reset counter nếu folders không trống
+                            if emptyTime > 0 then
+                                emptyTime = 0
+                                print("Folders không còn trống, reset bộ đếm")
+                            end
                         end
-                        print("EnemyT và Agent folder trống: " .. emptyTime .. "/" .. maxEmptyTime .. " giây")
                     else
-                        -- Reset counter nếu folders không trống
+                        -- Reset counter nếu không ở trong map
                         if emptyTime > 0 then
                             emptyTime = 0
-                            print("Folders không còn trống, reset bộ đếm")
                         end
+                        -- Không cần print thông báo ở đây để tránh spam
                     end
                     
                     wait(checkInterval)

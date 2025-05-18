@@ -2179,7 +2179,7 @@ RangerSection:AddToggle("AutoLeaveToggle", {
             -- Tạo vòng lặp tối ưu để kiểm tra folders
             autoLeaveLoop = spawn(function()
                 local checkInterval = 1 -- Kiểm tra mỗi 1 giây
-                local maxEmptyTime = 10 -- Thời gian tối đa folder trống trước khi leave
+                local maxEmptyTime = 15 -- Thời gian tối đa folder trống trước khi leave
                 local emptyTime = 0
                 
                 while autoLeaveEnabled do
@@ -2528,11 +2528,18 @@ InGameSection:AddToggle("AutoPlayToggle", {
         
         -- Chỉ toggle khi trạng thái mong muốn khác với trạng thái hiện tại
         if Value ~= actualState then
-            toggleAutoPlay()
-            
             if Value then
-                print("Auto Play đã được bật")
+                print("Auto Play sẽ bật sau 3 giây...")
+                -- Đợi 3 giây trước khi kích hoạt Auto Play
+                spawn(function()
+                    wait(3)
+                    if autoPlayEnabled then -- Kiểm tra lại xem có còn bật không sau 3 giây
+                        toggleAutoPlay()
+                        print("Auto Play đã được bật")
+                    end
+                end)
             else
+                toggleAutoPlay()
                 print("Auto Play đã được tắt")
             end
         else

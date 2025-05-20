@@ -2307,13 +2307,13 @@ local function joinChallenge()
     -- Kiểm tra nếu đang ở Ranger Stage: Act 5 - Wings of the Abyss thì join ngay lập tức
     if isRangerStageAct5() then
         print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia ngay lập tức")
-        -- Tiếp tục thực hiện join mà không cần delay
-    end
-
-    -- Kiểm tra xem người chơi đã ở trong map chưa
-    if isPlayerInMap() then
-        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Challenge")
-        return false
+        -- Bỏ qua kiểm tra người chơi có đang ở trong map hay không
+    else
+        -- Chỉ kiểm tra xem người chơi đã ở trong map chưa nếu không phải Ranger Stage Act 5
+        if isPlayerInMap() then
+            print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Challenge")
+            return false
+        end
     end
 
     local success, err = pcall(function()

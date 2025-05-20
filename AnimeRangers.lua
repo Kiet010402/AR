@@ -2273,47 +2273,47 @@ local function isRangerStageAct5()
     local success, result = pcall(function()
         local player = game:GetService("Players").LocalPlayer
         if not player then return false end
-        
+
         -- Kiểm tra UI RewardsUI
         local rewardsUI = player.PlayerGui:FindFirstChild("RewardsUI")
         if not rewardsUI then return false end
-        
+
         local main = rewardsUI:FindFirstChild("Main")
         if not main then return false end
-        
+
         local leftSide = main:FindFirstChild("LeftSide")
         if not leftSide then return false end
-        
+
         -- Kiểm tra Mode (Ranger Stage)
         local mode = leftSide:FindFirstChild("Mode")
         if not mode or mode.Text ~= "Ranger Stage" then return false end
-        
+
         -- Kiểm tra Chapter (Act 5 - Wings of the Abyss)
         local chapter = leftSide:FindFirstChild("Chapter")
         if not chapter or chapter.Text ~= "Act 5 - Wings of the Abyss" then return false end
-        
+
         return true
     end)
-    
+
     if not success then
         warn("Lỗi khi kiểm tra Ranger Stage Act 5: " .. tostring(result))
         return false
     end
-    
+
     return result
 end
 
 local function joinChallenge()
-    -- Kiểm tra xem người chơi đã ở trong map chưa
-    if isPlayerInMap() then
-        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Challenge")
-        return false
-    end
-    
     -- Kiểm tra nếu đang ở Ranger Stage: Act 5 - Wings of the Abyss thì join ngay lập tức
     if isRangerStageAct5() then
         print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia ngay lập tức")
         -- Tiếp tục thực hiện join mà không cần delay
+    end
+
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join Challenge")
+        return false
     end
 
     local success, err = pcall(function()
@@ -2413,7 +2413,7 @@ ChallengeSection:AddToggle("AutoChallengeToggle", {
                     if isRangerStageAct5() and not isPlayerInMap() then
                         print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia ngay lập tức")
                         joinChallenge()
-                    -- Nếu không, thì chỉ thực hiện join challenge nếu người chơi không ở trong map
+                        -- Nếu không, thì chỉ thực hiện join challenge nếu người chơi không ở trong map
                     elseif not isPlayerInMap() then
                         -- Áp dụng time delay
                         print("Đợi " .. challengeTimeDelay .. " giây trước khi join Challenge")

@@ -2410,10 +2410,10 @@ ChallengeSection:AddToggle("AutoChallengeToggle", {
             spawn(function()
                 while autoChallengeEnabled and wait(10) do -- Thử join challenge mỗi 10 giây
                     -- Kiểm tra nếu đang ở Ranger Stage: Act 5 - Wings of the Abyss thì join ngay lập tức
-                    if isRangerStageAct5() and not isPlayerInMap() then
+                    if isRangerStageAct5() then
                         print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia ngay lập tức")
                         joinChallenge()
-                        -- Nếu không, thì chỉ thực hiện join challenge nếu người chơi không ở trong map
+                    -- Nếu không, thì chỉ thực hiện join challenge nếu người chơi không ở trong map
                     elseif not isPlayerInMap() then
                         -- Áp dụng time delay
                         print("Đợi " .. challengeTimeDelay .. " giây trước khi join Challenge")

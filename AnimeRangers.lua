@@ -1037,17 +1037,52 @@ local function toggleFriendOnly()
     end
 end
 
+-- Hàm để kiểm tra xem có phải đang ở màn hình rewards với mode Ranger Stage và Act 5 không
+local function isRangerStageAct5RewardsUI()
+    local success, result = pcall(function()
+        local player = game:GetService("Players").LocalPlayer
+        if not player then return false end
+
+        -- Kiểm tra UI RewardsUI
+        local rewardsUI = player.PlayerGui:FindFirstChild("RewardsUI")
+        if not rewardsUI then return false end
+
+        local main = rewardsUI:FindFirstChild("Main")
+        if not main then return false end
+
+        local leftSide = main:FindFirstChild("LeftSide")
+        if not leftSide then return false end
+
+        -- Kiểm tra Mode (Ranger Stage)
+        local mode = leftSide:FindFirstChild("Mode")
+        if not mode or mode.Text ~= "Ranger Stage" then return false end
+
+        -- Kiểm tra Chapter (Act 5 - Wings of the Abyss)
+        local chapter = leftSide:FindFirstChild("Chapter")
+        if not chapter or chapter.Text ~= "Act 5 - Wings of the Abyss" then return false end
+
+        return true
+    end)
+
+    if not success then
+        warn("Lỗi khi kiểm tra Ranger Stage Act 5 RewardsUI: " .. tostring(result))
+        return false
+    end
+
+    return result
+end
+
 -- Hàm để tự động tham gia map
 local function joinMap()
     -- Kiểm tra nếu đang ở Ranger Stage: Act 5 - Wings of the Abyss thì join ngay lập tức
-    if isRangerStageAct5() then
-        print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia Story ngay lập tức")
+    if isRangerStageAct5RewardsUI() then
+        print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia ngay lập tức")
         -- Bỏ qua kiểm tra người chơi có đang ở trong map hay không
     else
-        -- Kiểm tra xem người chơi đã ở trong map chưa
-        if isPlayerInMap() then
-            print("Đã phát hiện người chơi đang ở trong map, không thực hiện join map")
-            return false
+    -- Kiểm tra xem người chơi đã ở trong map chưa
+    if isPlayerInMap() then
+        print("Đã phát hiện người chơi đang ở trong map, không thực hiện join map")
+        return false
         end
     end
     
@@ -1191,7 +1226,7 @@ StorySection:AddToggle("FriendOnlyToggle", {
     end
 })
 
--- Toggle Auto Join Map
+-- Cập nhật Toggle Auto Join Map để kiểm tra và xử lý trường hợp Ranger Stage Act 5
 StorySection:AddToggle("AutoJoinMapToggle", {
     Title = "Auto Join Map",
     Default = ConfigSystem.CurrentConfig.AutoJoinMap or false,
@@ -1219,11 +1254,11 @@ StorySection:AddToggle("AutoJoinMapToggle", {
             -- Tạo vòng lặp Auto Join Map
             spawn(function()
                 while autoJoinMapEnabled and wait(10) do -- Thử join map mỗi 10 giây
-                    -- Kiểm tra nếu đang ở Ranger Stage: Act 5 - Wings of the Abyss thì join ngay lập tức
-                    if isRangerStageAct5() then
-                        print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss, tham gia Story ngay lập tức")
+                    -- Kiểm tra nếu đang ở màn hình Ranger Stage Act 5 thì join ngay lập tức
+                    if isRangerStageAct5RewardsUI() then
+                        print("Phát hiện Ranger Stage: Act 5 - Wings of the Abyss trên RewardsUI, tham gia ngay lập tức")
                         joinMap()
-                    -- Nếu không, chỉ thực hiện join map nếu người chơi không ở trong map
+                    -- Nếu không phải màn hình Ranger Stage Act 5, thì mới kiểm tra người chơi có đang ở trong map không
                     elseif not isPlayerInMap() then
                         -- Áp dụng time delay
                         print("Đợi " .. storyTimeDelay .. " giây trước khi join map")

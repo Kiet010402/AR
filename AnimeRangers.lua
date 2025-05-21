@@ -5353,7 +5353,7 @@ _G.EvolveSystem.scanUnits = function()
             local tag = unit:FindFirstChild("Tag") and unit.Tag.Value or nil
             
             -- Chỉ chọn những unit có EvolveTier trống và Lock được tích
-            if tag and evolveTier and evolveTier.Value == "" and lock and lock.Value == true then
+            if tag and evolveTier and evolveTier.Value == "" and lock and lock.Value == false then
                 local displayName = unitName .. " (Lv: " .. level .. ")"
                 
                 -- Lưu vào cache để sử dụng sau
@@ -5458,7 +5458,7 @@ _G.evolveUnitDropdown = EvolveTierSection:AddDropdown("EvolveUnitDropdown", {
         end
         
         if selectedUnitsText ~= "" then
-            selectedUnitsText = selectedUnitsText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
+            selectedUnitsText = selectedUnitsText:sub(1, -3)
             print("Đã chọn " .. selectedCount .. " unit cho evolve")
         else
             print("Không có unit nào được chọn cho evolve")

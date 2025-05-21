@@ -1079,8 +1079,8 @@ end
 -- Hàm lấy giá trị Level hiện tại từ DataValue
 local function getCurrentLevel()
     local levelValue = game:GetService("ReplicatedStorage"):FindFirstChild("Values")
-    and game:GetService("ReplicatedStorage").Values:FindFirstChild("Game")
-    and game:GetService("ReplicatedStorage").Values.Game:FindFirstChild("Level")
+        and game:GetService("ReplicatedStorage").Values:FindFirstChild("Game")
+        and game:GetService("ReplicatedStorage").Values.Game:FindFirstChild("Level")
 
     if levelValue then
         print("Current Level from DataValue:", levelValue.Value)
@@ -1103,7 +1103,7 @@ local function findAndJoinHighestStory()
     local chapterLevels = playerFolder and playerFolder:FindFirstChild("ChapterLevels")
 
     -- Map thứ tự ưu tiên
-    local mapOrder = {"OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM"}
+    local mapOrder = { "OnePiece", "Namek", "DemonSlayer", "Naruto", "OPM", "TokyoGhoul" }
     local highestMap, highestChapter = nil, nil
 
     if chapterLevels then
@@ -1137,7 +1137,8 @@ local function findAndJoinHighestStory()
 
         -- Thực hiện join map
         local function joinMap()
-            local Event = game:GetService("ReplicatedStorage"):FindFirstChild("Remote"):FindFirstChild("Server"):FindFirstChild("PlayRoom"):FindFirstChild("Event")
+            local Event = game:GetService("ReplicatedStorage"):FindFirstChild("Remote"):FindFirstChild("Server")
+            :FindFirstChild("PlayRoom"):FindFirstChild("Event")
             if not Event then
                 warn("Không tìm thấy Event để join map.")
                 return

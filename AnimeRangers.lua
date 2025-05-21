@@ -48,293 +48,8 @@ Fluent.Notify = function(options)
     }
 end
 
--- Hệ thống xác thực key
-local KeySystem = {}
-KeySystem.Keys = {
-    "HT_ANIME_RANGERS_ACCESS_5723", -- Key 1
-    "RANGER_PRO_ACCESS_9841",       -- Key 2
-    "PREMIUM_ANIME_ACCESS_3619"     -- Key 3
-}
-KeySystem.KeyFileName = "htkey_anime_rangers.txt"
-KeySystem.WebhookURL =
-"https://discord.com/api/webhooks/1348673902506934384/ZRMIlRzlQq9Hfnjgpu96GGF7jCG8mG1qqfya3ErW9YvbuIKOaXVomOgjg4tM_Xk57yAK" -- Thay bằng webhook của bạn
-
--- Hàm kiểm tra key đã lưu
-KeySystem.CheckSavedKey = function()
-    if not isfile then
-        return false, "Executor của bạn không hỗ trợ isfile/readfile"
-    end
-
-    if isfile(KeySystem.KeyFileName) then
-        local savedKey = readfile(KeySystem.KeyFileName)
-        for _, validKey in ipairs(KeySystem.Keys) do
-            if savedKey == validKey then
-                return true, "Key hợp lệ"
-            end
-        end
-        -- Nếu key không hợp lệ, xóa file
-        delfile(KeySystem.KeyFileName)
-    end
-
-    return false, "Key không hợp lệ hoặc chưa được lưu"
-end
-
--- Hàm lưu key
-KeySystem.SaveKey = function(key)
-    if not writefile then
-        return false, "Executor của bạn không hỗ trợ writefile"
-    end
-
-    writefile(KeySystem.KeyFileName, key)
-    return true, "Đã lưu key"
-end
-
--- Hàm gửi log đến webhook Discord
-KeySystem.SendWebhook = function(username, key, status)
-    if KeySystem.WebhookURL == "https://discord.com/api/webhooks/1348673902506934384/ZRMIlRzlQq9Hfnjgpu96GGF7jCG8mG1qqfya3ErW9YvbuIKOaXVomOgjg4tM_Xk57yAK" then
-        return -- Bỏ qua nếu webhook chưa được cấu hình
-    end
-
-    local HttpService = game:GetService("HttpService")
-    local data = {
-        ["content"] = "",
-        ["embeds"] = { {
-            ["title"] = "Anime Rangers X Script - Key Log",
-            ["description"] = "Người dùng đã sử dụng script",
-            ["type"] = "rich",
-            ["color"] = status and 65280 or 16711680,
-            ["fields"] = {
-                {
-                    ["name"] = "Username",
-                    ["value"] = username,
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Key Status",
-                    ["value"] = status and "Hợp lệ" or "Không hợp lệ",
-                    ["inline"] = true
-                },
-                {
-                    ["name"] = "Key Used",
-                    ["value"] = key ~= "" and key or "N/A",
-                    ["inline"] = true
-                }
-            },
-            ["timestamp"] = DateTime.now():ToIsoDate()
-        } }
-    }
-
-    local success, _ = pcall(function()
-        HttpService:PostAsync(KeySystem.WebhookURL, HttpService:JSONEncode(data))
-    end)
-
-    return success
-end
-
--- Tạo UI nhập key
-KeySystem.CreateKeyUI = function()
-    local success, keyValid = KeySystem.CheckSavedKey()
-    if success then
-        print("HT Hub | Key hợp lệ, đang tải script...")
-        KeySystem.SendWebhook(game.Players.LocalPlayer.Name, "Key đã lưu", true)
-        return true
-    end
-
-    local ScreenGui = Instance.new("ScreenGui")
-    local Main = Instance.new("Frame")
-    local UICorner = Instance.new("UICorner")
-    local Title = Instance.new("TextLabel")
-    local Description = Instance.new("TextLabel")
-    local KeyInput = Instance.new("TextBox")
-    local UICorner_2 = Instance.new("UICorner")
-    local SubmitButton = Instance.new("TextButton")
-    local UICorner_3 = Instance.new("UICorner")
-    local GetKeyButton = Instance.new("TextButton")
-    local UICorner_4 = Instance.new("UICorner")
-    local StatusLabel = Instance.new("TextLabel")
-
-    -- Thiết lập UI
-    if syn and syn.protect_gui then
-        syn.protect_gui(ScreenGui)
-        ScreenGui.Parent = game:GetService("CoreGui")
-    elseif gethui then
-        ScreenGui.Parent = gethui()
-    else
-        ScreenGui.Parent = game:GetService("CoreGui")
-    end
-
-    ScreenGui.Name = "HTHubKeySystem"
-    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.ResetOnSpawn = false
-
-    Main.Name = "Main"
-    Main.Parent = ScreenGui
-    Main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    Main.Position = UDim2.new(0.5, -175, 0.5, -125)
-    Main.Size = UDim2.new(0, 350, 0, 250)
-
-    UICorner.CornerRadius = UDim.new(0, 10)
-    UICorner.Parent = Main
-
-    Title.Name = "Title"
-    Title.Parent = Main
-    Title.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Title.BackgroundTransparency = 1.000
-    Title.Position = UDim2.new(0, 0, 0, 10)
-    Title.Size = UDim2.new(1, 0, 0, 30)
-    Title.Font = Enum.Font.GothamBold
-    Title.Text = "HT Hub | Anime Rangers X"
-    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Title.TextSize = 20.000
-
-    Description.Name = "Description"
-    Description.Parent = Main
-    Description.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Description.BackgroundTransparency = 1.000
-    Description.Position = UDim2.new(0, 0, 0, 45)
-    Description.Size = UDim2.new(1, 0, 0, 40)
-    Description.Font = Enum.Font.Gotham
-    Description.Text = "Nhập key để sử dụng script"
-    Description.TextColor3 = Color3.fromRGB(200, 200, 200)
-    Description.TextSize = 14.000
-
-    KeyInput.Name = "KeyInput"
-    KeyInput.Parent = Main
-    KeyInput.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    KeyInput.Position = UDim2.new(0.5, -125, 0, 100)
-    KeyInput.Size = UDim2.new(0, 250, 0, 40)
-    KeyInput.Font = Enum.Font.Gotham
-    KeyInput.PlaceholderText = "Nhập key vào đây..."
-    KeyInput.Text = ""
-    KeyInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-    KeyInput.TextSize = 14.000
-
-    UICorner_2.CornerRadius = UDim.new(0, 6)
-    UICorner_2.Parent = KeyInput
-
-    SubmitButton.Name = "SubmitButton"
-    SubmitButton.Parent = Main
-    SubmitButton.BackgroundColor3 = Color3.fromRGB(90, 90, 255)
-    SubmitButton.Position = UDim2.new(0.5, -60, 0, 155)
-    SubmitButton.Size = UDim2.new(0, 120, 0, 35)
-    SubmitButton.Font = Enum.Font.GothamBold
-    SubmitButton.Text = "Xác nhận"
-    SubmitButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    SubmitButton.TextSize = 14.000
-
-    UICorner_3.CornerRadius = UDim.new(0, 6)
-    UICorner_3.Parent = SubmitButton
-
-    GetKeyButton.Name = "GetKeyButton"
-    GetKeyButton.Parent = Main
-    GetKeyButton.BackgroundColor3 = Color3.fromRGB(50, 150, 50)
-    GetKeyButton.Position = UDim2.new(0.5, -75, 0, 200)
-    GetKeyButton.Size = UDim2.new(0, 150, 0, 35)
-    GetKeyButton.Font = Enum.Font.GothamBold
-    GetKeyButton.Text = "Lấy key tại discord"
-    GetKeyButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    GetKeyButton.TextSize = 14.000
-
-    UICorner_4.CornerRadius = UDim.new(0, 6)
-    UICorner_4.Parent = GetKeyButton
-
-    StatusLabel.Name = "StatusLabel"
-    StatusLabel.Parent = Main
-    StatusLabel.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    StatusLabel.BackgroundTransparency = 1.000
-    StatusLabel.Position = UDim2.new(0, 0, 0, 240)
-    StatusLabel.Size = UDim2.new(1, 0, 0, 20)
-    StatusLabel.Font = Enum.Font.Gotham
-    StatusLabel.Text = ""
-    StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-    StatusLabel.TextSize = 12.000
-
-    -- Biến để theo dõi trạng thái xác thực
-    local keyAuthenticated = false
-
-    -- Hàm xác thực key
-    local function checkKey(key)
-        for _, validKey in ipairs(KeySystem.Keys) do
-            if key == validKey then
-                return true
-            end
-        end
-        return false
-    end
-
-    -- Xử lý sự kiện nút Submit
-    SubmitButton.MouseButton1Click:Connect(function()
-        local inputKey = KeyInput.Text
-
-        if inputKey == "" then
-            StatusLabel.Text = "Vui lòng nhập key"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            return
-        end
-
-        local isKeyValid = checkKey(inputKey)
-
-        if isKeyValid then
-            StatusLabel.Text = "Key hợp lệ! Đang tải script..."
-            StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-
-            -- Lưu key
-            KeySystem.SaveKey(inputKey)
-
-            -- Gửi log
-            KeySystem.SendWebhook(game.Players.LocalPlayer.Name, inputKey, true)
-
-            -- Đánh dấu đã xác thực thành công
-            keyAuthenticated = true
-
-            -- Xóa UI sau 1 giây
-            wait(1)
-            ScreenGui:Destroy()
-        else
-            StatusLabel.Text = "Key không hợp lệ, vui lòng thử lại"
-            StatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-
-            -- Gửi log
-            KeySystem.SendWebhook(game.Players.LocalPlayer.Name, inputKey, false)
-        end
-    end)
-
-    -- Xử lý sự kiện nút Get Key
-    GetKeyButton.MouseButton1Click:Connect(function()
-        setclipboard("https://discord.gg/6WXu2zZC3d")
-        StatusLabel.Text = "Đã sao chép liên kết vào clipboard"
-        StatusLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-    end)
-
-    -- Đợi cho đến khi xác thực thành công hoặc đóng UI
-    local startTime = tick()
-    local timeout = 300 -- 5 phút timeout
-
-    repeat
-        wait(0.1)
-    until keyAuthenticated or (tick() - startTime > timeout)
-
-    if keyAuthenticated then
-        return true
-    else
-        -- Nếu hết thời gian chờ mà không xác thực, đóng UI và trả về false
-        if ScreenGui and ScreenGui.Parent then
-            ScreenGui:Destroy()
-        end
-        return false
-    end
-end
-
--- Khởi chạy hệ thống key
-local keyValid = KeySystem.CreateKeyUI()
-if not keyValid then
-    -- Nếu key không hợp lệ, dừng script
-    warn("Key không hợp lệ hoặc đã hết thời gian chờ. Script sẽ dừng.")
-    return
-end
-
--- Delay 30 giây trước khi mở script
-print("HT Hub | Anime Rangers X đang khởi động, vui lòng đợi 10 giây...")
+-- Delay 10 giây trước khi mở script
+print("Kaihon Hub | Anime Rangers X đang khởi động, vui lòng đợi 10 giây...")
 wait(10)
 print("Đang tải script...")
 
@@ -703,7 +418,7 @@ local playerName = game:GetService("Players").LocalPlayer.Name
 
 -- Tạo Window
 local Window = Fluent:CreateWindow({
-    Title = "HT Hub | Anime Rangers X",
+    Title = "Kaihon Hub | Anime Rangers X",
     SubTitle = "",
     TabWidth = 140,
     Size = UDim2.fromOffset(450, 350),
@@ -764,7 +479,7 @@ local SettingsTab = Window:AddTab({
 
 -- Thêm hỗ trợ Logo khi minimize
 repeat task.wait(0.25) until game:IsLoaded()
-getgenv().Image = "rbxassetid://90319448802378" -- ID tài nguyên hình ảnh logo
+getgenv().Image = "rbxassetid://124432203914164" -- ID tài nguyên hình ảnh logo
 getgenv().ToggleUI = "LeftControl"              -- Phím để bật/tắt giao diện
 
 -- Tạo logo để mở lại UI khi đã minimize
@@ -3701,7 +3416,7 @@ end
 
 -- Thông báo khi script đã tải xong
 Fluent:Notify({
-    Title = "HT Hub | Anime Rangers X",
+    Title = "Kaihon Hub | Anime Rangers X",
     Content = "Script đã tải thành công! Đã tối ưu hóa cho trải nghiệm mượt mà.",
     Duration = 3
 })
@@ -3859,18 +3574,18 @@ local function createEmbed(rewards, gameInfo)
 
     -- Tạo embed
     local embed = {
-        title = "Anime Rangers X - HT Hub",
+        title = "Anime Rangers X - Kaihon Hub",
         description = "Game Info",
         color = 5793266, -- Màu tím
         fields = fields,
         thumbnail = {
             url =
-            "https://media.discordapp.net/attachments/1321403790343274597/1364864770699821056/HT_HUB.png?ex=680b38df&is=6809e75f&hm=8a8272215b54db14974319f1745680390342942777e2fc291e38a4be4edf6fda&=&format=webp&quality=lossless&width=930&height=930" -- Logo HT Hub
+            "https://images-ext-1.discordapp.net/external/CmlSOppXAMnvaaK2XVHV8FZlQDakSJQGop2XAPbhPyw/%3Fsize%3D4096/https/cdn.discordapp.com/avatars/1269841484090179636/a6032236a677c176d236a53ac480c586.png?format=webp&quality=lossless&width=900&height=900" -- Logo HT Hub
         },
         footer = {
-            text = "HT Hub | Anime Rangers X • " .. os.date("%x %X"),
+            text = "Kaihon Hub | Anime Rangers X • " .. os.date("%x %X"),
             icon_url =
-            "https://media.discordapp.net/attachments/1321403790343274597/1364864770699821056/HT_HUB.png?ex=680b38df&is=6809e75f&hm=8a8272215b54db14974319f1745680390342942777e2fc291e38a4be4edf6fda&=&format=webp&quality=lossless&width=930&height=930"
+            "https://images-ext-1.discordapp.net/external/CmlSOppXAMnvaaK2XVHV8FZlQDakSJQGop2XAPbhPyw/%3Fsize%3D4096/https/cdn.discordapp.com/avatars/1269841484090179636/a6032236a677c176d236a53ac480c586.png?format=webp&quality=lossless&width=900&height=900"
         },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ")
     }
@@ -5159,7 +4874,7 @@ local function checkTraitMatch(unitObject)
         for trait, isSelected in pairs(selectedTraits) do
             if isSelected then
                 if primaryTrait == trait or secondaryTrait == trait then
-                    print("✅ Đã tìm thấy trait mong muốn: " ..
+                    print("Đã tìm thấy trait mong muốn: " ..
                         trait .. " (Primary: " .. primaryTrait .. ", Secondary: " .. secondaryTrait .. ")")
                     return true
                 end
@@ -5593,203 +5308,3 @@ RCExchangeSection:AddToggle("BuyQuinqueToggle", {
         end
     end
 })
-
--- Thêm section Evolve Tier trong tab Unit
-local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
-
--- Biến lưu trạng thái
-_G.selectedEvolveTier = "Hyper" -- Mặc định là Hyper
-_G.autoEvolveEnabled = false
-_G.eligibleUnits = {}           -- Lưu danh sách unit hợp lệ để evolve
-
--- Hàm kiểm tra số lượng Ranger Crystal hiện có
-local function checkRangerCrystalAmount()
-    local player = game:GetService("Players").LocalPlayer
-    local playerName = player.Name
-    local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
-
-    if not playerData then return 0 end
-
-    local playerFolder = playerData:FindFirstChild(playerName)
-    if not playerFolder then return 0 end
-
-    local itemsFolder = playerFolder:FindFirstChild("Items")
-    if not itemsFolder then return 0 end
-
-    local rangerCrystal = itemsFolder:FindFirstChild("Ranger Crystal")
-    if not rangerCrystal then return 0 end
-
-    return rangerCrystal.Amount.Value
-end
-
--- Hàm để quét unit hợp lệ cho evolve
-local function scanEligibleUnits()
-    _G.eligibleUnits = {}
-
-    local player = game:GetService("Players").LocalPlayer
-    local playerName = player.Name
-    local playerData = game:GetService("ReplicatedStorage"):FindFirstChild("Player_Data")
-
-    if not playerData then
-        print("Không tìm thấy Player_Data")
-        return {}
-    end
-
-    local playerFolder = playerData:FindFirstChild(playerName)
-    if not playerFolder then
-        print("Không tìm thấy folder người chơi")
-        return {}
-    end
-
-    local collectionFolder = playerFolder:FindFirstChild("Collection")
-    if not collectionFolder then
-        print("Không tìm thấy Collection")
-        return {}
-    end
-
-    -- Tìm các unit hợp lệ để evolve (chưa evo và không bị lock)
-    for _, unit in pairs(collectionFolder:GetChildren()) do
-        -- Kiểm tra nếu unit này chưa evolve
-        local evolveTier = unit:FindFirstChild("EvolveTier")
-        -- Kiểm tra xem unit có bị lock không
-        local lock = unit:FindFirstChild("Lock")
-        -- Lấy tag của unit
-        local tag = unit:FindFirstChild("Tag")
-
-        -- Chỉ thêm vào danh sách nếu unit chưa evolve, không bị lock và có tag
-        if evolveTier and tag and lock then
-            if evolveTier.Value == "" and lock.Value == false then
-                table.insert(_G.eligibleUnits, {
-                    name = unit.Name,
-                    tag = tag.Value
-                })
-            end
-        end
-    end
-
-    return _G.eligibleUnits
-end
-
--- Hàm để thực hiện evolve unit
-local function evolveUnit(unitTag, tier)
-    local Remote = game:GetService("ReplicatedStorage"):WaitForChild("Remote"):WaitForChild("Server"):WaitForChild(
-    "Units"):WaitForChild("EvolveTier")
-
-    local args = {
-        unitTag,
-        tier
-    }
-
-    Remote:FireServer(unpack(args))
-    print("Đã evolve unit với tag: " .. unitTag .. " lên " .. tier)
-end
-
--- Dropdown để chọn tier
-EvolveTierSection:AddDropdown("EvolveTierDropdown", {
-    Title = "Select Tier",
-    Values = { "Hyper", "Ultra" },
-    Multi = false,
-    Default = _G.selectedEvolveTier,
-    Callback = function(Value)
-        _G.selectedEvolveTier = Value
-        print("Đã chọn tier: " .. Value)
-    end
-})
-
--- Nút Refresh để quét lại unit
-EvolveTierSection:AddButton({
-    Title = "Refresh Units",
-    Callback = function()
-        local units = scanEligibleUnits()
-        local crystalAmount = checkRangerCrystalAmount()
-        local maxEvolvable = math.floor(crystalAmount / 10)
-
-        print("Đã tìm thấy " .. #units .. " unit hợp lệ để evolve")
-        print("Bạn có " .. crystalAmount .. " Ranger Crystal (Có thể evolve tối đa " .. maxEvolvable .. " unit)")
-    end
-})
-
--- Toggle Auto Evolve
-EvolveTierSection:AddToggle("AutoEvolveToggle", {
-    Title = "Auto Evolve",
-    Default = _G.autoEvolveEnabled,
-    Callback = function(Value)
-        _G.autoEvolveEnabled = Value
-
-        if Value then
-            -- Scan lại danh sách unit hợp lệ
-            local units = scanEligibleUnits()
-            local crystalAmount = checkRangerCrystalAmount()
-            local maxEvolvable = math.floor(crystalAmount / 10)
-
-            if #units == 0 then
-                print("Không tìm thấy unit nào hợp lệ để evolve")
-                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
-                return
-            end
-
-            if crystalAmount < 10 then
-                print("Không đủ Ranger Crystal để evolve (Cần ít nhất 10)")
-                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
-                return
-            end
-
-            print("Bắt đầu Auto Evolve với tier " .. _G.selectedEvolveTier)
-            print("Bạn có " .. crystalAmount .. " Ranger Crystal (Có thể evolve tối đa " .. maxEvolvable .. " unit)")
-
-            -- Bắt đầu evolve
-            spawn(function()
-                local evolvedCount = 0
-
-                for i, unit in ipairs(units) do
-                    -- Kiểm tra lại số lượng Ranger Crystal hiện tại
-                    local currentCrystal = checkRangerCrystalAmount()
-                    if currentCrystal < 10 then
-                        print("Đã hết Ranger Crystal, dừng Auto Evolve")
-                        break
-                    end
-
-                    -- Kiểm tra nếu đã evolve đủ số unit có thể evolve
-                    if evolvedCount >= maxEvolvable then
-                        print("Đã evolve đủ số unit có thể evolve với số lượng Ranger Crystal hiện có")
-                        break
-                    end
-
-                    if _G.autoEvolveEnabled then
-                        evolveUnit(unit.tag, _G.selectedEvolveTier)
-                        evolvedCount = evolvedCount + 1
-                        print("Đã evolve " .. evolvedCount .. "/" .. math.min(#units, maxEvolvable) .. " unit")
-
-                        -- Đợi một chút giữa các lần evolve để không bị ban
-                        wait(0.5)
-                    else
-                        break
-                    end
-                end
-
-                -- Tự động tắt Auto Evolve khi hoàn thành
-                _G.autoEvolveEnabled = false
-                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
-                print("Auto Evolve hoàn tất!")
-            end)
-        else
-            print("Auto Evolve đã được tắt")
-        end
-    end
-})
-
--- Hiển thị thông tin số lượng Ranger Crystal
-_G.crystalInfoLabel = EvolveTierSection:AddParagraph({
-    Title = "Ranger Crystal Info",
-    Content = "Chưa có thông tin"
-})
-
--- Cập nhật thông tin Crystal định kỳ
-spawn(function()
-    while wait(5) do
-        local amount = checkRangerCrystalAmount()
-        local maxEvolvable = math.floor(amount / 10)
-
-        _G.crystalInfoLabel:SetDesc("Số lượng: " .. amount .. "\nCó thể evolve: " .. maxEvolvable .. " unit")
-    end
-end)

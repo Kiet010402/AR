@@ -5316,6 +5316,304 @@ TraitRerollSection:AddButton({
     end
 })
 
+-- Thêm section Evolve Tier trong tab Unit
+local EvolveTierSection = UnitTab:AddSection("Evolve Tier")
+
+-- Biến lưu trạng thái
+_G.selectedUnitsForEvolve = {}
+_G.selectedTier = "Hyper"
+_G.autoEvolveEnabled = false
+_G.autoEvolveLoop = nil
+_G.unitCollectionEvolveCache = {}
+
+-- Thêm tất cả các hàm vào namespace _G.EvolveSystem
+_G.EvolveSystem = {}
+
+-- Hàm để quét danh sách unit từ Collection cho Evolve
+_G.EvolveSystem.scanUnits = function()
+    _G.unitCollectionEvolveCache = {}
+    local displayUnits = {}
+    
+    local success, result = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local collectionPath = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data", 2):WaitForChild(
+            playerName, 2):WaitForChild("Collection", 2)
+        
+        if not collectionPath then
+            print("Không tìm thấy Collection")
+            return {}
+        end
+        
+        -- Quét các unit phù hợp cho evolve (EvolveTier trống và Lock được tích)
+        for _, unit in pairs(collectionPath:GetChildren()) do
+            local unitName = unit.Name
+            local level = unit:FindFirstChild("Level") and unit.Level.Value or 0
+            local evolveTier = unit:FindFirstChild("EvolveTier")
+            local lock = unit:FindFirstChild("Lock")
+            local tag = unit:FindFirstChild("Tag") and unit.Tag.Value or nil
+            
+            -- Chỉ chọn những unit có EvolveTier trống và Lock được tích
+            if tag and evolveTier and evolveTier.Value == "" and lock and lock.Value == true then
+                local displayName = unitName .. " (Lv: " .. level .. ")"
+                
+                -- Lưu vào cache để sử dụng sau
+                _G.unitCollectionEvolveCache[displayName] = {
+                    name = unitName,
+                    level = level,
+                    tag = tag,
+                    ref = unit
+                }
+                
+                table.insert(displayUnits, displayName)
+            end
+        end
+        
+        return displayUnits
+    end)
+    
+    if not success then
+        warn("Lỗi khi quét unit collection cho Evolve: " .. tostring(result))
+        return {}
+    end
+    
+    table.sort(displayUnits) -- Sắp xếp theo thứ tự bảng chữ cái
+    return displayUnits
+end
+
+-- Hàm để kiểm tra số lượng Ranger Crystal
+_G.EvolveSystem.checkCrystal = function()
+    local success, amount = pcall(function()
+        local playerName = game:GetService("Players").LocalPlayer.Name
+        local itemsPath = game:GetService("ReplicatedStorage"):WaitForChild("Player_Data", 2):WaitForChild(
+            playerName, 2):WaitForChild("Items", 2)
+        
+        if not itemsPath then
+            return 0
+        end
+        
+        local rangerCrystal = itemsPath:FindFirstChild("Ranger Crystal")
+        if rangerCrystal and rangerCrystal:FindFirstChild("Amount") then
+            return rangerCrystal.Amount.Value
+        end
+        
+        return 0
+    end)
+    
+    if not success then
+        warn("Lỗi khi kiểm tra số lượng Ranger Crystal: " .. tostring(amount))
+        return 0
+    end
+    
+    return amount
+end
+
+-- Hàm để thực hiện evolve cho một unit
+_G.EvolveSystem.evolveUnit = function(unitTag, tier)
+    local success, err = pcall(function()
+        local evolveRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remote", 2):WaitForChild("Server", 2)
+            :WaitForChild("Units", 2):WaitForChild("EvolveTier", 2)
+        
+        if not evolveRemote then
+            warn("Không tìm thấy EvolveTier Remote")
+            return false
+        end
+        
+        local args = {
+            unitTag,
+            tier
+        }
+        
+        evolveRemote:FireServer(unpack(args))
+        return true
+    end)
+    
+    if not success then
+        warn("Lỗi khi evolve unit: " .. tostring(err))
+        return false
+    end
+    
+    return true
+end
+
+-- Quét unit collection ban đầu
+_G.unitsForEvolveList = _G.EvolveSystem.scanUnits()
+
+-- Dropdown để chọn Unit
+_G.evolveUnitDropdown = EvolveTierSection:AddDropdown("EvolveUnitDropdown", {
+    Title = "Choose Unit",
+    Values = _G.unitsForEvolveList,
+    Multi = true,
+    Default = {},
+    Callback = function(Values)
+        _G.selectedUnitsForEvolve = Values
+        
+        local selectedUnitsText = ""
+        local selectedCount = 0
+        
+        for unitName, isSelected in pairs(Values) do
+            if isSelected then
+                selectedUnitsText = selectedUnitsText .. unitName .. ", "
+                selectedCount = selectedCount + 1
+            end
+        end
+        
+        if selectedUnitsText ~= "" then
+            selectedUnitsText = selectedUnitsText:sub(1, -3) -- Xóa dấu phẩy cuối cùng
+            print("Đã chọn " .. selectedCount .. " unit cho evolve")
+        else
+            print("Không có unit nào được chọn cho evolve")
+        end
+    end
+})
+
+-- Dropdown để chọn Tier
+EvolveTierSection:AddDropdown("EvolveTierDropdown", {
+    Title = "Select Tier",
+    Values = { "Hyper", "Ultra" },
+    Multi = false,
+    Default = "Hyper",
+    Callback = function(Value)
+        _G.selectedTier = Value
+        print("Đã chọn tier: " .. Value)
+    end
+})
+
+-- Hiển thị số lượng Ranger Crystal
+_G.crystalInfoParagraph = EvolveTierSection:AddParagraph({
+    Title = "Ranger Crystal",
+    Content = "Đang kiểm tra số lượng..."
+})
+
+-- Cập nhật thông tin Crystal
+_G.EvolveSystem.updateCrystalInfo = function()
+    local crystalAmount = _G.EvolveSystem.checkCrystal()
+    local maxEvolvePossible = math.floor(crystalAmount / 10)
+    
+    _G.crystalInfoParagraph:SetDesc("Hiện có: " .. crystalAmount .. " (Có thể evolve tối đa: " .. maxEvolvePossible .. " unit)")
+end
+
+-- Cập nhật thông tin Crystal ban đầu
+_G.EvolveSystem.updateCrystalInfo()
+
+-- Nút Refresh
+EvolveTierSection:AddButton({
+    Title = "Refresh",
+    Callback = function()
+        local newUnitList = _G.EvolveSystem.scanUnits()
+        
+        if #newUnitList > 0 then
+            _G.evolveUnitDropdown:SetValues(newUnitList)
+            print("Đã làm mới danh sách unit: " .. #newUnitList .. " unit có thể evolve")
+        else
+            print("Không tìm thấy unit nào phù hợp để evolve")
+        end
+        
+        -- Cập nhật thông tin Crystal
+        _G.EvolveSystem.updateCrystalInfo()
+    end
+})
+
+-- Toggle Auto Evolve
+EvolveTierSection:AddToggle("AutoEvolveToggle", {
+    Title = "Auto Evolve",
+    Default = false,
+    Callback = function(Value)
+        _G.autoEvolveEnabled = Value
+        
+        if Value then
+            local selectedCount = 0
+            for _, isSelected in pairs(_G.selectedUnitsForEvolve) do
+                if isSelected then
+                    selectedCount = selectedCount + 1
+                end
+            end
+            
+            if selectedCount == 0 then
+                print("Vui lòng chọn ít nhất một unit để evolve")
+                -- Reset toggle về false
+                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
+                return
+            end
+            
+            -- Kiểm tra số lượng Ranger Crystal
+            local crystalAmount = _G.EvolveSystem.checkCrystal()
+            local requiredCrystals = selectedCount * 10
+            
+            if crystalAmount < 10 then
+                print("Không đủ Ranger Crystal để evolve! Cần ít nhất 10 crystal.")
+                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
+                return
+            elseif crystalAmount < requiredCrystals then
+                print("Cảnh báo: Không đủ crystal để evolve tất cả các unit đã chọn (" .. 
+                      crystalAmount .. "/" .. requiredCrystals .. ")")
+            end
+            
+            print("Bắt đầu Auto Evolve với tier " .. _G.selectedTier)
+            
+            -- Bắt đầu vòng lặp evolve
+            _G.autoEvolveLoop = spawn(function()
+                -- Lặp qua mỗi unit đã chọn
+                for unitName, isSelected in pairs(_G.selectedUnitsForEvolve) do
+                    if isSelected and _G.autoEvolveEnabled then
+                        local unitInfo = _G.unitCollectionEvolveCache[unitName]
+                        
+                        if unitInfo and unitInfo.tag then
+                            -- Kiểm tra lại số lượng crystal trước mỗi lần evolve
+                            local currentCrystalAmount = _G.EvolveSystem.checkCrystal()
+                            
+                            if currentCrystalAmount >= 10 then
+                                print("Evolve " .. unitName .. " thành " .. _G.selectedTier)
+                                local success = _G.EvolveSystem.evolveUnit(unitInfo.tag, _G.selectedTier)
+                                
+                                if success then
+                                    -- Đợi một chút để dữ liệu cập nhật
+                                    wait(1)
+                                    -- Cập nhật thông tin Crystal
+                                    _G.EvolveSystem.updateCrystalInfo()
+                                end
+                            else
+                                print("Hết Ranger Crystal! Không thể evolve thêm.")
+                                _G.autoEvolveEnabled = false
+                                EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
+                                break
+                            end
+                            
+                            -- Đợi một chút giữa các lần evolve để tránh spam
+                            wait(0.5)
+                        end
+                    end
+                    
+                    -- Kiểm tra xem đã dừng Auto Evolve chưa
+                    if not _G.autoEvolveEnabled then
+                        break
+                    end
+                end
+                
+                -- Sau khi hoàn thành tất cả unit đã chọn
+                if _G.autoEvolveEnabled then
+                    print("Đã hoàn thành evolve tất cả unit đã chọn!")
+                    _G.autoEvolveEnabled = false
+                    EvolveTierSection:GetComponent("AutoEvolveToggle"):Set(false)
+                    
+                    -- Tải lại danh sách unit sau khi evolve
+                    local newUnitList = _G.EvolveSystem.scanUnits()
+                    _G.evolveUnitDropdown:SetValues(newUnitList)
+                    
+                    -- Cập nhật thông tin Crystal
+                    _G.EvolveSystem.updateCrystalInfo()
+                end
+            end)
+        else
+            print("Đã dừng Auto Evolve")
+            
+            if _G.autoEvolveLoop then
+                _G.autoEvolveLoop:Disconnect()
+                _G.autoEvolveLoop = nil
+            end
+        end
+    end
+})
+
 -- Tạo hệ thống toàn cục để giảm số lượng biến cục bộ
 _G.SystemManager = _G.SystemManager or {}
 

@@ -31,6 +31,8 @@ ConfigSystem.DefaultConfig = {
     -- Gears Shop Settings
     AutoBuyGearsEnabled = false,
     SelectedGears = {},
+    -- Settings
+    AntiAFKEnabled = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -85,6 +87,10 @@ local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
 local autoBuyGearsEnabled = ConfigSystem.CurrentConfig.AutoBuyGearsEnabled or false
 local selectedGears = ConfigSystem.CurrentConfig.SelectedGears or {}
 
+-- Settings: Anti AFK
+local antiAFKEnabled = ConfigSystem.CurrentConfig.AntiAFKEnabled or false
+local antiAFKConnection = nil
+
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
@@ -92,8 +98,8 @@ local playerName = game:GetService("Players").LocalPlayer.Name
 local Window = Fluent:CreateWindow({
     Title = "HT HUB | Plant vs Brainrots",
     SubTitle = "",
-    TabWidth = 80,
-    Size = UDim2.fromOffset(300, 220),
+    TabWidth = 140,
+    Size = UDim2.fromOffset(450, 350),
     Acrylic = true,
     Theme = "Amethyst",
     MinimizeKey = Enum.KeyCode.LeftControl
@@ -106,6 +112,9 @@ local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311804536
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
+-- Auto select Main tab on startup
+Window:SelectTab(1)
+
 -- Tab Main
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
@@ -117,6 +126,46 @@ local GearShopSection = ShopTab:AddSection("Gear Shop")
 -- Settings tab configuration
 local SettingsSection = SettingsTab:AddSection("Script Settings")
 
+-- Anti AFK setup
+local function setupAntiAFK()
+    if antiAFKConnection then
+        antiAFKConnection:Disconnect()
+        antiAFKConnection = nil
+    end
+    if antiAFKEnabled then
+        local VirtualUser = game:GetService("VirtualUser")
+        local Players = game:GetService("Players")
+        local LocalPlayer = Players.LocalPlayer
+        if LocalPlayer then
+            antiAFKConnection = LocalPlayer.Idled:Connect(function()
+                VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                task.wait(0.5)
+                VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            end)
+        end
+    end
+end
+
+-- Add Anti AFK toggle in Settings
+SettingsSection:AddToggle("AntiAFKToggle", {
+    Title = "Anti AFK",
+    Description = "Prevent idle kick",
+    Default = antiAFKEnabled,
+    Callback = function(Value)
+        antiAFKEnabled = Value
+        ConfigSystem.CurrentConfig.AntiAFKEnabled = Value
+        ConfigSystem.SaveConfig()
+        setupAntiAFK()
+        if Value then
+            Fluent:Notify({ Title = "Anti AFK", Content = "Enabled", Duration = 2 })
+        else
+            Fluent:Notify({ Title = "Anti AFK", Content = "Disabled", Duration = 2 })
+        end
+    end
+})
+
+-- Initialize Anti AFK if enabled on startup
+setupAntiAFK()
 
 -- Helper: get sorted seed names from ReplicatedStorage.Assets.Seeds
 local function getAllSeedNames()
@@ -607,7 +656,7 @@ task.spawn(function()
             ImageButton.BackgroundTransparency = 0.8
             ImageButton.Position = UDim2.new(0.9,0,0.1,0)
             ImageButton.Size = UDim2.new(0,50,0,50)
-            ImageButton.Image = "rbxassetid://13099788281" -- Logo HT Hub
+            ImageButton.Image = "rbxassetid://90319448802378"
             ImageButton.Draggable = true
             ImageButton.Transparency = 0.2
             
@@ -622,9 +671,9 @@ task.spawn(function()
     end)
     
     if not success then
-        warn("Lỗi khi tạo nút Logo UI: " .. tostring(errorMsg))
+        warn("Error creating UI logo: " .. tostring(errorMsg))
     end
 end)
 
-print("HT Hub All Star Tower Defense Script đã tải thành công!")
-print("Sử dụng Left Ctrl để thu nhỏ/mở rộng UI")
+print("HT Hub Plant vs Brainrots Script loaded successfully!")
+print("Use Left Ctrl to hide/show the interface")

@@ -94,6 +94,30 @@ local function getSortedSeedNames()
     return names
 end
 
+-- Normalize dropdown multi-select values to an array of names
+local function normalizeSelectedSeeds(value)
+    if type(value) ~= "table" then return {} end
+    -- detect array-like
+    local isArray = value[1] ~= nil
+    if isArray then
+        local out = {}
+        for _, v in ipairs(value) do
+            if typeof(v) == "string" and v ~= "" then
+                table.insert(out, v)
+            end
+        end
+        return out
+    else
+        local out = {}
+        for k, v in pairs(value) do
+            if v and typeof(k) == "string" and k ~= "" then
+                table.insert(out, k)
+            end
+        end
+        return out
+    end
+end
+
 -- Cấu hình UI
 local Window = Fluent:CreateWindow({
     Title = "HT HUB | Plant vs Brainrots",
@@ -322,8 +346,9 @@ SeedsShopSection:AddDropdown("SeedsMulti", {
     Multi = true,
     Default = selectedSeeds,
     Callback = function(values)
-        selectedSeeds = values
-        ConfigSystem.CurrentConfig.SelectedSeeds = values
+        local normalized = normalizeSelectedSeeds(values)
+        selectedSeeds = normalized
+        ConfigSystem.CurrentConfig.SelectedSeeds = normalized
         ConfigSystem.SaveConfig()
     end
 })
@@ -349,13 +374,12 @@ local function autoBuySeedsLoop()
     spawn(function()
         while true do
             if autoBuySeedsEnabled and type(selectedSeeds) == "table" then
-                for _, seedName in pairs(selectedSeeds) do
-                    if typeof(seedName) == "string" and seedName ~= "" then
-                        pcall(function()
-                            local args = { seedName }
-                            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
-                        end)
-                    end
+                local seedsToBuy = normalizeSelectedSeeds(selectedSeeds)
+                for _, seedName in ipairs(seedsToBuy) do
+                    pcall(function()
+                        local args = { seedName }
+                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
+                    end)
                 end
                 wait(30)
             else

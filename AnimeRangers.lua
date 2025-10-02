@@ -137,8 +137,33 @@ SeedsShopSection:AddDropdown("SeedsDropdown", {
     Multi = true,
     Default = selectedSeeds,
     Callback = function(selection)
-        -- selection is a table of selected values
-        selectedSeeds = selection
+        -- Normalize selection to an array of seed names
+        local normalized = {}
+        if type(selection) == "table" then
+            -- Case 1: map { ["SeedName"] = true }
+            for key, value in pairs(selection) do
+                if typeof(key) == "string" and value == true then
+                    table.insert(normalized, key)
+                end
+            end
+            -- Case 2: array {"SeedName1","SeedName2"}
+            for _, value in ipairs(selection) do
+                if typeof(value) == "string" then
+                    table.insert(normalized, value)
+                end
+            end
+        end
+        -- Deduplicate and sort
+        local seen = {}
+        local unique = {}
+        for _, name in ipairs(normalized) do
+            if not seen[name] then
+                seen[name] = true
+                table.insert(unique, name)
+            end
+        end
+        table.sort(unique, function(a,b) return string.lower(a) < string.lower(b) end)
+        selectedSeeds = unique
         ConfigSystem.CurrentConfig.SelectedSeeds = selectedSeeds
         ConfigSystem.SaveConfig()
     end
@@ -386,16 +411,38 @@ AutoEquipBestBrainrots()
 
 -- Buy selected seeds once
 local function buySelectedSeeds()
+    -- Build an ordered list from selectedSeeds which may be an array or a map
+    local toBuy = {}
     if type(selectedSeeds) == "table" then
-        for _, seedName in ipairs(selectedSeeds) do
-            if typeof(seedName) == "string" and seedName ~= "" then
-                local args = { seedName }
-                pcall(function()
-                    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
-                end)
-                wait(0.1)
+        -- Map form
+        for key, value in pairs(selectedSeeds) do
+            if typeof(key) == "string" and value == true then
+                table.insert(toBuy, key)
             end
         end
+        -- Array form
+        for _, value in ipairs(selectedSeeds) do
+            if typeof(value) == "string" then
+                table.insert(toBuy, value)
+            end
+        end
+    end
+    -- Deduplicate preserving first occurrence
+    local seen = {}
+    local ordered = {}
+    for _, name in ipairs(toBuy) do
+        if not seen[name] then
+            seen[name] = true
+            table.insert(ordered, name)
+        end
+    end
+    -- Iterate and fire remote per seed with 2s interval
+    for _, seedName in ipairs(ordered) do
+        local args = { seedName }
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
+        end)
+        wait(2)
     end
 end
 

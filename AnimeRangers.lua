@@ -25,7 +25,7 @@ ConfigSystem.DefaultConfig = {
     EquipBestBrainrotsDelay = 1, -- Mặc định là 1 phút
     SellBrainrotsEnabled = false,
     SellBrainrotsDelay = 1, -- Mặc định là 1 phút
-    -- Seeds Shop Settings
+    -- Seeds Shop Settings 
     AutoBuySeedsEnabled = false,
     SelectedSeeds = {},
     -- Gears Shop Settings
@@ -33,8 +33,9 @@ ConfigSystem.DefaultConfig = {
     SelectedGears = {},
     -- Settings
     AntiAFKEnabled = false,
-    -- Auto Play Extras
-    AutoBuyPlatformEnabled = false,
+    -- Favorite Settings
+    AutoFavoriteEnabled = false,
+    SelectedFavoriteRarities = {},
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -80,7 +81,6 @@ local equipBestBrainrotsEnabled = ConfigSystem.CurrentConfig.EquipBestBrainrotsE
 local equipBestBrainrotsDelay = ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1
 local sellBrainrotsEnabled = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false
 local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
-local autoBuyPlatformEnabled = ConfigSystem.CurrentConfig.AutoBuyPlatformEnabled or false
 
 -- Shop Seeds
 local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
@@ -93,6 +93,10 @@ local selectedGears = ConfigSystem.CurrentConfig.SelectedGears or {}
 -- Settings: Anti AFK
 local antiAFKEnabled = ConfigSystem.CurrentConfig.AntiAFKEnabled or false
 local antiAFKConnection = nil
+
+-- Favorite
+local autoFavoriteEnabled = ConfigSystem.CurrentConfig.AutoFavoriteEnabled or false
+local selectedFavoriteRarities = ConfigSystem.CurrentConfig.SelectedFavoriteRarities or {}
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -121,43 +125,119 @@ Window:SelectTab(1)
 -- Tab Main
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
+local FavoriteSection = MainTab:AddSection("Favorite")
 
--- Toggle Auto Buy Platform
-AutoPlaySection:AddToggle("AutoBuyPlatformToggle", {
-    Title = "Auto Buy Platform",
-    Description = "",
-    Default = autoBuyPlatformEnabled,
+-- Favorite helpers
+local function getBrainrotInfoMap()
+    -- Returns map: name -> rarity
+    local map = {}
+    local folder = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):FindFirstChild("Brainrots")
+    if folder then
+        for _, inst in ipairs(folder:GetChildren()) do
+            local rarity = ""
+            local attrRarity = inst:GetAttribute("Rarity")
+            if attrRarity ~= nil then
+                rarity = tostring(attrRarity)
+            else
+                -- fallback: try a child value
+                local rarityVal = inst:FindFirstChild("Rarity")
+                if rarityVal and (rarityVal:IsA("StringValue") or rarityVal:IsA("IntValue") or rarityVal:IsA("NumberValue")) then
+                    rarity = tostring(rarityVal.Value)
+                end
+            end
+            map[inst.Name] = rarity
+        end
+    end
+    return map
+end
+
+local FAVORITE_RARITIES = { "Rare", "Epic", "Legendary", "Mythic", "Godly", "Secret", "Limited" }
+
+-- UI: Favorite Rarity dropdown (multi-select)
+FavoriteSection:AddDropdown("FavoriteRarityDropdown", {
+    Title = "Favorite Rarity",
+    Values = FAVORITE_RARITIES,
+    Multi = true,
+    Default = selectedFavoriteRarities,
+    Callback = function(Values)
+        selectedFavoriteRarities = Values
+        ConfigSystem.CurrentConfig.SelectedFavoriteRarities = Values
+        ConfigSystem.SaveConfig()
+    end
+})
+
+-- Favorite executor
+local function favoriteBackpackItems()
+    local brainrotMap = getBrainrotInfoMap()
+    local backpack = game:GetService("Players").LocalPlayer:FindFirstChild("Backpack")
+    if not backpack then return end
+
+    -- Normalize selected rarities which may be a map or array
+    local wanted = {}
+    if type(selectedFavoriteRarities) == "table" then
+        for k, v in pairs(selectedFavoriteRarities) do
+            if typeof(k) == "string" and v == true then wanted[string.lower(k)] = true end
+        end
+        for _, v in ipairs(selectedFavoriteRarities) do
+            if typeof(v) == "string" then wanted[string.lower(v)] = true end
+        end
+    end
+
+    for _, tool in ipairs(backpack:GetChildren()) do
+        local name = tool.Name
+        if brainrotMap[name] then
+            local rarity = string.lower(tostring(brainrotMap[name]))
+            if wanted[rarity] then
+                -- find ID from tool if available
+                local id = nil
+                -- common patterns: tool:FindFirstChild("ID") or tool:FindFirstChild("Tag") or Attribute
+                local attrId = tool:GetAttribute("ID") or tool:GetAttribute("Tag") or tool:GetAttribute("UID")
+                if attrId then id = tostring(attrId) end
+                if not id then
+                    local possible = tool:FindFirstChild("ID") or tool:FindFirstChild("Tag") or tool:FindFirstChild("UID")
+                    if possible then
+                        if possible:IsA("StringValue") then id = possible.Value end
+                    end
+                end
+                -- If still no id, skip this tool
+                if id and id ~= "" then
+                    local args = { id }
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("FavoriteItem"):FireServer(unpack(args))
+                    end)
+                    wait(0.1)
+                end
+            end
+        end
+    end
+end
+
+-- Toggle Auto Favorite
+FavoriteSection:AddToggle("AutoFavoriteToggle", {
+    Title = "Auto Favorite",
+    Description = "Auto favorite backpack items by rarity",
+    Default = autoFavoriteEnabled,
     Callback = function(Value)
-        autoBuyPlatformEnabled = Value
-        ConfigSystem.CurrentConfig.AutoBuyPlatformEnabled = Value
+        autoFavoriteEnabled = Value
+        ConfigSystem.CurrentConfig.AutoFavoriteEnabled = Value
         ConfigSystem.SaveConfig()
         if Value then
-            Fluent:Notify({ Title = "Auto Buy Platform", Content = "Enabled", Duration = 2 })
+            Fluent:Notify({ Title = "Auto Favorite", Content = "Enabled", Duration = 2 })
         else
-            Fluent:Notify({ Title = "Auto Buy Platform", Content = "Disabled", Duration = 2 })
+            Fluent:Notify({ Title = "Auto Favorite", Content = "Disabled", Duration = 2 })
         end
     end
 })
 
--- Function to buy platforms 1..17 with 2s delay
-local function buyPlatforms()
-    for i = 1, 17 do
-        if not autoBuyPlatformEnabled then return end
-        local args = { tostring(i) }
-        pcall(function()
-            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyPlatform"):FireServer(unpack(args))
-        end)
-        wait(2)
-    end
-end
-
--- Background loop for Auto Buy Platform
+-- Background loop for Auto Favorite
 spawn(function()
     while true do
-        if autoBuyPlatformEnabled then
-            buyPlatforms()
+        if autoFavoriteEnabled then
+            favoriteBackpackItems()
+            wait(5)
+        else
+            wait(1)
         end
-        wait(1)
     end
 end)
 
@@ -191,7 +271,7 @@ end
 -- Add Anti AFK toggle in Settings
 SettingsSection:AddToggle("AntiAFKToggle", {
     Title = "Anti AFK",
-    Description = "",
+    Description = "Prevent idle kick",
     Default = antiAFKEnabled,
     Callback = function(Value)
         antiAFKEnabled = Value
@@ -466,8 +546,8 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Time (1-60m)",
-    Description = "Time EquipBestBrainrots",
+    Title = "Delay Time (1-60)",
+    Description = "Delay time Equip Best Brainrots (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)        local numericValue = tonumber(Value)
@@ -518,8 +598,8 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
-    Title = "Time (1-60m)",
-    Description = "Time SellBrainrots",
+    Title = "Sell Delay Time (1-60)",
+    Description = "Delay time Sell Brainrots (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)

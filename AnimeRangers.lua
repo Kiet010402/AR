@@ -33,6 +33,8 @@ ConfigSystem.DefaultConfig = {
     SelectedGears = {},
     -- Settings
     AntiAFKEnabled = false,
+    -- Auto Play Extras
+    AutoBuyPlatformEnabled = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -78,6 +80,7 @@ local equipBestBrainrotsEnabled = ConfigSystem.CurrentConfig.EquipBestBrainrotsE
 local equipBestBrainrotsDelay = ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1
 local sellBrainrotsEnabled = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false
 local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
+local autoBuyPlatformEnabled = ConfigSystem.CurrentConfig.AutoBuyPlatformEnabled or false
 
 -- Shop Seeds
 local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
@@ -119,6 +122,45 @@ Window:SelectTab(1)
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
 
+-- Toggle Auto Buy Platform
+AutoPlaySection:AddToggle("AutoBuyPlatformToggle", {
+    Title = "Auto Buy Platform",
+    Description = "",
+    Default = autoBuyPlatformEnabled,
+    Callback = function(Value)
+        autoBuyPlatformEnabled = Value
+        ConfigSystem.CurrentConfig.AutoBuyPlatformEnabled = Value
+        ConfigSystem.SaveConfig()
+        if Value then
+            Fluent:Notify({ Title = "Auto Buy Platform", Content = "Enabled", Duration = 2 })
+        else
+            Fluent:Notify({ Title = "Auto Buy Platform", Content = "Disabled", Duration = 2 })
+        end
+    end
+})
+
+-- Function to buy platforms 1..17 with 2s delay
+local function buyPlatforms()
+    for i = 1, 17 do
+        if not autoBuyPlatformEnabled then return end
+        local args = { tostring(i) }
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyPlatform"):FireServer(unpack(args))
+        end)
+        wait(2)
+    end
+end
+
+-- Background loop for Auto Buy Platform
+spawn(function()
+    while true do
+        if autoBuyPlatformEnabled then
+            buyPlatforms()
+        end
+        wait(1)
+    end
+end)
+
 -- Shop tab configuration
 local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
 local GearShopSection = ShopTab:AddSection("Gear Shop")
@@ -149,7 +191,7 @@ end
 -- Add Anti AFK toggle in Settings
 SettingsSection:AddToggle("AntiAFKToggle", {
     Title = "Anti AFK",
-    Description = "Prevent idle kick",
+    Description = "",
     Default = antiAFKEnabled,
     Callback = function(Value)
         antiAFKEnabled = Value
@@ -424,8 +466,8 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Delay Time (1-60)",
-    Description = "Delay time Equip Best Brainrots (minutes)",
+    Title = "Time (1-60m)",
+    Description = "Time EquipBestBrainrots",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)        local numericValue = tonumber(Value)
@@ -476,8 +518,8 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
-    Title = "Sell Delay Time (1-60)",
-    Description = "Delay time Sell Brainrots (minutes)",
+    Title = "Time (1-60m)",
+    Description = "Time SellBrainrots",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)

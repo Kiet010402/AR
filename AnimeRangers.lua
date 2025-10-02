@@ -25,6 +25,8 @@ ConfigSystem.DefaultConfig = {
     EquipBestBrainrotsDelay = 1, -- Mặc định là 1 phút
     SellBrainrotsEnabled = false,
     SellBrainrotsDelay = 1, -- Mặc định là 1 phút
+    AutoBuyEnabled = false,
+    SelectedSeeds = {},
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -70,6 +72,8 @@ local equipBestBrainrotsEnabled = ConfigSystem.CurrentConfig.EquipBestBrainrotsE
 local equipBestBrainrotsDelay = ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1
 local sellBrainrotsEnabled = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false
 local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
+local autoBuyEnabled = ConfigSystem.CurrentConfig.AutoBuyEnabled or false
+local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -91,6 +95,8 @@ local Window = Fluent:CreateWindow({
 local MainTab = Window:AddTab({ Title = "Main", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
+-- Tạo Tab Shop
+local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311802307" })
 
 -- Tab Main
 -- Section Auto Play trong tab Main
@@ -321,6 +327,98 @@ end
 
 -- Thực thi tự động trang bị brainrots
 AutoEquipBestBrainrots()
+
+-- Tab Shop
+local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
+
+-- Lấy danh sách hạt giống
+local function getSeedNames()
+    local seedsFolder = game:GetService("ReplicatedStorage").Assets:WaitForChild("Seeds")
+    local names = {}
+    for _, child in pairs(seedsFolder:GetChildren()) do
+        if child:IsA("Folder") or child:IsA("Model") then -- Giả định mỗi hạt giống là một Folder hoặc Model
+            table.insert(names, child.Name)
+        end
+    end
+    table.sort(names) -- Sắp xếp theo thứ tự bảng chữ cái
+    return names
+end
+
+local availableSeeds = getSeedNames()
+
+-- Multi-select Dropdown cho Seeds
+SeedsShopSection:AddDropdown("SeedMultiSelect", {
+    Title = "Chọn Seeds để mua",
+    Description = "Chọn các loại seeds sẽ tự động mua",
+    List = availableSeeds,
+    Multi = true,
+    Default = ConfigSystem.CurrentConfig.SelectedSeeds,
+    Callback = function(Value)
+        selectedSeeds = Value
+        ConfigSystem.CurrentConfig.SelectedSeeds = Value
+        ConfigSystem.SaveConfig()
+        Fluent:Notify({
+            Title = "Seeds Selected",
+            Content = "Đã chọn " .. #selectedSeeds .. " loại seeds.",
+            Duration = 3
+        })
+    end
+})
+
+-- Toggle Auto Buy Seeds
+SeedsShopSection:AddToggle("AutoBuyToggle", {
+    Title = "Auto Buy Seeds",
+    Description = "Tự động mua các loại seeds đã chọn mỗi 30 giây",
+    Default = ConfigSystem.CurrentConfig.AutoBuyEnabled or false,
+    Callback = function(Value)
+        autoBuyEnabled = Value
+        ConfigSystem.CurrentConfig.AutoBuyEnabled = Value
+        ConfigSystem.SaveConfig()
+
+        if autoBuyEnabled then
+            Fluent:Notify({
+                Title = "Auto Buy Enabled",
+                Content = "Đã bật tự động mua seeds.",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Auto Buy Disabled",
+                Content = "Đã tắt tự động mua seeds.",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Auto Buy Seeds with Delay
+local function AutoBuySeeds()
+    spawn(function()
+        while true do
+            if autoBuyEnabled and #selectedSeeds > 0 then
+                for _, seedName in pairs(selectedSeeds) do
+                    local success, err = pcall(function()
+                        local args = {seedName}
+                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
+                    end)
+
+                    if not success then
+                        warn("Lỗi Auto Buy Seed (" .. seedName .. "): " .. tostring(err))
+                    else
+                        print("Auto Buy Seed executed successfully: " .. seedName)
+                    end
+                    wait(0.1) -- Small delay between buying each seed to avoid flooding the server
+                end
+                wait(30) -- Wait 30 seconds after buying all selected seeds
+            else
+                wait(1) -- Wait a short time if disabled or no seeds selected
+            end
+        end
+    end)
+end
+
+-- Thực thi tự động mua seeds
+AutoBuySeeds()
 
 -- Tạo logo để mở lại UI khi đã minimize
 task.spawn(function()

@@ -25,6 +25,8 @@ ConfigSystem.DefaultConfig = {
     EquipBestBrainrotsDelay = 1, -- Mặc định là 1 phút
     SellBrainrotsEnabled = false,
     SellBrainrotsDelay = 1, -- Mặc định là 1 phút
+    AutoBuySeedsEnabled = false,
+    SelectedSeedsToBuy = {},
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -70,6 +72,8 @@ local equipBestBrainrotsEnabled = ConfigSystem.CurrentConfig.EquipBestBrainrotsE
 local equipBestBrainrotsDelay = ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1
 local sellBrainrotsEnabled = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false
 local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
+local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
+local selectedSeedsToBuy = ConfigSystem.CurrentConfig.SelectedSeedsToBuy or {}
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -89,12 +93,68 @@ local Window = Fluent:CreateWindow({
 
 -- Tạo Tab Main
 local MainTab = Window:AddTab({ Title = "Main", Icon = "rbxassetid://13311802307" })
+-- Tạo Tab Shop
+local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
 -- Tab Main
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
+
+-- Tab Shop
+-- Section Seeds Shop trong tab Shop
+local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
+
+-- Lấy danh sách hạt giống
+local allSeedNames = getSortedSeedNames()
+
+-- Thêm Toggle cho từng hạt giống
+for i, seedName in ipairs(allSeedNames) do
+    SeedsShopSection:AddToggle("SeedToggle_" .. seedName, {
+        Title = seedName,
+        Description = "Chọn để tự động mua hạt giống này",
+        Default = table.find(ConfigSystem.CurrentConfig.SelectedSeedsToBuy, seedName) ~= nil,
+        Callback = function(Value)
+            if Value then
+                table.insert(selectedSeedsToBuy, seedName)
+            else
+                local index = table.find(selectedSeedsToBuy, seedName)
+                if index then
+                    table.remove(selectedSeedsToBuy, index)
+                end
+            end
+            ConfigSystem.CurrentConfig.SelectedSeedsToBuy = selectedSeedsToBuy
+            ConfigSystem.SaveConfig()
+        end
+    })
+end
+
+-- Thêm Toggle Auto Buy Seeds
+SeedsShopSection:AddToggle("AutoBuySeedsToggle", {
+    Title = "Tự động mua hạt giống",
+    Description = "Tự động mua các hạt giống đã chọn mỗi 30 giây",
+    Default = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false,
+    Callback = function(Value)
+        autoBuySeedsEnabled = Value
+        ConfigSystem.CurrentConfig.AutoBuySeedsEnabled = Value
+        ConfigSystem.SaveConfig()
+
+        if autoBuySeedsEnabled then
+            Fluent:Notify({
+                Title = "Đã bật tự động mua hạt giống",
+                Content = "Tự động mua hạt giống đã được bật.",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Đã tắt tự động mua hạt giống",
+                Content = "Tự động mua hạt giống đã bị tắt.",
+                Duration = 3
+            })
+        end
+    end
+})
 
 -- Settings tab configuration
 local SettingsSection = SettingsTab:AddSection("Script Settings")
@@ -134,7 +194,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({MainTab, SettingsTab}) do
+    for _, tab in pairs({MainTab, ShopTab, SettingsTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then
@@ -186,7 +246,7 @@ end
 -- Toggle Equip Best Brainrots
 AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
     Title = "Equip Best Brainrots",
-    Description = "Auto equip best brainrots",
+    Description = "Tự động trang bị brainrots tốt nhất",
     Default = ConfigSystem.CurrentConfig.EquipBestBrainrotsEnabled or false,
     Callback = function(Value)
         equipBestBrainrotsEnabled = Value
@@ -195,14 +255,14 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
         if equipBestBrainrotsEnabled then
             Fluent:Notify({
-                Title = "Equip Best Brainrots Enabled",
-                Content = "Auto equip best brainrots enabled",
+                Title = "Đã bật tự động trang bị Brainrots",
+                Content = "Tự động trang bị Brainrots tốt nhất đã được bật.",
                 Duration = 3
             })
         else
             Fluent:Notify({
-                Title = "Equip Best Brainrots Disabled",
-                Content = "Auto equip best brainrots disabled",
+                Title = "Đã tắt tự động trang bị Brainrots",
+                Content = "Tự động trang bị Brainrots tốt nhất đã bị tắt.",
                 Duration = 3
             })
         end
@@ -211,24 +271,24 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Delay Time (1-60)",
-    Description = "Delay time between each activation (minutes)",
+    Title = "Thời gian chờ (phút)",
+    Description = "Thời gian chờ giữa các lần kích hoạt (phút, 1-60)",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
-    Placeholder = "1-60 minutes",
+    Placeholder = "1-60 phút",
     Callback = function(Value)        local numericValue = tonumber(Value)
         if numericValue and numericValue >= 1 and numericValue <= 60 then
             equipBestBrainrotsDelay = numericValue
             ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay = numericValue
             ConfigSystem.SaveConfig()
             Fluent:Notify({
-                Title = "Delay Time Updated",
-                Content = "Delay time updated to " .. numericValue .. " minutes",
+                Title = "Đã cập nhật thời gian chờ",
+                Content = "Thời gian chờ đã được cập nhật thành " .. numericValue .. " phút.",
                 Duration = 3
             })
         else
             Fluent:Notify({
-                Title = "Invalid Input",
-                Content = "Please enter a number between 1-60.",
+                Title = "Giá trị không hợp lệ",
+                Content = "Vui lòng nhập số từ 1 đến 60.",
                 Duration = 3
             })
         end
@@ -237,8 +297,8 @@ AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
 
 -- Toggle Sell Brainrots
 AutoPlaySection:AddToggle("SellBrainrotsToggle", {
-    Title = "Sell Brainrots",
-    Description = "Auto sell brainrots",
+    Title = "Bán Brainrots",
+    Description = "Tự động bán brainrots",
     Default = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false,
     Callback = function(Value)
         sellBrainrotsEnabled = Value
@@ -247,14 +307,14 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
         if sellBrainrotsEnabled then
             Fluent:Notify({
-                Title = "Sell Brainrots Enabled",
-                Content = "Auto sell brainrots enabled",
+                Title = "Đã bật tự động bán Brainrots",
+                Content = "Tự động bán Brainrots đã được bật.",
                 Duration = 3
             })
         else
             Fluent:Notify({
-                Title = "Sell Brainrots Disabled",
-                Content = "Auto sell brainrots disabled",
+                Title = "Đã tắt tự động bán Brainrots",
+                Content = "Tự động bán Brainrots đã bị tắt.",
                 Duration = 3
             })
         end
@@ -263,10 +323,10 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
-    Title = "Sell Delay Time (1-60)",
-    Description = "Delay time between each sell (minutes)",
+    Title = "Thời gian chờ bán (phút)",
+    Description = "Thời gian chờ giữa các lần bán (phút, 1-60)",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
-    Placeholder = "1-60 minutes",
+    Placeholder = "1-60 phút",
     Callback = function(Value)
         local numericValue = tonumber(Value)
         if numericValue and numericValue >= 1 and numericValue <= 60 then
@@ -274,14 +334,14 @@ AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
             ConfigSystem.CurrentConfig.SellBrainrotsDelay = numericValue
             ConfigSystem.SaveConfig()
             Fluent:Notify({
-                Title = "Sell Delay Time Updated",
-                Content = "Sell delay time updated to " .. numericValue .. " minutes",
+                Title = "Đã cập nhật thời gian chờ bán",
+                Content = "Thời gian chờ bán đã được cập nhật thành " .. numericValue .. " phút.",
                 Duration = 3
             })
         else
             Fluent:Notify({
-                Title = "Invalid Input",
-                Content = "Please enter a number between 1-60.",
+                Title = "Giá trị không hợp lệ",
+                Content = "Vui lòng nhập số từ 1 đến 60.",
                 Duration = 3
             })
         end
@@ -322,78 +382,54 @@ end
 -- Thực thi tự động trang bị brainrots
 AutoEquipBestBrainrots()
 
--- Tạo Tab Shop
-local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311800988" })
-
--- Lấy danh sách seeds từ ReplicatedStorage
-local SeedsFolder = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):WaitForChild("Seeds")
-local seedNames = {}
-
-for _, seed in ipairs(SeedsFolder:GetChildren()) do
-    table.insert(seedNames, seed.Name)
-end
-table.sort(seedNames) -- Sắp xếp A-Z
-
--- Biến lưu seeds được chọn
-local selectedSeeds = {}
-
--- Dropdown Seeds Shop (multi select)
-ShopTab:AddDropdown("SeedsShopDropdown", {
-    Title = "Seeds Shop",
-    Description = "Select seeds to buy",
-    Values = seedNames,
-    Multi = true,
-    Default = {},
-    Callback = function(Value)
-        selectedSeeds = Value -- Lưu seeds được chọn
-        print("Selected seeds:", table.concat(selectedSeeds, ", "))
-    end
-})
-
--- Trạng thái Auto Buy
-local autoBuyEnabled = false
-
--- Nút Auto Buy
-ShopTab:AddToggle("AutoBuySeeds", {
-    Title = "Auto Buy",
-    Description = "Auto buy seeds every 30s",
-    Default = false,
-    Callback = function(Value)
-        autoBuyEnabled = Value
-        if autoBuyEnabled then
-            Fluent:Notify({
-                Title = "Auto Buy Enabled",
-                Content = "Auto buy seeds enabled",
-                Duration = 3
-            })
-        else
-            Fluent:Notify({
-                Title = "Auto Buy Disabled",
-                Content = "Auto buy seeds disabled",
-                Duration = 3
-            })
+-- Hàm lấy và sắp xếp danh sách hạt giống
+local function getSortedSeedNames()
+    local seedNames = {}
+    local seedsFolder = game:GetService("ReplicatedStorage").Assets:WaitForChild("Seeds")
+    for _, seed in pairs(seedsFolder:GetChildren()) do
+        if seed:IsA("Folder") or seed:IsA("Model") then -- Giả sử mỗi hạt giống là một Folder hoặc Model
+            table.insert(seedNames, seed.Name)
         end
     end
-})
+    table.sort(seedNames) -- Sắp xếp theo thứ tự chữ cái
+    return seedNames
+end
 
--- Vòng lặp Auto Buy
-task.spawn(function()
-    while true do
-        if autoBuyEnabled and selectedSeeds and next(selectedSeeds) ~= nil then
-            for seedName, isSelected in pairs(selectedSeeds) do
-                if isSelected then
-                    local args = { seedName }
-                    pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
-                    end)
-                    print("Đã mua:", seedName)
-                end
+-- Hàm Auto Buy Seeds
+local function executeAutoBuySeeds()
+    if autoBuySeedsEnabled and #selectedSeedsToBuy > 0 then
+        for _, seedName in ipairs(selectedSeedsToBuy) do
+            local success, err = pcall(function()
+                local args = {seedName}
+                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
+            end)
+
+            if not success then
+                warn("Lỗi Auto Buy Seed (" .. seedName .. "): " .. tostring(err))
+            else
+                print("Auto Buy Seed (" .. seedName .. ") executed successfully")
+            end
+            wait(0.1) -- Đợi một chút giữa các lần mua để tránh spam
+        end
+    end
+end
+
+-- Auto Buy Seeds Loop
+local function AutoBuySeeds()
+    spawn(function()
+        while true do
+            if autoBuySeedsEnabled then
+                executeAutoBuySeeds()
+                wait(30) -- Lặp lại mỗi 30 giây
+            else
+                wait(1) -- Đợi một chút nếu chức năng bị tắt
             end
         end
-        task.wait(30) -- Delay 30 giây
-    end
-end)
+    end)
+end
 
+-- Thực thi tự động mua hạt giống
+AutoBuySeeds()
 
 -- Tạo logo để mở lại UI khi đã minimize
 task.spawn(function()
@@ -430,7 +466,7 @@ task.spawn(function()
             UICorner.Parent = ImageButton
             
             -- Khi click vào logo sẽ mở lại UI
-            ImageButton.MouseButton1Click:Connect(function()
+            ImageButton.MouseButton1Click:Connect(function() 
                 game:GetService("VirtualInputManager"):SendKeyEvent(true,Enum.KeyCode.LeftControl,false,game)
             end)
         end
@@ -441,5 +477,5 @@ task.spawn(function()
     end
 end)
 
-print("HT Hub All Star Tower Defense Script đã tải thành công!")
+print("HT Hub Plant vs Brainrots Script đã tải thành công!")
 print("Sử dụng Left Ctrl để thu nhỏ/mở rộng UI")

@@ -28,6 +28,9 @@ ConfigSystem.DefaultConfig = {
     -- Seeds Shop Settings
     AutoBuySeedsEnabled = false,
     SelectedSeeds = {},
+    -- Gears Shop Settings
+    AutoBuyGearsEnabled = false,
+    SelectedGears = {},
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -78,6 +81,10 @@ local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
 local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
 local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
 
+-- Gear Shop
+local autoBuyGearsEnabled = ConfigSystem.CurrentConfig.AutoBuyGearsEnabled or false
+local selectedGears = ConfigSystem.CurrentConfig.SelectedGears or {}
+
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
@@ -92,24 +99,24 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.LeftControl
 })
 
--- Hệ thống Tạo Tab
-
 -- Tạo Tab Main
 local MainTab = Window:AddTab({ Title = "Main", Icon = "rbxassetid://13311802307" })
--- Tạo Tab Settings
-local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 -- Tạo Tab Shop
 local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311804536" })
+-- Tạo Tab Settings
+local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
 -- Tab Main
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
 
+-- Shop tab configuration
+local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
+local GearShopSection = ShopTab:AddSection("Gear Shop")
+
 -- Settings tab configuration
 local SettingsSection = SettingsTab:AddSection("Script Settings")
 
--- Shop tab configuration
-local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
 
 -- Helper: get sorted seed names from ReplicatedStorage.Assets.Seeds
 local function getAllSeedNames()
@@ -126,8 +133,24 @@ local function getAllSeedNames()
     return names
 end
 
+-- Helper: get sorted gear names from ReplicatedStorage.Assets.Gears
+local function getAllGearNames()
+    local gearsFolder = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):FindFirstChild("Gears")
+    local names = {}
+    if gearsFolder then
+        for _, inst in ipairs(gearsFolder:GetChildren()) do
+            table.insert(names, inst.Name)
+        end
+        table.sort(names, function(a, b)
+            return string.lower(a) < string.lower(b)
+        end)
+    end
+    return names
+end
+
 -- Build dropdown options
 local seedOptions = getAllSeedNames()
+local gearOptions = getAllGearNames()
 
 -- Multi-select dropdown (using AddDropdown with Multi = true)
 SeedsShopSection:AddDropdown("SeedsDropdown", {
@@ -172,14 +195,68 @@ SeedsShopSection:AddDropdown("SeedsDropdown", {
 -- Auto Buy toggle
 SeedsShopSection:AddToggle("AutoBuySeedsToggle", {
     Title = "Auto Buy",
-    Description = "Automatically buy selected seeds every 30 seconds",
+    Description = "Automatically buy selected seeds every 5 seconds",
     Default = autoBuySeedsEnabled,
     Callback = function(value)
         autoBuySeedsEnabled = value
         ConfigSystem.CurrentConfig.AutoBuySeedsEnabled = value
         ConfigSystem.SaveConfig()
         if autoBuySeedsEnabled then
-            Fluent:Notify({ Title = "Auto Buy Enabled", Content = "Buying seeds every 30s", Duration = 3 })
+            Fluent:Notify({ Title = "Auto Buy Enabled", Content = "Buying seeds every 5s", Duration = 3 })
+        else
+            Fluent:Notify({ Title = "Auto Buy Disabled", Content = "Stopped auto buying", Duration = 3 })
+        end
+    end
+})
+
+-- Gear dropdown
+GearShopSection:AddDropdown("GearsDropdown", {
+    Title = "Select Gears",
+    Description = "Choose one or more gears to buy",
+    Values = gearOptions,
+    Multi = true,
+    Default = selectedGears,
+    Callback = function(selection)
+        -- Normalize selection to an array of gear names
+        local normalized = {}
+        if type(selection) == "table" then
+            for key, value in pairs(selection) do
+                if typeof(key) == "string" and value == true then
+                    table.insert(normalized, key)
+                end
+            end
+            for _, value in ipairs(selection) do
+                if typeof(value) == "string" then
+                    table.insert(normalized, value)
+                end
+            end
+        end
+        local seen = {}
+        local unique = {}
+        for _, name in ipairs(normalized) do
+            if not seen[name] then
+                seen[name] = true
+                table.insert(unique, name)
+            end
+        end
+        table.sort(unique, function(a,b) return string.lower(a) < string.lower(b) end)
+        selectedGears = unique
+        ConfigSystem.CurrentConfig.SelectedGears = selectedGears
+        ConfigSystem.SaveConfig()
+    end
+})
+
+-- Auto Buy toggle for gears
+GearShopSection:AddToggle("AutoBuyGearsToggle", {
+    Title = "Auto Buy",
+    Description = "Automatically buy selected gears every 5 seconds",
+    Default = autoBuyGearsEnabled,
+    Callback = function(value)
+        autoBuyGearsEnabled = value
+        ConfigSystem.CurrentConfig.AutoBuyGearsEnabled = value
+        ConfigSystem.SaveConfig()
+        if autoBuyGearsEnabled then
+            Fluent:Notify({ Title = "Auto Buy Enabled", Content = "Buying gears every 5s", Duration = 3 })
         else
             Fluent:Notify({ Title = "Auto Buy Disabled", Content = "Stopped auto buying", Duration = 3 })
         end
@@ -196,13 +273,13 @@ SaveManager:SetFolder("HTHubAllStar/" .. playerName)
 
 -- Thêm thông tin vào tab Settings
 SettingsTab:AddParagraph({
-    Title = "Cấu hình tự động",
-    Content = "Cấu hình của bạn đang được tự động lưu theo tên nhân vật: " .. playerName
+    Title = "Auto Save Config",
+    Content = "Your config is automatically saved by the character name: " .. playerName
 })
 
 SettingsTab:AddParagraph({
-    Title = "Phím tắt",
-    Content = "Nhấn LeftControl để ẩn/hiện giao diện"
+    Title = "Shortcut",
+    Content = "Press LeftControl to hide/show the interface"
 })
 
 -- Auto Save Config
@@ -299,7 +376,7 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
     Title = "Delay Time (1-60)",
-    Description = "Delay time between each activation (minutes)",
+    Description = "Delay time Equip Best Brainrots (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)        local numericValue = tonumber(Value)
@@ -351,7 +428,7 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
     Title = "Sell Delay Time (1-60)",
-    Description = "Delay time between each sell (minutes)",
+    Description = "Delay time Sell Brainrots (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)
@@ -446,12 +523,57 @@ local function buySelectedSeeds()
     end
 end
 
--- Background loop for auto buy every 30 seconds
+-- Background loop for auto buy every 5 seconds
 spawn(function()
     while true do
         if autoBuySeedsEnabled and selectedSeeds and #selectedSeeds > 0 then
             buySelectedSeeds()
-            wait(30)
+            wait(5)
+        else
+            wait(1)
+        end
+    end
+end)
+
+-- Buy selected gears once
+local function buySelectedGears()
+    -- Build an ordered list from selectedGears which may be an array or a map
+    local toBuy = {}
+    if type(selectedGears) == "table" then
+        for key, value in pairs(selectedGears) do
+            if typeof(key) == "string" and value == true then
+                table.insert(toBuy, key)
+            end
+        end
+        for _, value in ipairs(selectedGears) do
+            if typeof(value) == "string" then
+                table.insert(toBuy, value)
+            end
+        end
+    end
+    local seen = {}
+    local ordered = {}
+    for _, name in ipairs(toBuy) do
+        if not seen[name] then
+            seen[name] = true
+            table.insert(ordered, name)
+        end
+    end
+    for _, gearName in ipairs(ordered) do
+        local args = { gearName }
+        pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyGear"):FireServer(unpack(args))
+        end)
+        wait(2)
+    end
+end
+
+-- Background loop for auto buy gears every 5 seconds
+spawn(function()
+    while true do
+        if autoBuyGearsEnabled and selectedGears and #selectedGears > 0 then
+            buySelectedGears()
+            wait(5)
         else
             wait(1)
         end

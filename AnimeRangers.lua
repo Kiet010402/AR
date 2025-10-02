@@ -183,34 +183,45 @@ local function favoriteBackpackItems()
         end
     end
 
+    -- Build ordered list of tools to favorite
+    local toFavorite = {}
     for _, tool in ipairs(backpack:GetChildren()) do
         local name = tool.Name
         if brainrotMap[name] then
             local rarity = string.lower(tostring(brainrotMap[name]))
-            if wanted[rarity] then
-                -- find ID from tool if available
-                local id = nil
-                -- common patterns: tool:FindFirstChild("ID") or tool:FindFirstChild("Tag") or Attribute
-                local attrId = tool:GetAttribute("ID") or tool:GetAttribute("Tag") or tool:GetAttribute("UID")
-                if attrId then id = tostring(attrId) end
-                if not id then
-                    local possible = tool:FindFirstChild("ID") or tool:FindFirstChild("Tag") or tool:FindFirstChild("UID")
-                    if possible then
-                        if possible:IsA("StringValue") then id = possible.Value end
-                    end
-                end
-                -- If still no id, skip this tool
-                if id and id ~= "" then
-                    local args = { id }
-                    pcall(function()
-                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("FavoriteItem"):FireServer(unpack(args))
-                    end)
-                    wait(0.1)
-                end
+            if next(wanted) == nil or wanted[rarity] then
+                table.insert(toFavorite, tool)
             end
         end
     end
+
+    -- Sequentially favorite each tool with 2s gap
+    for _, tool in ipairs(toFavorite) do
+        -- Resolve ID
+        local id = nil
+        local attrId = tool:GetAttribute("ID") or tool:GetAttribute("Tag") or tool:GetAttribute("UID")
+        if attrId then id = tostring(attrId) end
+        if not id or id == "" then
+            local possible = tool:FindFirstChild("ID") or tool:FindFirstChild("Tag") or tool:FindFirstChild("UID")
+            if possible and possible:IsA("StringValue") then id = possible.Value end
+        end
+        if id and id ~= "" then
+            local args = { id }
+            pcall(function()
+                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("FavoriteItem"):FireServer(unpack(args))
+            end)
+            wait(2)
+        end
+    end
 end
+
+-- Add manual trigger button
+FavoriteSection:AddButton({
+    Title = "Favorite Now",
+    Callback = function()
+        spawn(favoriteBackpackItems)
+    end
+})
 
 -- Toggle Auto Favorite
 FavoriteSection:AddToggle("AutoFavoriteToggle", {

@@ -379,13 +379,15 @@ ShopTab:AddToggle("AutoBuySeeds", {
 -- Vòng lặp Auto Buy
 task.spawn(function()
     while true do
-        if autoBuyEnabled and #selectedSeeds > 0 then
-            for _, seedName in ipairs(selectedSeeds) do
-                local args = { "seedName" }
-                pcall(function()
-                    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
-                end)
-                print("Đã mua:", seedName)
+        if autoBuyEnabled and selectedSeeds and next(selectedSeeds) ~= nil then
+            for seedName, isSelected in pairs(selectedSeeds) do
+                if isSelected then
+                    local args = { seedName }
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
+                    end)
+                    print("Đã mua:", seedName)
+                end
             end
         end
         task.wait(30) -- Delay 30 giây

@@ -35,7 +35,7 @@ ConfigSystem.DefaultConfig = {
     AntiAFKEnabled = false,
     -- Favorite Settings
     AutoFavoriteEnabled = false,
-    SelectedFavoriteRarities = {},
+    FavoriteRarities = {},
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -94,9 +94,10 @@ local selectedGears = ConfigSystem.CurrentConfig.SelectedGears or {}
 local antiAFKEnabled = ConfigSystem.CurrentConfig.AntiAFKEnabled or false
 local antiAFKConnection = nil
 
--- Favorite
+-- Favorite system
 local autoFavoriteEnabled = ConfigSystem.CurrentConfig.AutoFavoriteEnabled or false
-local selectedFavoriteRarities = ConfigSystem.CurrentConfig.SelectedFavoriteRarities or {}
+local favoriteRarities = ConfigSystem.CurrentConfig.FavoriteRarities or {}
+local brainrotNameToRarity = {}
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -126,131 +127,6 @@ Window:SelectTab(1)
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
 local FavoriteSection = MainTab:AddSection("Favorite")
-
--- Favorite helpers
-local function getBrainrotInfoMap()
-    -- Returns map: name -> rarity
-    local map = {}
-    local folder = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):FindFirstChild("Brainrots")
-    if folder then
-        for _, inst in ipairs(folder:GetChildren()) do
-            local rarity = ""
-            local attrRarity = inst:GetAttribute("Rarity")
-            if attrRarity ~= nil then
-                rarity = tostring(attrRarity)
-            else
-                -- fallback: try a child value
-                local rarityVal = inst:FindFirstChild("Rarity")
-                if rarityVal and (rarityVal:IsA("StringValue") or rarityVal:IsA("IntValue") or rarityVal:IsA("NumberValue")) then
-                    rarity = tostring(rarityVal.Value)
-                end
-            end
-            map[inst.Name] = rarity
-        end
-    end
-    return map
-end
-
-local FAVORITE_RARITIES = { "Rare", "Epic", "Legendary", "Mythic", "Godly", "Secret", "Limited" }
-
--- UI: Favorite Rarity dropdown (multi-select)
-FavoriteSection:AddDropdown("FavoriteRarityDropdown", {
-    Title = "Favorite Rarity",
-    Values = FAVORITE_RARITIES,
-    Multi = true,
-    Default = selectedFavoriteRarities,
-    Callback = function(Values)
-        selectedFavoriteRarities = Values
-        ConfigSystem.CurrentConfig.SelectedFavoriteRarities = Values
-        ConfigSystem.SaveConfig()
-    end
-})
-
--- Favorite executor
-local function favoriteBackpackItems()
-    local brainrotMap = getBrainrotInfoMap()
-    local backpack = game:GetService("Players").LocalPlayer:FindFirstChild("Backpack")
-    if not backpack then return end
-
-    -- Normalize selected rarities which may be a map or array
-    local wanted = {}
-    if type(selectedFavoriteRarities) == "table" then
-        for k, v in pairs(selectedFavoriteRarities) do
-            if typeof(k) == "string" and v == true then wanted[string.lower(k)] = true end
-        end
-        for _, v in ipairs(selectedFavoriteRarities) do
-            if typeof(v) == "string" then wanted[string.lower(v)] = true end
-        end
-    end
-
-    -- Build ordered list of tools to favorite
-    local toFavorite = {}
-    for _, tool in ipairs(backpack:GetChildren()) do
-        local name = tool.Name
-        if brainrotMap[name] then
-            local rarity = string.lower(tostring(brainrotMap[name]))
-            if next(wanted) == nil or wanted[rarity] then
-                table.insert(toFavorite, tool)
-            end
-        end
-    end
-
-    -- Sequentially favorite each tool with 2s gap
-    for _, tool in ipairs(toFavorite) do
-        -- Resolve ID
-        local id = nil
-        local attrId = tool:GetAttribute("ID") or tool:GetAttribute("Tag") or tool:GetAttribute("UID")
-        if attrId then id = tostring(attrId) end
-        if not id or id == "" then
-            local possible = tool:FindFirstChild("ID") or tool:FindFirstChild("Tag") or tool:FindFirstChild("UID")
-            if possible and possible:IsA("StringValue") then id = possible.Value end
-        end
-        if id and id ~= "" then
-            local args = { id }
-            pcall(function()
-                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("FavoriteItem"):FireServer(unpack(args))
-            end)
-            wait(2)
-        end
-    end
-end
-
--- Add manual trigger button
-FavoriteSection:AddButton({
-    Title = "Favorite Now",
-    Callback = function()
-        spawn(favoriteBackpackItems)
-    end
-})
-
--- Toggle Auto Favorite
-FavoriteSection:AddToggle("AutoFavoriteToggle", {
-    Title = "Auto Favorite",
-    Description = "Auto favorite backpack items by rarity",
-    Default = autoFavoriteEnabled,
-    Callback = function(Value)
-        autoFavoriteEnabled = Value
-        ConfigSystem.CurrentConfig.AutoFavoriteEnabled = Value
-        ConfigSystem.SaveConfig()
-        if Value then
-            Fluent:Notify({ Title = "Auto Favorite", Content = "Enabled", Duration = 2 })
-        else
-            Fluent:Notify({ Title = "Auto Favorite", Content = "Disabled", Duration = 2 })
-        end
-    end
-})
-
--- Background loop for Auto Favorite
-spawn(function()
-    while true do
-        if autoFavoriteEnabled then
-            favoriteBackpackItems()
-            wait(5)
-        else
-            wait(1)
-        end
-    end
-end)
 
 -- Shop tab configuration
 local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
@@ -756,6 +632,116 @@ spawn(function()
         if autoBuyGearsEnabled and selectedGears and #selectedGears > 0 then
             buySelectedGears()
             wait(5)
+        else
+            wait(1)
+        end
+    end
+end)
+
+-- Build name->rarity map from Assets.Brainrots
+local function refreshBrainrotCatalog()
+    brainrotNameToRarity = {}
+    local folder = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):FindFirstChild("Brainrots")
+    if folder then
+        for _, inst in ipairs(folder:GetChildren()) do
+            local rarityValue = (inst:FindFirstChild("Rarity") and inst.Rarity.Value) or (inst:GetAttribute("Rarity"))
+            local rarity = tostring(rarityValue or "")
+            brainrotNameToRarity[inst.Name] = rarity
+        end
+    end
+end
+refreshBrainrotCatalog()
+
+-- Helper to extract clean item name from Backpack tool Text/ItemName
+local function getCleanBackpackName(tool)
+    -- Prefer attribute ItemName if present
+    local attrName = tool:GetAttribute("ItemName")
+    if attrName and attrName ~= "" then return tostring(attrName) end
+    -- Fallback to Name: strip prefixes like [Gold] [11.2 kg]
+    local raw = tool.Name or ""
+    -- Remove bracketed prefixes
+    local cleaned = raw:gsub("%b[]%s*", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    return cleaned
+end
+
+-- Helper to buy favorite: call FavoriteItem with ID
+local function favoriteById(id)
+    pcall(function()
+        local args = { id }
+        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("FavoriteItem"):FireServer(unpack(args))
+    end)
+end
+
+-- Favorite UI: dropdown of rarities
+local rarityOptions = { "Rare", "Epic", "Legendary", "Mythic", "Godly", "Secret", "Limited" }
+FavoriteSection:AddDropdown("FavoriteRarityDropdown", {
+    Title = "Favorite Rarity",
+    Description = "Select rarities to auto-favorite",
+    Values = rarityOptions,
+    Multi = true,
+    Default = favoriteRarities,
+    Callback = function(values)
+        favoriteRarities = values
+        ConfigSystem.CurrentConfig.FavoriteRarities = values
+        ConfigSystem.SaveConfig()
+    end
+})
+
+-- Toggle Auto Favorite
+FavoriteSection:AddToggle("AutoFavoriteToggle", {
+    Title = "Auto Favorite",
+    Description = "Auto favorite matching items in Backpack",
+    Default = autoFavoriteEnabled,
+    Callback = function(value)
+        autoFavoriteEnabled = value
+        ConfigSystem.CurrentConfig.AutoFavoriteEnabled = value
+        ConfigSystem.SaveConfig()
+        if value then
+            Fluent:Notify({ Title = "Auto Favorite", Content = "Enabled", Duration = 2 })
+        else
+            Fluent:Notify({ Title = "Auto Favorite", Content = "Disabled", Duration = 2 })
+        end
+    end
+})
+
+-- Background loop: scan Backpack and favorite matches
+spawn(function()
+    local processedIds = {}
+    while true do
+        if autoFavoriteEnabled then
+            pcall(function()
+                refreshBrainrotCatalog()
+                local backpack = game:GetService("Players").LocalPlayer:FindFirstChild("Backpack")
+                if backpack then
+                    for _, tool in ipairs(backpack:GetChildren()) do
+                        local itemName = getCleanBackpackName(tool)
+                        local desiredRarity = brainrotNameToRarity[itemName]
+                        if desiredRarity then
+                            -- values may be map or array; normalize check
+                            local selected = false
+                            if type(favoriteRarities) == "table" then
+                                for k, v in pairs(favoriteRarities) do
+                                    if type(k) == "string" and v == true and string.lower(k) == string.lower(desiredRarity) then
+                                        selected = true; break
+                                    elseif type(k) == "number" and type(v) == "string" and string.lower(v) == string.lower(desiredRarity) then
+                                        selected = true; break
+                                    end
+                                end
+                            end
+                            if selected then
+                                -- Get ID attribute/value
+                                local id = tool:GetAttribute("ID") or (tool:FindFirstChild("ID") and tool.ID.Value)
+                                if id and not processedIds[id] then
+                                    favoriteById(id)
+                                    processedIds[id] = true
+                                    wait(2)
+                                end
+                            end
+                        end
+                    end
+                end
+            end)
+            wait(1)
         else
             wait(1)
         end

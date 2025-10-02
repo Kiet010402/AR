@@ -23,6 +23,8 @@ ConfigSystem.DefaultConfig = {
     -- Auto Play Settings
     EquipBestBrainrotsEnabled = false,
     EquipBestBrainrotsDelay = 1, -- Mặc định là 1 phút
+    SellBrainrotsEnabled = false,
+    SellBrainrotsDelay = 1, -- Mặc định là 1 phút
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -66,13 +68,15 @@ local autoVoteEnabled = false
 local autoRetryEnabled = false
 local equipBestBrainrotsEnabled = ConfigSystem.CurrentConfig.EquipBestBrainrotsEnabled or false
 local equipBestBrainrotsDelay = ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1
+local sellBrainrotsEnabled = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false
+local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
 -- Cấu hình UI
 local Window = Fluent:CreateWindow({
-    Title = "HT HUB | All Star Tower Defense",
+    Title = "HT HUB | Plant vs Brainrots",
     SubTitle = "",
     TabWidth = 80,
     Size = UDim2.fromOffset(300, 220),
@@ -148,6 +152,7 @@ end
 -- Thiết lập events
 setupSaveEvents()
 
+-- Hàm Auto Play
 -- Hàm Equip Best Brainrots
 local function executeEquipBestBrainrots()
     if equipBestBrainrotsEnabled then
@@ -163,10 +168,25 @@ local function executeEquipBestBrainrots()
     end
 end
 
+-- Hàm Sell Brainrots
+local function executeSellBrainrots()
+    if sellBrainrotsEnabled then
+        local success, err = pcall(function()
+            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("ItemSell"):FireServer()
+        end)
+
+        if not success then
+            warn("Lỗi Sell Brainrots: " .. tostring(err))
+        else
+            print("Sell Brainrots executed successfully")
+        end
+    end
+end
+
 -- Toggle Equip Best Brainrots
 AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
     Title = "Equip Best Brainrots",
-    Description = "Tự động trang bị brainrots tốt nhất",
+    Description = "Auto equip best brainrots",
     Default = ConfigSystem.CurrentConfig.EquipBestBrainrotsEnabled or false,
     Callback = function(Value)
         equipBestBrainrotsEnabled = Value
@@ -176,13 +196,13 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
         if equipBestBrainrotsEnabled then
             Fluent:Notify({
                 Title = "Equip Best Brainrots Enabled",
-                Content = "Đã bật tự động trang bị brainrots",
+                Content = "Auto equip best brainrots enabled",
                 Duration = 3
             })
         else
             Fluent:Notify({
                 Title = "Equip Best Brainrots Disabled",
-                Content = "Đã tắt tự động trang bị brainrots",
+                Content = "Auto equip best brainrots disabled",
                 Duration = 3
             })
         end
@@ -191,10 +211,10 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Delay Time (minutes)",
-    Description = "Thời gian chờ giữa các lần kích hoạt (phút)",
+    Title = "Delay Time (1-60)",
+    Description = "Delay time between each activation (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
-    Placeholder = "1-60 phút",
+    Placeholder = "1-60 minutes",
     Callback = function(Value)        local numericValue = tonumber(Value)
         if numericValue and numericValue >= 1 and numericValue <= 60 then
             equipBestBrainrotsDelay = numericValue
@@ -202,18 +222,88 @@ AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
             ConfigSystem.SaveConfig()
             Fluent:Notify({
                 Title = "Delay Time Updated",
-                Content = "Thời gian chờ đã được cập nhật thành " .. numericValue .. " phút",
+                Content = "Delay time updated to " .. numericValue .. " minutes",
                 Duration = 3
             })
         else
             Fluent:Notify({
                 Title = "Invalid Input",
-                Content = "Vui lòng nhập số từ 1 đến 60.",
+                Content = "Please enter a number between 1-60.",
                 Duration = 3
             })
         end
     end
 })
+
+-- Toggle Sell Brainrots
+AutoPlaySection:AddToggle("SellBrainrotsToggle", {
+    Title = "Sell Brainrots",
+    Description = "Auto sell brainrots",
+    Default = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false,
+    Callback = function(Value)
+        sellBrainrotsEnabled = Value
+        ConfigSystem.CurrentConfig.SellBrainrotsEnabled = Value
+        ConfigSystem.SaveConfig()
+
+        if sellBrainrotsEnabled then
+            Fluent:Notify({
+                Title = "Sell Brainrots Enabled",
+                Content = "Auto sell brainrots enabled",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Sell Brainrots Disabled",
+                Content = "Auto sell brainrots disabled",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Input cho Delay Time (Sell Brainrots)
+AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
+    Title = "Sell Delay Time (1-60)",
+    Description = "Delay time between each sell (minutes)",
+    Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
+    Placeholder = "1-60 minutes",
+    Callback = function(Value)
+        local numericValue = tonumber(Value)
+        if numericValue and numericValue >= 1 and numericValue <= 60 then
+            sellBrainrotsDelay = numericValue
+            ConfigSystem.CurrentConfig.SellBrainrotsDelay = numericValue
+            ConfigSystem.SaveConfig()
+            Fluent:Notify({
+                Title = "Sell Delay Time Updated",
+                Content = "Sell delay time updated to " .. numericValue .. " minutes",
+                Duration = 3
+            })
+        else
+            Fluent:Notify({
+                Title = "Invalid Input",
+                Content = "Please enter a number between 1-60.",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Auto Sell Brainrots with Delay
+local function AutoSellBrainrots()
+    spawn(function()
+        while true do
+            if sellBrainrotsEnabled then
+                executeSellBrainrots()
+                wait(sellBrainrotsDelay * 60) -- Convert minutes to seconds
+            else
+                wait(1) -- Wait a short time if disabled to avoid busy-waiting
+            end
+        end
+    end)
+end
+
+-- Thực thi tự động bán brainrots
+AutoSellBrainrots()
 
 -- Auto Equip Best Brainrots with Delay
 local function AutoEquipBestBrainrots()

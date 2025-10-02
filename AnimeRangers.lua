@@ -381,7 +381,7 @@ task.spawn(function()
     while true do
         if autoBuyEnabled and #selectedSeeds > 0 then
             for _, seedName in ipairs(selectedSeeds) do
-                local args = { seedName }
+                local args = { "seedName" }
                 pcall(function()
                     game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
                 end)

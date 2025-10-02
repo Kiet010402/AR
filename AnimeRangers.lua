@@ -25,9 +25,9 @@ ConfigSystem.DefaultConfig = {
     EquipBestBrainrotsDelay = 1, -- Mặc định là 1 phút
     SellBrainrotsEnabled = false,
     SellBrainrotsDelay = 1, -- Mặc định là 1 phút
-    -- Shop Settings
-    SelectedSeeds = {},
+    -- Seeds Shop Settings
     AutoBuySeedsEnabled = false,
+    SelectedSeeds = {},
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -71,52 +71,15 @@ local autoVoteEnabled = false
 local autoRetryEnabled = false
 local equipBestBrainrotsEnabled = ConfigSystem.CurrentConfig.EquipBestBrainrotsEnabled or false
 local equipBestBrainrotsDelay = ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1
--- Shop state
-local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
+local sellBrainrotsEnabled = ConfigSystem.CurrentConfig.SellBrainrotsEnabled or false
+local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
+
+-- Shop Seeds
 local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
+local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
-
--- Utility: get and sort seed names A-Z from ReplicatedStorage.Assets.Seeds
-local function getSortedSeedNames()
-    local seedsFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Assets")
-    if seedsFolder then seedsFolder = seedsFolder:FindFirstChild("Seeds") end
-    local names = {}
-    if seedsFolder and seedsFolder:IsA("Folder") then
-        for _, child in ipairs(seedsFolder:GetChildren()) do
-            table.insert(names, child.Name)
-        end
-    end
-    table.sort(names, function(a,b)
-        return string.lower(a) < string.lower(b)
-    end)
-    return names
-end
-
--- Normalize dropdown multi-select values to an array of names
-local function normalizeSelectedSeeds(value)
-    if type(value) ~= "table" then return {} end
-    -- detect array-like
-    local isArray = value[1] ~= nil
-    if isArray then
-        local out = {}
-        for _, v in ipairs(value) do
-            if typeof(v) == "string" and v ~= "" then
-                table.insert(out, v)
-            end
-        end
-        return out
-    else
-        local out = {}
-        for k, v in pairs(value) do
-            if v and typeof(k) == "string" and k ~= "" then
-                table.insert(out, k)
-            end
-        end
-        return out
-    end
-end
 
 -- Cấu hình UI
 local Window = Fluent:CreateWindow({
@@ -136,17 +99,67 @@ local MainTab = Window:AddTab({ Title = "Main", Icon = "rbxassetid://13311802307
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 -- Tạo Tab Shop
-local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311800295" })
+local ShopTab = Window:AddTab({ Title = "Shop", Icon = "rbxassetid://13311804536" })
 
 -- Tab Main
 -- Section Auto Play trong tab Main
 local AutoPlaySection = MainTab:AddSection("Auto Play")
 
--- Shop tab sections
-local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
-
 -- Settings tab configuration
 local SettingsSection = SettingsTab:AddSection("Script Settings")
+
+-- Shop tab configuration
+local SeedsShopSection = ShopTab:AddSection("Seeds Shop")
+
+-- Helper: get sorted seed names from ReplicatedStorage.Assets.Seeds
+local function getAllSeedNames()
+    local seedsFolder = game:GetService("ReplicatedStorage"):WaitForChild("Assets"):FindFirstChild("Seeds")
+    local names = {}
+    if seedsFolder then
+        for _, inst in ipairs(seedsFolder:GetChildren()) do
+            table.insert(names, inst.Name)
+        end
+        table.sort(names, function(a, b)
+            return string.lower(a) < string.lower(b)
+        end)
+    end
+    return names
+end
+
+-- Build dropdown options
+local seedOptions = getAllSeedNames()
+
+-- Multi-select dropdown (using AddDropdown with Multi = true)
+SeedsShopSection:AddDropdown("SeedsDropdown", {
+    Title = "Select Seeds",
+    Description = "Choose one or more seeds to buy",
+    Values = seedOptions,
+    Multi = true,
+    Default = selectedSeeds,
+    Callback = function(selection)
+        -- selection is a table of selected values
+        selectedSeeds = selection
+        ConfigSystem.CurrentConfig.SelectedSeeds = selectedSeeds
+        ConfigSystem.SaveConfig()
+    end
+})
+
+-- Auto Buy toggle
+SeedsShopSection:AddToggle("AutoBuySeedsToggle", {
+    Title = "Auto Buy",
+    Description = "Automatically buy selected seeds every 30 seconds",
+    Default = autoBuySeedsEnabled,
+    Callback = function(value)
+        autoBuySeedsEnabled = value
+        ConfigSystem.CurrentConfig.AutoBuySeedsEnabled = value
+        ConfigSystem.SaveConfig()
+        if autoBuySeedsEnabled then
+            Fluent:Notify({ Title = "Auto Buy Enabled", Content = "Buying seeds every 30s", Duration = 3 })
+        else
+            Fluent:Notify({ Title = "Auto Buy Disabled", Content = "Stopped auto buying", Duration = 3 })
+        end
+    end
+})
 
 -- Integration with SaveManager
 SaveManager:SetLibrary(Fluent)
@@ -337,59 +350,22 @@ AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
     end
 })
 
--- Seeds dropdown (multi-select) and auto-buy toggle
-local availableSeeds = getSortedSeedNames()
-SeedsShopSection:AddDropdown("SeedsMulti", {
-    Title = "Select Seeds",
-    Description = "Chọn một hoặc nhiều seeds (A-Z)",
-    Values = availableSeeds,
-    Multi = true,
-    Default = selectedSeeds,
-    Callback = function(values)
-        local normalized = normalizeSelectedSeeds(values)
-        selectedSeeds = normalized
-        ConfigSystem.CurrentConfig.SelectedSeeds = normalized
-        ConfigSystem.SaveConfig()
-    end
-})
-
-SeedsShopSection:AddToggle("AutoBuySeedsToggle", {
-    Title = "Auto Buy",
-    Description = "Tự động mua seeds đã chọn mỗi 30 giây",
-    Default = autoBuySeedsEnabled,
-    Callback = function(Value)
-        autoBuySeedsEnabled = Value
-        ConfigSystem.CurrentConfig.AutoBuySeedsEnabled = Value
-        ConfigSystem.SaveConfig()
-        if autoBuySeedsEnabled then
-            Fluent:Notify({ Title = "Auto Buy Seeds Enabled", Content = "Đang tự động mua seeds đã chọn", Duration = 3 })
-        else
-            Fluent:Notify({ Title = "Auto Buy Seeds Disabled", Content = "Đã tắt tự động mua seeds", Duration = 3 })
-        end
-    end
-})
-
--- Auto buy loop
-local function autoBuySeedsLoop()
+-- Auto Sell Brainrots with Delay
+local function AutoSellBrainrots()
     spawn(function()
         while true do
-            if autoBuySeedsEnabled and type(selectedSeeds) == "table" then
-                local seedsToBuy = normalizeSelectedSeeds(selectedSeeds)
-                for _, seedName in ipairs(seedsToBuy) do
-                    pcall(function()
-                        local args = { seedName }
-                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
-                    end)
-                end
-                wait(30)
+            if sellBrainrotsEnabled then
+                executeSellBrainrots()
+                wait(sellBrainrotsDelay * 60) -- Convert minutes to seconds
             else
-                wait(1)
+                wait(1) -- Wait a short time if disabled to avoid busy-waiting
             end
         end
     end)
 end
 
-autoBuySeedsLoop()
+-- Thực thi tự động bán brainrots
+AutoSellBrainrots()
 
 -- Auto Equip Best Brainrots with Delay
 local function AutoEquipBestBrainrots()
@@ -408,7 +384,32 @@ end
 -- Thực thi tự động trang bị brainrots
 AutoEquipBestBrainrots()
 
+-- Buy selected seeds once
+local function buySelectedSeeds()
+    if type(selectedSeeds) == "table" then
+        for _, seedName in ipairs(selectedSeeds) do
+            if typeof(seedName) == "string" and seedName ~= "" then
+                local args = { seedName }
+                pcall(function()
+                    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("BuyItem"):FireServer(unpack(args))
+                end)
+                wait(0.1)
+            end
+        end
+    end
+end
 
+-- Background loop for auto buy every 30 seconds
+spawn(function()
+    while true do
+        if autoBuySeedsEnabled and selectedSeeds and #selectedSeeds > 0 then
+            buySelectedSeeds()
+            wait(30)
+        else
+            wait(1)
+        end
+    end
+end)
 
 -- Tạo logo để mở lại UI khi đã minimize
 task.spawn(function()

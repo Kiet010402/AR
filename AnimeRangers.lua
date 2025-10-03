@@ -88,6 +88,9 @@ local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
 local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
 local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
 
+-- Init guard flags (prevent UI lib initial callback from auto-picking first value)
+local seedDropdownInitialized = false
+
 -- Gear Shop
 local autoBuyGearsEnabled = ConfigSystem.CurrentConfig.AutoBuyGearsEnabled or false
 local selectedGears = ConfigSystem.CurrentConfig.SelectedGears or {}
@@ -100,9 +103,6 @@ local antiAFKConnection = nil
 local autoFavoriteEnabled = ConfigSystem.CurrentConfig.AutoFavoriteEnabled or false
 local favoriteRarities = ConfigSystem.CurrentConfig.FavoriteRarities or {}
 local brainrotNameToRarity = {}
-
--- Init guard flags (prevent UI lib initial callback from auto-picking first value)
-local seedDropdownInitialized = false
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -443,8 +443,8 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Time (1-60m)",
-    Description = "",
+    Title = "Delay Time (1-60)",
+    Description = "Delay time Equip Best Brainrots (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)
@@ -496,8 +496,8 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
-    Title = "Time (1-60m)",
-    Description = "",
+    Title = "Sell Delay Time (1-60)",
+    Description = "Delay time Sell Brainrots (minutes)",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)

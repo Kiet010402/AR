@@ -1,8 +1,10 @@
 -- Load UI Library với error handling
 local success, err = pcall(function()
     Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-    SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-    InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
+    SaveManager = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+    InterfaceManager = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 end)
 
 if not success then
@@ -24,8 +26,8 @@ ConfigSystem.DefaultConfig = {
     EquipBestBrainrotsEnabled = false,
     EquipBestBrainrotsDelay = 1, -- Mặc định là 1 phút
     SellBrainrotsEnabled = false,
-    SellBrainrotsDelay = 1, -- Mặc định là 1 phút
-    -- Seeds Shop Settings 
+    SellBrainrotsDelay = 1,      -- Mặc định là 1 phút
+    -- Seeds Shop Settings
     AutoBuySeedsEnabled = false,
     SelectedSeeds = {},
     -- Gears Shop Settings
@@ -59,7 +61,7 @@ ConfigSystem.LoadConfig = function()
         end
         return nil
     end)
-    
+
     if success and content then
         local data = game:GetService("HttpService"):JSONDecode(content)
         ConfigSystem.CurrentConfig = data
@@ -98,6 +100,9 @@ local antiAFKConnection = nil
 local autoFavoriteEnabled = ConfigSystem.CurrentConfig.AutoFavoriteEnabled or false
 local favoriteRarities = ConfigSystem.CurrentConfig.FavoriteRarities or {}
 local brainrotNameToRarity = {}
+
+-- Init guard flags (prevent UI lib initial callback from auto-picking first value)
+local seedDropdownInitialized = false
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -218,6 +223,11 @@ SeedsShopSection:AddDropdown("SeedsDropdown", {
     Multi = true,
     Default = selectedSeeds,
     Callback = function(selection)
+        if not seedDropdownInitialized then
+            seedDropdownInitialized = true
+            -- keep whatever is in config; don't auto-pick anything
+            return
+        end
         -- Normalize selection to an array of seed names
         local normalized = {}
         if type(selection) == "table" then
@@ -243,7 +253,7 @@ SeedsShopSection:AddDropdown("SeedsDropdown", {
                 table.insert(unique, name)
             end
         end
-        table.sort(unique, function(a,b) return string.lower(a) < string.lower(b) end)
+        table.sort(unique, function(a, b) return string.lower(a) < string.lower(b) end)
         selectedSeeds = unique
         ConfigSystem.CurrentConfig.SelectedSeeds = selectedSeeds
         ConfigSystem.SaveConfig()
@@ -297,7 +307,7 @@ GearShopSection:AddDropdown("GearsDropdown", {
                 table.insert(unique, name)
             end
         end
-        table.sort(unique, function(a,b) return string.lower(a) < string.lower(b) end)
+        table.sort(unique, function(a, b) return string.lower(a) < string.lower(b) end)
         selectedGears = unique
         ConfigSystem.CurrentConfig.SelectedGears = selectedGears
         ConfigSystem.SaveConfig()
@@ -356,7 +366,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({MainTab, SettingsTab}) do
+    for _, tab in pairs({ MainTab, SettingsTab }) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then
@@ -433,11 +443,12 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Delay Time (1-60)",
-    Description = "Delay time Equip Best Brainrots (minutes)",
+    Title = "Time (1-60m)",
+    Description = "",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
-    Callback = function(Value)        local numericValue = tonumber(Value)
+    Callback = function(Value)
+        local numericValue = tonumber(Value)
         if numericValue and numericValue >= 1 and numericValue <= 60 then
             equipBestBrainrotsDelay = numericValue
             ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay = numericValue
@@ -485,8 +496,8 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
-    Title = "Sell Delay Time (1-60)",
-    Description = "Delay time Sell Brainrots (minutes)",
+    Title = "Time (1-60m)",
+    Description = "",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)
@@ -518,7 +529,7 @@ local function AutoSellBrainrots()
                 executeSellBrainrots()
                 wait(sellBrainrotsDelay * 60) -- Convert minutes to seconds
             else
-                wait(1) -- Wait a short time if disabled to avoid busy-waiting
+                wait(1)                       -- Wait a short time if disabled to avoid busy-waiting
             end
         end
     end)
@@ -535,7 +546,7 @@ local function AutoEquipBestBrainrots()
                 executeEquipBestBrainrots()
                 wait(equipBestBrainrotsDelay * 60) -- Convert minutes to seconds
             else
-                wait(1) -- Wait a short time if disabled to avoid busy-waiting
+                wait(1)                            -- Wait a short time if disabled to avoid busy-waiting
             end
         end
     end)
@@ -751,12 +762,12 @@ end)
 -- Tạo logo để mở lại UI khi đã minimize
 task.spawn(function()
     local success, errorMsg = pcall(function()
-        if not getgenv().LoadedMobileUI == true then 
+        if not getgenv().LoadedMobileUI == true then
             getgenv().LoadedMobileUI = true
             local OpenUI = Instance.new("ScreenGui")
             local ImageButton = Instance.new("ImageButton")
             local UICorner = Instance.new("UICorner")
-            
+
             -- Kiểm tra môi trường
             if syn and syn.protect_gui then
                 syn.protect_gui(OpenUI)
@@ -766,29 +777,29 @@ task.spawn(function()
             else
                 OpenUI.Parent = game:GetService("CoreGui")
             end
-            
+
             OpenUI.Name = "OpenUI"
             OpenUI.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-            
+
             ImageButton.Parent = OpenUI
-            ImageButton.BackgroundColor3 = Color3.fromRGB(105,105,105)
+            ImageButton.BackgroundColor3 = Color3.fromRGB(105, 105, 105)
             ImageButton.BackgroundTransparency = 0.8
-            ImageButton.Position = UDim2.new(0.9,0,0.1,0)
-            ImageButton.Size = UDim2.new(0,50,0,50)
+            ImageButton.Position = UDim2.new(0.9, 0, 0.1, 0)
+            ImageButton.Size = UDim2.new(0, 50, 0, 50)
             ImageButton.Image = "rbxassetid://90319448802378"
             ImageButton.Draggable = true
             ImageButton.Transparency = 0.2
-            
-            UICorner.CornerRadius = UDim.new(0,200)
+
+            UICorner.CornerRadius = UDim.new(0, 200)
             UICorner.Parent = ImageButton
-            
+
             -- Khi click vào logo sẽ mở lại UI
             ImageButton.MouseButton1Click:Connect(function()
-                game:GetService("VirtualInputManager"):SendKeyEvent(true,Enum.KeyCode.LeftControl,false,game)
+                game:GetService("VirtualInputManager"):SendKeyEvent(true, Enum.KeyCode.LeftControl, false, game)
             end)
         end
     end)
-    
+
     if not success then
         warn("Error creating UI logo: " .. tostring(errorMsg))
     end

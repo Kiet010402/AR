@@ -87,8 +87,6 @@ local sellBrainrotsDelay = ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1
 -- Shop Seeds
 local autoBuySeedsEnabled = ConfigSystem.CurrentConfig.AutoBuySeedsEnabled or false
 local selectedSeeds = ConfigSystem.CurrentConfig.SelectedSeeds or {}
-
--- Init guard flags (prevent UI lib initial callback from auto-picking first value)
 local seedDropdownInitialized = false
 
 -- Gear Shop
@@ -443,8 +441,8 @@ AutoPlaySection:AddToggle("EquipBestBrainrotsToggle", {
 
 -- Input cho Delay Time
 AutoPlaySection:AddInput("EquipBestBrainrotsDelayInput", {
-    Title = "Delay Time (1-60)",
-    Description = "Delay time Equip Best Brainrots (minutes)",
+    Title = "Time (1-60m)",
+    Description = "",
     Default = tostring(ConfigSystem.CurrentConfig.EquipBestBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)
@@ -496,8 +494,8 @@ AutoPlaySection:AddToggle("SellBrainrotsToggle", {
 
 -- Input cho Delay Time (Sell Brainrots)
 AutoPlaySection:AddInput("SellBrainrotsDelayInput", {
-    Title = "Sell Delay Time (1-60)",
-    Description = "Delay time Sell Brainrots (minutes)",
+    Title = " Time (1-60m)",
+    Description = "",
     Default = tostring(ConfigSystem.CurrentConfig.SellBrainrotsDelay or 1),
     Placeholder = "1-60 minutes",
     Callback = function(Value)

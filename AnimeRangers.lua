@@ -27,6 +27,7 @@ ConfigSystem.DefaultConfig = {
     FriendOnly = false,
     AutoJoin = false,
     AutoMatching = false,
+    -- Script Settings
     AntiAFK = false,
 }
 ConfigSystem.CurrentConfig = {}
@@ -148,7 +149,6 @@ end
 StorySection:AddDropdown("MapDropdown", {
     Title = "Select Map",
     Description = "Chọn map để chơi",
-    Options = {"namek", "marineford", "karakura", "shibuya", "Entertainment_district"},
     Values = {"namek", "marineford", "karakura", "shibuya", "Entertainment_district"},
     Default = ConfigSystem.CurrentConfig.SelectedMap or "namek",
     Callback = function(Value)
@@ -162,7 +162,6 @@ StorySection:AddDropdown("MapDropdown", {
 StorySection:AddDropdown("ActDropdown", {
     Title = "Act",
     Description = "Chọn act để chơi",
-    Options = {"Act 1", "Act 2", "Act 3", "Act 4", "Act 5", "Act 6"},
     Values = {"Act 1", "Act 2", "Act 3", "Act 4", "Act 5", "Act 6"},
     Default = ConfigSystem.CurrentConfig.SelectedAct or "Act 1",
     Callback = function(Value)
@@ -176,7 +175,6 @@ StorySection:AddDropdown("ActDropdown", {
 StorySection:AddDropdown("DifficultyDropdown", {
     Title = "Difficulty",
     Description = "Chọn độ khó",
-    Options = {"normal", "hard"},
     Values = {"normal", "hard"},
     Default = ConfigSystem.CurrentConfig.SelectedDifficulty or "normal",
     Callback = function(Value)
@@ -268,7 +266,7 @@ StorySection:AddToggle("AutoMatchingToggle", {
 })
 
 -- Tab Settings
--- Settings tab configuration
+-- Script Settings tab configuration
 local SettingsSection = SettingsTab:AddSection("Script Settings")
 
 -- Anti AFK Toggle và logic

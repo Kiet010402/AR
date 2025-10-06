@@ -232,7 +232,8 @@ local Recorder = {
     hasStarted = false,
     moneyConn = nil,
     lastMoney = nil,
-    lastAction = nil, -- {remote, args}
+    lastAction = nil,
+    startConn = nil,
     buffer = nil,
 }
 
@@ -256,7 +257,6 @@ local function installHookOnce()
                 -- Only record whitelisted endpoints
                 local remoteName = tostring(self and self.Name or "")
                 local allowed = {
-                    vote_start = true,
                     spawn_unit = true,
                     upgrade_unit_ingame = true,
                     sell_unit_ingame = true,
@@ -264,39 +264,7 @@ local function installHookOnce()
                 if not allowed[remoteName] then
                     return oldNamecall(self, ...)
                 end
-                -- Start timeline only when vote_start is seen
-                if not Recorder.hasStarted then
-                    if remoteName ~= "vote_start" then
-                        return oldNamecall(self, ...)
-                    end
-                    Recorder.baseTime = os.clock()
-                    Recorder.lastEventTime = Recorder.baseTime
-                    Recorder.hasStarted = true
-                    -- setup money watcher
-                    pcall(function()
-                        local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
-                        Recorder.lastMoney = tonumber(res.Value)
-                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
-                        Recorder.moneyConn = res.Changed:Connect(function(newVal)
-                            local current = tonumber(newVal)
-                            if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
-                                if current < Recorder.lastMoney then
-                                    local delta = Recorder.lastMoney - current
-                                    -- record latest relevant action if present
-                                    local item = Recorder.lastAction
-                                    if item then
-                                        item.record(delta)
-                                        Recorder.lastAction = nil
-                                    end
-                                end
-                                Recorder.lastMoney = current
-                            end
-                        end)
-                    end)
-                    appendLine("--vote_start")
-                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
-                    return oldNamecall(self, ...)
-                end
+                if not Recorder.hasStarted then return oldNamecall(self, ...) end
                 local function recordCall(remote, callArgs, noteMoney)
                     local now = os.clock()
                     local absSec = math.max(0, now - Recorder.baseTime)
@@ -422,7 +390,50 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.lastEventTime = 0
             Recorder.hasStarted = false
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
-            print("Recording started ->", selectedMacro)
+            print("Recording armed -> waiting for GameStarted")
+            -- watch workspace._DATA.GameStarted to begin timeline
+            pcall(function()
+                local flag = workspace:WaitForChild("_DATA"):WaitForChild("GameStarted")
+                local function tryStart()
+                    local enabled = false
+                    if typeof(flag.Value) == "boolean" then
+                        enabled = flag.Value
+                    else
+                        enabled = (flag.Value == true) or (tonumber(flag.Value) == 1)
+                    end
+                    if enabled and not Recorder.hasStarted then
+                        Recorder.baseTime = os.clock()
+                        Recorder.lastEventTime = Recorder.baseTime
+                        Recorder.hasStarted = true
+                        appendLine("--game_start")
+                        if Recorder.startConn then Recorder.startConn:Disconnect() Recorder.startConn = nil end
+                        -- setup money watcher
+                        local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
+                        Recorder.lastMoney = tonumber(res.Value)
+                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
+                        Recorder.moneyConn = res.Changed:Connect(function(newVal)
+                            local current = tonumber(newVal)
+                            if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
+                                if current < Recorder.lastMoney then
+                                    local delta = Recorder.lastMoney - current
+                                    local item = Recorder.lastAction
+                                    if item then
+                                        item.record(delta)
+                                        Recorder.lastAction = nil
+                                    end
+                                end
+                                Recorder.lastMoney = current
+                            end
+                        end)
+                    end
+                end
+                tryStart()
+                if not Recorder.hasStarted then
+                    Recorder.startConn = flag.Changed:Connect(function()
+                        tryStart()
+                    end)
+                end
+            end)
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false

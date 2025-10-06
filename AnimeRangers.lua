@@ -146,6 +146,34 @@ local pendingMacroName = ""
 -- Macro UI
 local MacroSection = MacroTab:AddSection("Macro Recorder")
 
+-- Status UI for recording
+local recordStatus = {
+    elapsed = 0,
+    lastRecorded = nil,
+    lastType = "-",
+}
+local StatusParagraph = MacroSection:AddParagraph({
+    Title = "Status",
+    Content = "Time: 0.000s\nRecorded: -\nType: -"
+})
+
+local function setStatusText()
+    local content = string.format("Time: %.3fs\nRecorded: %s\nType: %s",
+        tonumber(recordStatus.elapsed) or 0,
+        recordStatus.lastRecorded and string.format("%.3fs", recordStatus.lastRecorded) or "-",
+        tostring(recordStatus.lastType or "-"))
+    -- Try multiple setter APIs for compatibility
+    pcall(function()
+        if StatusParagraph.SetDesc then
+            StatusParagraph:SetDesc(content)
+        elseif StatusParagraph.SetContent then
+            StatusParagraph:SetContent(content)
+        elseif StatusParagraph.Set then
+            StatusParagraph:Set({ Content = content })
+        end
+    end)
+end
+
 -- Dropdown select macro
 local MacroDropdown = MacroSection:AddDropdown("MacroSelect", {
     Title = "Select Macro",
@@ -229,6 +257,7 @@ local Recorder = {
     isRecording = false,
     baseTime = 0,
     lastEventTime = 0,
+    hasStarted = false,
     buffer = nil,
 }
 
@@ -252,11 +281,32 @@ local function installHookOnce()
                 -- Only record whitelisted endpoints
                 local remoteName = tostring(self and self.Name or "")
                 local allowed = {
+                    vote_start = true,
                     spawn_unit = true,
                     upgrade_unit_ingame = true,
                     sell_unit_ingame = true,
                 }
                 if not allowed[remoteName] then
+                    return oldNamecall(self, ...)
+                end
+                -- Start timeline only when vote_start is seen
+                if not Recorder.hasStarted then
+                    if remoteName ~= "vote_start" then
+                        return oldNamecall(self, ...)
+                    end
+                    Recorder.baseTime = os.clock()
+                    Recorder.lastEventTime = Recorder.baseTime
+                    Recorder.hasStarted = true
+                    -- start ticking status time in background
+                    task.spawn(function()
+                        while Recorder.isRecording and Recorder.hasStarted do
+                            recordStatus.elapsed = os.clock() - Recorder.baseTime
+                            setStatusText()
+                            task.wait(0.1)
+                        end
+                    end)
+                    appendLine("--vote_start")
+                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
                 local now = os.clock()
@@ -265,6 +315,9 @@ local function installHookOnce()
                 Recorder.lastEventTime = now
                 appendLine(string.format("-- t=%.3f", absSec))
                 appendLine(string.format("task.wait(%.3f)", deltaSec))
+                recordStatus.lastRecorded = absSec
+                recordStatus.lastType = remoteName
+                setStatusText()
 
                 -- spawn_unit formatting expects vector.create for vectors
                 local function vecToStr(v)
@@ -364,10 +417,16 @@ MacroSection:AddToggle("RecordMacroToggle", {
             end
             local path = macroPath(selectedMacro)
             Recorder.isRecording = true
-            Recorder.baseTime = os.clock()
-            Recorder.lastEventTime = Recorder.baseTime
+            Recorder.baseTime = 0
+            Recorder.lastEventTime = 0
+            Recorder.hasStarted = false
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording started ->", selectedMacro)
+            -- reset status
+            recordStatus.elapsed = 0
+            recordStatus.lastRecorded = nil
+            recordStatus.lastType = "-"
+            setStatusText()
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false

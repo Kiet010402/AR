@@ -29,6 +29,8 @@ ConfigSystem.DefaultConfig = {
     AutoMatching = false,
     -- Script Settings
     AntiAFK = false,
+    -- Macro Settings
+    SelectedMacro = "",
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -75,6 +77,7 @@ local selectedDifficulty = ConfigSystem.CurrentConfig.SelectedDifficulty or "nor
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoin = ConfigSystem.CurrentConfig.AutoJoin or false
 local autoMatching = ConfigSystem.CurrentConfig.AutoMatching or false
+-- Biến lưu trạng thái cho Script Settings
 local antiAFKEnabled = ConfigSystem.CurrentConfig.AntiAFK or false
 
 -- Lấy tên người chơi
@@ -95,6 +98,8 @@ local Window = Fluent:CreateWindow({
 
 -- Tạo Tab Maps
 local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311802307" })
+-- Tạo Tab Macro
+local MacroTab = Window:AddTab({ Title = "Macro", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
@@ -102,10 +107,274 @@ local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://133
 -- Section Story trong tab Maps
 local StorySection = MapsTab:AddSection("Story")
 
+-- Macro helpers
+local MacroSystem = {}
+MacroSystem.BaseFolder = "HTHubAnimeCrusaders_Macros"
+
+local function ensureMacroFolder()
+    pcall(function()
+        if not isfolder(MacroSystem.BaseFolder) then
+            makefolder(MacroSystem.BaseFolder)
+        end
+    end)
+end
+
+ensureMacroFolder()
+
+local function listMacros()
+    local names = {}
+    local ok, files = pcall(function()
+        return listfiles(MacroSystem.BaseFolder)
+    end)
+    if ok and files then
+        for _, p in ipairs(files) do
+            local name = string.match(p, "[^/\\]+$")
+            if name then table.insert(names, name) end
+        end
+    end
+    table.sort(names)
+    return names
+end
+
+local function macroPath(name)
+    return MacroSystem.BaseFolder .. "/" .. name
+end
+
+local selectedMacro = ConfigSystem.CurrentConfig.SelectedMacro or ""
+local pendingMacroName = ""
+
+-- Macro UI
+local MacroSection = MacroTab:AddSection("Macro Recorder")
+
+-- Dropdown select macro
+local MacroDropdown = MacroSection:AddDropdown("MacroSelect", {
+    Title = "Select Macro",
+    Description = "Chọn file macro",
+    Values = listMacros(),
+    Default = selectedMacro ~= "" and selectedMacro or nil,
+    Callback = function(val)
+        selectedMacro = val
+        ConfigSystem.CurrentConfig.SelectedMacro = val
+        ConfigSystem.SaveConfig()
+    end
+})
+
+-- Input macro name
+MacroSection:AddInput("MacroNameInput", {
+    Title = "Macro name",
+    Default = "",
+    Placeholder = "vd: my_macro.txt",
+    Callback = function(val)
+        pendingMacroName = tostring(val or "")
+    end
+})
+
+-- Create macro button
+MacroSection:AddButton({
+    Title = "Create Macro",
+    Description = "Tạo file macro .txt",
+    Callback = function()
+        local name = pendingMacroName ~= "" and pendingMacroName or ("macro_" .. os.time() .. ".txt")
+        if not string.find(name, "%.") then name = name .. ".txt" end
+        local path = macroPath(name)
+        local ok, errMsg = pcall(function()
+            ensureMacroFolder()
+            if not isfile(path) then
+                writefile(path, "-- New macro file\n")
+            end
+        end)
+        if ok then
+            selectedMacro = name
+            ConfigSystem.CurrentConfig.SelectedMacro = name
+            ConfigSystem.SaveConfig()
+            -- refresh dropdown
+            pcall(function()
+                MacroDropdown:SetValues(listMacros())
+                MacroDropdown:SetValue(selectedMacro)
+            end)
+            print("Created macro:", name)
+        else
+            warn("Create macro failed:", errMsg)
+        end
+    end
+})
+
+-- Delete macro button
+MacroSection:AddButton({
+    Title = "Delete Macro",
+    Description = "Xóa file macro đang chọn",
+    Callback = function()
+        if not selectedMacro or selectedMacro == "" then return end
+        local path = macroPath(selectedMacro)
+        local ok, errMsg = pcall(function()
+            if isfile(path) then delfile(path) end
+        end)
+        if ok then
+            print("Deleted macro:", selectedMacro)
+            selectedMacro = ""
+            ConfigSystem.CurrentConfig.SelectedMacro = ""
+            ConfigSystem.SaveConfig()
+            pcall(function()
+                MacroDropdown:SetValues(listMacros())
+                MacroDropdown:SetValue(nil)
+            end)
+        else
+            warn("Delete macro failed:", errMsg)
+        end
+    end
+})
+
+-- Recorder state
+local Recorder = {
+    isRecording = false,
+    startTime = 0,
+    buffer = nil,
+}
+
+local function appendLine(line)
+    if Recorder.buffer then
+        Recorder.buffer = Recorder.buffer .. line .. "\n"
+    end
+end
+
+-- Install namecall hook (once)
+local hookInstalled = false
+local oldNamecall
+local function installHookOnce()
+    if hookInstalled then return end
+    hookInstalled = true
+    local ok, res = pcall(function()
+        oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+            local method = getnamecallmethod and getnamecallmethod() or ""
+            if Recorder.isRecording and tostring(method) == "InvokeServer" then
+                local args = {...}
+                -- Only record known endpoints
+                local path = tostring(self)
+                local now = os.clock()
+                local delaySec = math.max(0, now - Recorder.startTime)
+                Recorder.startTime = now
+                appendLine(string.format("task.wait(%.3f)", delaySec))
+
+                -- spawn_unit formatting expects vector.create for vectors
+                local function vecToStr(v)
+                    if typeof and typeof(v) == "Vector3" then
+                        return string.format("vector.create(%f, %f, %f)", v.X, v.Y, v.Z)
+                    end
+                    return tostring(v)
+                end
+
+                -- Build args string (basic serializer for tables with vectors)
+                local function serialize(val, indent)
+                    indent = indent or 0
+                    local pad = string.rep(" ", indent)
+                    if type(val) == "table" then
+                        local parts = {"{"}
+                        for k, v in pairs(val) do
+                            local key = tostring(k)
+                            local valueStr
+                            if typeof and typeof(v) == "Vector3" then
+                                valueStr = vecToStr(v)
+                            elseif type(v) == "table" then
+                                valueStr = serialize(v, indent + 4)
+                            elseif type(v) == "string" then
+                                valueStr = string.format("\"%s\"", v)
+                            else
+                                valueStr = tostring(v)
+                            end
+                            table.insert(parts, string.format("\n%s    %s = %s,", pad, key, valueStr))
+                        end
+                        table.insert(parts, string.format("\n%s}", pad))
+                        return table.concat(parts, "")
+                    elseif type(val) == "string" then
+                        return string.format("\"%s\"", val)
+                    else
+                        return tostring(val)
+                    end
+                end
+
+                local argsStr = serialize(args)
+                appendLine("-- call: " .. path)
+                appendLine("local args = " .. argsStr)
+                appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"" .. self.Parent and self.Parent.Name or "" .. "\"):WaitForChild(\"" .. self.Name .. "\"):InvokeServer(unpack(args))")
+            end
+            return oldNamecall(self, ...)
+        end)
+    end)
+    if not ok then
+        warn("Failed to install hook:", res)
+    end
+end
+
+-- Toggle record macro
+MacroSection:AddToggle("RecordMacroToggle", {
+    Title = "Record Macro",
+    Description = "Ghi macro và thời gian chờ",
+    Default = false,
+    Callback = function(enabled)
+        if enabled then
+            installHookOnce()
+            if not selectedMacro or selectedMacro == "" then
+                -- auto name
+                selectedMacro = "macro_" .. os.time() .. ".txt"
+                ConfigSystem.CurrentConfig.SelectedMacro = selectedMacro
+                ConfigSystem.SaveConfig()
+            end
+            local path = macroPath(selectedMacro)
+            Recorder.isRecording = true
+            Recorder.startTime = os.clock()
+            Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
+            print("Recording started ->", selectedMacro)
+        else
+            if Recorder.isRecording then
+                Recorder.isRecording = false
+                local path = macroPath(selectedMacro)
+                local ok, errMsg = pcall(function()
+                    writefile(path, Recorder.buffer or "-- empty macro\n")
+                end)
+                if ok then
+                    print("Recording saved:", selectedMacro)
+                    pcall(function()
+                        MacroDropdown:SetValues(listMacros())
+                        MacroDropdown:SetValue(selectedMacro)
+                    end)
+                else
+                    warn("Save macro failed:", errMsg)
+                end
+        end
+    end
+end
+})
+
+-- Play macro
+MacroSection:AddButton({
+    Title = "Play Macro",
+    Description = "Phát lại macro đang chọn",
+    Callback = function()
+        if not selectedMacro or selectedMacro == "" then return end
+        local path = macroPath(selectedMacro)
+        local ok, content = pcall(function()
+            if isfile(path) then return readfile(path) end
+            return nil
+        end)
+        if ok and content then
+            local runnerCode = "return function()\n" .. content .. "\nend"
+            local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
+            if loadOk and type(fnOrErr) == "function" then
+                local runOk, runErr = pcall(fnOrErr)
+                if not runOk then warn("Run macro error:", runErr) end
+            else
+                warn("Load macro error:", fnOrErr)
+            end
+        else
+            warn("Read macro failed")
+        end
+    end
+})
+
 -- Hàm Auto Join theo 3 bước
 local function executeAutoJoin()
     if not autoJoin then return end
-    local success, err = pcall(function()
+        local success, err = pcall(function()
         -- Bước 1: Join lobby
         local args1 = {"P1"}
         game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args1))
@@ -136,11 +405,11 @@ local function executeAutoJoin()
         -- Bước 3: Start game
         local args3 = {"P1"}
         game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args3))
-    end)
-
-    if not success then
+        end)
+        
+        if not success then
         warn("Lỗi Auto Join: " .. tostring(err))
-    else
+        else
         print("Auto Join executed successfully")
     end
 end

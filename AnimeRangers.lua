@@ -56,7 +56,10 @@ ConfigSystem.LoadConfig = function()
         ConfigSystem.CurrentConfig = data
         return true
     else
-        ConfigSystem.CurrentConfig = table.clone(ConfigSystem.DefaultConfig)
+        ConfigSystem.CurrentConfig = {}
+        for k, v in pairs(ConfigSystem.DefaultConfig) do
+            ConfigSystem.CurrentConfig[k] = v
+        end
         ConfigSystem.SaveConfig()
         return false
     end
@@ -223,17 +226,9 @@ StorySection:AddToggle("FriendOnlyToggle", {
         ConfigSystem.SaveConfig()
         
         if friendOnly then
-            Fluent:Notify({
-                Title = "Friend Only Enabled",
-                Content = "Đã bật chế độ chỉ chơi với bạn bè",
-                Duration = 3
-            })
+            print("Friend Only Enabled - Đã bật chế độ chỉ chơi với bạn bè")
         else
-            Fluent:Notify({
-                Title = "Friend Only Disabled",
-                Content = "Đã tắt chế độ chỉ chơi với bạn bè",
-                Duration = 3
-            })
+            print("Friend Only Disabled - Đã tắt chế độ chỉ chơi với bạn bè")
         end
     end
 })
@@ -249,19 +244,11 @@ StorySection:AddToggle("AutoJoinToggle", {
         ConfigSystem.SaveConfig()
         
         if autoJoin then
-            Fluent:Notify({
-                Title = "Auto Join Enabled",
-                Content = "Đã bật tự động tham gia game",
-                Duration = 3
-            })
+            print("Auto Join Enabled - Đã bật tự động tham gia game")
             -- Thực hiện Auto Join
             executeAutoJoin()
         else
-            Fluent:Notify({
-                Title = "Auto Join Disabled",
-                Content = "Đã tắt tự động tham gia game",
-                Duration = 3
-            })
+            print("Auto Join Disabled - Đã tắt tự động tham gia game")
         end
     end
 })
@@ -277,19 +264,11 @@ StorySection:AddToggle("AutoMatchingToggle", {
         ConfigSystem.SaveConfig()
         
         if autoMatching then
-            Fluent:Notify({
-                Title = "Auto Matching Enabled",
-                Content = "Đã bật tự động tìm kiếm game",
-                Duration = 3
-            })
+            print("Auto Matching Enabled - Đã bật tự động tìm kiếm game")
             -- Thực hiện Auto Matching
             executeAutoMatching()
         else
-            Fluent:Notify({
-                Title = "Auto Matching Disabled",
-                Content = "Đã tắt tự động tìm kiếm game",
-                Duration = 3
-            })
+            print("Auto Matching Disabled - Đã tắt tự động tìm kiếm game")
         end
     end
 })
@@ -332,7 +311,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({MainTab, SettingsTab}) do
+    for _, tab in pairs({MapsTab, SettingsTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then

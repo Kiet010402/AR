@@ -282,17 +282,8 @@ local function installHookOnce()
                             local newVal = tonumber(res.Value) or 0
                             if Recorder.lastMoney and newVal < Recorder.lastMoney then
                                 local spent = Recorder.lastMoney - newVal
-                                -- flush one pending action if any
                                 local pending = table.remove(Recorder.pendingQueue, 1)
                                 if pending then
-                                    local now = os.clock()
-                                    local absSec = math.max(0, now - Recorder.baseTime)
-                                    local deltaSec = math.max(0, now - Recorder.lastEventTime)
-                                    Recorder.lastEventTime = now
-                                    appendLine(string.format("-- t=%.3f", absSec))
-                                    appendLine(string.format("task.wait(%.3f)", deltaSec))
-                                    appendLine("--note money: " .. tostring(spent))
-                                    -- serialize args
                                     local function vecToStr(v)
                                         if typeof and typeof(v) == "Vector3" then
                                             return string.format("vector.create(%f, %f, %f)", v.X, v.Y, v.Z)
@@ -355,6 +346,7 @@ local function installHookOnce()
                                     end
                                     local argsStr = serialize(pending.args)
                                     appendLine("--call: " .. pending.name)
+                                    appendLine("--note money: " .. tostring(spent))
                                     appendLine("local args = " .. argsStr)
                                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. pending.name .. "\"):InvokeServer(unpack(args))")
                                 end
@@ -366,12 +358,7 @@ local function installHookOnce()
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
-                local now = os.clock()
-                local absSec = math.max(0, now - Recorder.baseTime)
-                local deltaSec = math.max(0, now - Recorder.lastEventTime)
-                Recorder.lastEventTime = now
-                appendLine(string.format("-- t=%.3f", absSec))
-                appendLine(string.format("task.wait(%.3f)", deltaSec))
+                -- (removed time logging; rely on money delta to flush)
 
                 -- spawn_unit formatting expects vector.create for vectors
                 local function vecToStr(v)
@@ -444,11 +431,6 @@ local function installHookOnce()
 
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
                     table.insert(Recorder.pendingQueue, { name = remoteName, args = args })
-                else
-                    local argsStr = serialize(args)
-                    appendLine("--call: " .. remoteName)
-                    appendLine("local args = " .. argsStr)
-                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
                 end
             end
             return oldNamecall(self, ...)

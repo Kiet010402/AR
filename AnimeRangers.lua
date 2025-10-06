@@ -20,13 +20,14 @@ end
 local ConfigSystem = {}
 ConfigSystem.FileName = "HTHubAnimeCrusaders_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
 ConfigSystem.DefaultConfig = {
-    -- Auto Play Settings
+    -- Maps Settings
     SelectedMap = "namek",
     SelectedAct = "Act 1",
     SelectedDifficulty = "normal",
     FriendOnly = false,
     AutoJoin = false,
     AutoMatching = false,
+    AntiAFK = false,
 }
 ConfigSystem.CurrentConfig = {}
 
@@ -65,8 +66,7 @@ end
 -- Tải cấu hình khi khởi động
 ConfigSystem.LoadConfig()
 
--- Biến lưu trạng thái của tab Main
-
+-- Biến lưu trạng thái của tab Maps
 -- Biến lưu trạng thái cho Story selections và toggles
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "namek"
 local selectedAct = ConfigSystem.CurrentConfig.SelectedAct or "Act 1"
@@ -74,6 +74,7 @@ local selectedDifficulty = ConfigSystem.CurrentConfig.SelectedDifficulty or "nor
 local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
 local autoJoin = ConfigSystem.CurrentConfig.AutoJoin or false
 local autoMatching = ConfigSystem.CurrentConfig.AutoMatching or false
+local antiAFKEnabled = ConfigSystem.CurrentConfig.AntiAFK or false
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
@@ -95,52 +96,51 @@ local Window = Fluent:CreateWindow({
 local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
+
 -- Tab Maps
 -- Section Story trong tab Maps
 local StorySection = MapsTab:AddSection("Story")
 
 -- Hàm Auto Join theo 3 bước
 local function executeAutoJoin()
-    if autoJoin then
-        local success, err = pcall(function()
-            -- Bước 1: Join lobby
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
+    if not autoJoin then return end
+    local success, err = pcall(function()
+        -- Bước 1: Join lobby
+        local args1 = {"P1"}
+        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args1))
 
-            wait(1)
+        wait(1)
 
-            -- Bước 2: Lock level
-            local actNumber = string.match(selectedAct, "%d+") -- lấy số từ "Act X"
-            local levelName = ""
-
-            if selectedMap == "Entertainment_district" then
-                levelName = "Entertainment_district_" .. actNumber
-            else
-                levelName = selectedMap .. "_level_" .. actNumber
-            end
-
-            local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
-
-            local args2 = {
-                "P1",
-                levelName,
-                friendOnly,
-                difficultyPretty
-            }
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args2))
-
-            wait(1)
-
-            -- Bước 3: Start game
-            local args3 = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args3))
-        end)
-
-        if not success then
-            warn("Lỗi Auto Join: " .. tostring(err))
+        -- Bước 2: Lock level
+        local actNumber = string.match(selectedAct, "%d+")
+        local levelName
+        if selectedMap == "Entertainment_district" then
+            levelName = "Entertainment_district_" .. tostring(actNumber)
         else
-            print("Auto Join executed successfully")
+            levelName = selectedMap .. "_level_" .. tostring(actNumber)
         end
+
+        local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2)
+
+        local args2 = {
+            "P1",
+            levelName,
+            friendOnly,
+            difficultyPretty
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args2))
+
+        wait(1)
+
+        -- Bước 3: Start game
+        local args3 = {"P1"}
+        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args3))
+    end)
+
+    if not success then
+        warn("Lỗi Auto Join: " .. tostring(err))
+    else
+        print("Auto Join executed successfully")
     end
 end
 
@@ -192,7 +192,6 @@ StorySection:AddToggle("FriendOnlyToggle", {
         friendOnly = Value
         ConfigSystem.CurrentConfig.FriendOnly = Value
         ConfigSystem.SaveConfig()
-        
         if friendOnly then
             print("Friend Only Enabled - Đã bật chế độ chỉ chơi với bạn bè")
         else
@@ -210,7 +209,6 @@ StorySection:AddToggle("AutoJoinToggle", {
         autoJoin = Value
         ConfigSystem.CurrentConfig.AutoJoin = Value
         ConfigSystem.SaveConfig()
-        
         if autoJoin then
             print("Auto Join Enabled - Đã bật tự động tham gia game")
             executeAutoJoin()
@@ -222,31 +220,29 @@ StorySection:AddToggle("AutoJoinToggle", {
 
 -- Hàm Auto Matching theo 2 bước
 local function executeAutoMatching()
-    if autoMatching then
-        local success, err = pcall(function()
-            -- Bước 1: Join lobby
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
+    if not autoMatching then return end
+    local success, err = pcall(function()
+        -- Bước 1: Join lobby
+        local args1 = {"P1"}
+        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args1))
 
-            wait(1)
+        wait(1)
 
-            -- Bước 2: Request matchmaking
-            local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
-
-            local args2 = {
-                selectedMap .. "_level_1",
-                {
-                    Difficulty = difficultyPretty
-                }
+        -- Bước 2: Request matchmaking
+        local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2)
+        local args2 = {
+            selectedMap .. "_level_1",
+            {
+                Difficulty = difficultyPretty
             }
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args2))
-        end)
+        }
+        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args2))
+    end)
 
-        if not success then
-            warn("Lỗi Auto Matching: " .. tostring(err))
-        else
-            print("Auto Matching executed successfully")
-        end
+    if not success then
+        warn("Lỗi Auto Matching: " .. tostring(err))
+    else
+        print("Auto Matching executed successfully")
     end
 end
 
@@ -259,7 +255,6 @@ StorySection:AddToggle("AutoMatchingToggle", {
         autoMatching = Value
         ConfigSystem.CurrentConfig.AutoMatching = Value
         ConfigSystem.SaveConfig()
-        
         if autoMatching then
             print("Auto Matching Enabled - Đã bật tự động tìm kiếm game")
             executeAutoMatching()
@@ -268,6 +263,50 @@ StorySection:AddToggle("AutoMatchingToggle", {
         end
     end
 })
+
+-- Tab Settings
+-- Settings tab configuration
+local SettingsSection = SettingsTab:AddSection("Script Settings")
+
+-- Anti AFK Toggle và logic
+local antiAfkConnection
+local function setAntiAFK(enabled)
+    if enabled then
+        if not antiAfkConnection then
+            local VirtualUser = game:GetService("VirtualUser")
+            antiAfkConnection = game:GetService("Players").LocalPlayer.Idled:Connect(function()
+                VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                task.wait(1)
+                VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            end)
+        end
+    else
+        if antiAfkConnection then
+            antiAfkConnection:Disconnect()
+            antiAfkConnection = nil
+        end
+    end
+end
+
+SettingsSection:AddToggle("AntiAFKToggle", {
+    Title = "Anti AFK",
+    Description = "Chống out do AFK",
+    Default = ConfigSystem.CurrentConfig.AntiAFK or false,
+    Callback = function(Value)
+        antiAFKEnabled = Value
+        ConfigSystem.CurrentConfig.AntiAFK = Value
+        ConfigSystem.SaveConfig()
+        setAntiAFK(antiAFKEnabled)
+        if antiAFKEnabled then
+            print("Anti AFK Enabled")
+        else
+            print("Anti AFK Disabled")
+        end
+    end
+})
+
+-- Khởi tạo Anti AFK theo config
+setAntiAFK(antiAFKEnabled)
 
 -- Integration with SaveManager
 SaveManager:SetLibrary(Fluent)
@@ -304,7 +343,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({MainTab, SettingsTab}) do
+    for _, tab in pairs({MapsTab, SettingsTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then

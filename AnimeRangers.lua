@@ -230,10 +230,10 @@ local Recorder = {
     baseTime = 0,
     lastEventTime = 0,
     hasStarted = false,
-    buffer = nil,
     moneyConn = nil,
     lastMoney = nil,
-    pendingQueue = {},
+    lastAction = nil, -- {remote, args}
+    buffer = nil,
 }
 
 local function appendLine(line)
@@ -272,93 +272,46 @@ local function installHookOnce()
                     Recorder.baseTime = os.clock()
                     Recorder.lastEventTime = Recorder.baseTime
                     Recorder.hasStarted = true
-                    -- init money tracking
+                    -- setup money watcher
                     pcall(function()
-                        local stats = game:GetService("Players").LocalPlayer:WaitForChild("_stats")
-                        local res = stats:WaitForChild("resource")
-                        Recorder.lastMoney = tonumber(res.Value) or 0
-                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() end
-                        Recorder.moneyConn = res:GetPropertyChangedSignal("Value"):Connect(function()
-                            local newVal = tonumber(res.Value) or 0
-                            if Recorder.lastMoney and newVal < Recorder.lastMoney then
-                                local spent = Recorder.lastMoney - newVal
-                                local pending = table.remove(Recorder.pendingQueue, 1)
-                                if pending then
-                                    local function vecToStr(v)
-                                        if typeof and typeof(v) == "Vector3" then
-                                            return string.format("vector.create(%f, %f, %f)", v.X, v.Y, v.Z)
-                                        end
-                                        return tostring(v)
+                        local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
+                        Recorder.lastMoney = tonumber(res.Value)
+                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
+                        Recorder.moneyConn = res.Changed:Connect(function(newVal)
+                            local current = tonumber(newVal)
+                            if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
+                                if current < Recorder.lastMoney then
+                                    local delta = Recorder.lastMoney - current
+                                    -- record latest relevant action if present
+                                    local item = Recorder.lastAction
+                                    if item then
+                                        item.record(delta)
+                                        Recorder.lastAction = nil
                                     end
-                                    local function isArray(tbl)
-                                        local n = 0
-                                        for k,_ in pairs(tbl) do
-                                            if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then return false end
-                                            if k > n then n = k end
-                                        end
-                                        for i=1,n do if tbl[i]==nil then return false end end
-                                        return true, n
-                                    end
-                                    local function serialize(val, indent)
-                                        indent = indent or 0
-                                        local pad = string.rep(" ", indent)
-                                        if type(val) == "table" then
-                                            local arr,n = isArray(val)
-                                            local parts = {"{"}
-                                            if arr then
-                                                for i=1,n do
-                                                    local v = val[i]
-                                                    local valueStr
-                                                    if typeof and typeof(v) == "Vector3" then
-                                                        valueStr = vecToStr(v)
-                                                    elseif type(v) == "table" then
-                                                        valueStr = serialize(v, indent+4)
-                                                    elseif type(v) == "string" then
-                                                        valueStr = string.format("\"%s\"", v)
-                                                    else
-                                                        valueStr = tostring(v)
-                                                    end
-                                                    table.insert(parts, string.format("\n%s    %s,", pad, valueStr))
-                                                end
-                                            else
-                                                for k,v in pairs(val) do
-                                                    local key = tostring(k)
-                                                    local valueStr
-                                                    if typeof and typeof(v) == "Vector3" then
-                                                        valueStr = vecToStr(v)
-                                                    elseif type(v) == "table" then
-                                                        valueStr = serialize(v, indent+4)
-                                                    elseif type(v) == "string" then
-                                                        valueStr = string.format("\"%s\"", v)
-                                                    else
-                                                        valueStr = tostring(v)
-                                                    end
-                                                    table.insert(parts, string.format("\n%s    %s = %s,", pad, key, valueStr))
-                                                end
-                                            end
-                                            table.insert(parts, string.format("\n%s}", pad))
-                                            return table.concat(parts)
-                                        elseif type(val) == "string" then
-                                            return string.format("\"%s\"", val)
-                                        else
-                                            return tostring(val)
-                                        end
-                                    end
-                                    local argsStr = serialize(pending.args)
-                                    appendLine("--call: " .. pending.name)
-                                    appendLine("--note money: " .. tostring(spent))
-                                    appendLine("local args = " .. argsStr)
-                                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. pending.name .. "\"):InvokeServer(unpack(args))")
                                 end
+                                Recorder.lastMoney = current
                             end
-                            Recorder.lastMoney = newVal
                         end)
                     end)
                     appendLine("--vote_start")
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
-                -- (removed time logging; rely on money delta to flush)
+                local function recordCall(remote, callArgs, noteMoney)
+                    local now = os.clock()
+                    local absSec = math.max(0, now - Recorder.baseTime)
+                    local deltaSec = math.max(0, now - Recorder.lastEventTime)
+                    Recorder.lastEventTime = now
+                    appendLine(string.format("-- t=%.3f", absSec))
+                    appendLine(string.format("task.wait(%.3f)", deltaSec))
+                    if noteMoney and noteMoney > 0 then
+                        appendLine(string.format("--note money: %d", noteMoney))
+                    end
+                    local argsStr = serialize(callArgs)
+                    appendLine("--call: " .. remote)
+                    appendLine("local args = " .. argsStr)
+                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remote .. "\"):InvokeServer(unpack(args))")
+                end
 
                 -- spawn_unit formatting expects vector.create for vectors
                 local function vecToStr(v)
@@ -430,7 +383,15 @@ local function installHookOnce()
                 end
 
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    table.insert(Recorder.pendingQueue, { name = remoteName, args = args })
+                    -- capture latest action; only record when money decreases next
+                    Recorder.lastAction = {
+                        record = function(delta)
+                            recordCall(remoteName, args, delta)
+                        end
+                    }
+                else
+                    -- immediate record for other whitelisted calls (e.g., sell)
+                    recordCall(remoteName, args)
                 end
             end
             return oldNamecall(self, ...)

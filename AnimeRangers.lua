@@ -473,9 +473,13 @@ MacroSection:AddToggle("PlayMacroToggle", {
                 "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
                 "local function WAIT_MONEY(target) target=tonumber(target) or 0 while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
-                "return function()\n",
+                "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
+                "local function RUN_ONCE()\n",
                 txt,
-                "\nend"
+                "\nend\n",
+                "return function()\n",
+                "while _G.__HT_MACRO_PLAYING do RUN_ONCE(); if not _G.__HT_MACRO_PLAYING then break end; while _G.__HT_MACRO_PLAYING and GET_WAVE()~=0 do task.wait(0.5) end end\n",
+                "end"
             })
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then

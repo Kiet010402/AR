@@ -20,7 +20,7 @@ end
 local ConfigSystem = {}
 ConfigSystem.FileName = "HTHubAnimeCrusaders_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
 ConfigSystem.DefaultConfig = {
-    -- Map Settings
+    -- Auto Play Settings
     SelectedMap = "namek",
     SelectedAct = "Act 1",
     SelectedDifficulty = "normal",
@@ -56,10 +56,7 @@ ConfigSystem.LoadConfig = function()
         ConfigSystem.CurrentConfig = data
         return true
     else
-        ConfigSystem.CurrentConfig = {}
-        for k, v in pairs(ConfigSystem.DefaultConfig) do
-            ConfigSystem.CurrentConfig[k] = v
-        end
+        ConfigSystem.CurrentConfig = table.clone(ConfigSystem.DefaultConfig)
         ConfigSystem.SaveConfig()
         return false
     end
@@ -68,7 +65,7 @@ end
 -- Tải cấu hình khi khởi động
 ConfigSystem.LoadConfig()
 
--- Biến lưu trạng thái của tab Maps
+-- Biến lưu trạng thái của tab Main
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "namek"
 local selectedAct = ConfigSystem.CurrentConfig.SelectedAct or "Act 1"
 local selectedDifficulty = ConfigSystem.CurrentConfig.SelectedDifficulty or "normal"
@@ -92,87 +89,17 @@ local Window = Fluent:CreateWindow({
 
 -- Hệ thống Tạo Tab
 
--- Tạo Tab Maps
-local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
+-- Tạo Tab Maps
+local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311798537" })
+
 -- Tab Main
--- Hàm Auto Join
-local function executeAutoJoin()
-    if autoJoin then
-        local success, err = pcall(function()
-            -- Bước 1: Join lobby
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
-            
-            wait(1) -- Đợi 1 giây
-            
-            -- Bước 2: Lock level
-            local actNumber = string.match(selectedAct, "%d+") -- Lấy số từ "Act X"
-            local levelName = ""
-            
-            if selectedMap == "Entertainment_district" then
-                levelName = "Entertainment_district_" .. actNumber
-            else
-                levelName = selectedMap .. "_level_" .. actNumber
-            end
-            
-            local difficulty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
-            
-            local args = {
-                "P1",
-                levelName,
-                friendOnly,
-                difficulty
-            }
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args))
-            
-            wait(1) -- Đợi 1 giây
-            
-            -- Bước 3: Start game
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args))
-        end)
-        
-        if not success then
-            warn("Lỗi Auto Join: " .. tostring(err))
-        else
-            print("Auto Join executed successfully")
-        end
-    end
-end
+-- Section Auto Play trong tab Main
+local AutoPlaySection = MainTab:AddSection("Auto Play")
 
--- Hàm Auto Matching
-local function executeAutoMatching()
-    if autoMatching then
-        local success, err = pcall(function()
-            -- Bước 1: Join lobby
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
-            
-            wait(1) -- Đợi 1 giây
-            
-            -- Bước 2: Request matchmaking
-            local difficulty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
-            
-            local args = {
-                "namek_level_1",
-                {
-                    Difficulty = difficulty
-                }
-            }
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args))
-        end)
-        
-        if not success then
-            warn("Lỗi Auto Matching: " .. tostring(err))
-        else
-            print("Auto Matching executed successfully")
-        end
-    end
-end
-
+-- Tab Maps
 -- Section Story trong tab Maps
 local StorySection = MapsTab:AddSection("Story")
 
@@ -233,6 +160,51 @@ StorySection:AddToggle("FriendOnlyToggle", {
     end
 })
 
+-- Hàm Auto Join
+local function executeAutoJoin()
+    if autoJoin then
+        local success, err = pcall(function()
+            -- Bước 1: Join lobby
+            local args = {"P1"}
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
+            
+            wait(1) -- Đợi 1 giây
+            
+            -- Bước 2: Lock level
+            local actNumber = string.match(selectedAct, "%d+") -- Lấy số từ "Act X"
+            local levelName = ""
+            
+            if selectedMap == "Entertainment_district" then
+                levelName = "Entertainment_district_" .. actNumber
+            else
+                levelName = selectedMap .. "_level_" .. actNumber
+            end
+            
+            local difficulty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
+            
+            local args = {
+                "P1",
+                levelName,
+                friendOnly,
+                difficulty
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args))
+            
+            wait(1) -- Đợi 1 giây
+            
+            -- Bước 3: Start game
+            local args = {"P1"}
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args))
+        end)
+        
+        if not success then
+            warn("Lỗi Auto Join: " .. tostring(err))
+        else
+            print("Auto Join executed successfully")
+        end
+    end
+end
+
 -- Toggle Auto Join
 StorySection:AddToggle("AutoJoinToggle", {
     Title = "Auto Join",
@@ -252,6 +224,36 @@ StorySection:AddToggle("AutoJoinToggle", {
         end
     end
 })
+
+-- Hàm Auto Matching
+local function executeAutoMatching()
+    if autoMatching then
+        local success, err = pcall(function()
+            -- Bước 1: Join lobby
+            local args = {"P1"}
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
+            
+            wait(1) -- Đợi 1 giây
+            
+            -- Bước 2: Request matchmaking
+            local difficulty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
+            
+            local args = {
+                selectedMap .. "_level_1",
+                {
+                    Difficulty = difficulty
+                }
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args))
+        end)
+        
+        if not success then
+            warn("Lỗi Auto Matching: " .. tostring(err))
+        else
+            print("Auto Matching executed successfully")
+        end
+    end
+end
 
 -- Toggle Auto Join Matching
 StorySection:AddToggle("AutoMatchingToggle", {
@@ -311,7 +313,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({MapsTab, SettingsTab}) do
+    for _, tab in pairs({MainTab, SettingsTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then

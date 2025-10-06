@@ -463,16 +463,16 @@ MacroSection:AddToggle("PlayMacroToggle", {
             end
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            -- Biến đổi nội dung: chờ theo tiền và có thể dừng giữa chừng
+            -- Biến đổi nội dung: chờ theo tiền dựa trên --note money: X (mốc tuyệt đối)
             local txt = tostring(content)
-            -- Chờ theo delta tiền ngay trước mỗi hành động có ghi --note money: X
+            -- Chèn hàm WAIT_MONEY(target) trước mỗi hành động có ghi note
             txt = txt:gsub("%-%-note money:%s*(%d+)", "WAIT_MONEY(%1)\n--note money: %1")
             -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng (nếu còn sót)
             txt = txt:gsub("task%.wait%(", "SAFE_WAIT(")
             local runnerCode = table.concat({
                 "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
-                "local function WAIT_MONEY(delta) local start=GET_MONEY() local target=start+(tonumber(delta) or 0) while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
+                "local function WAIT_MONEY(target) target=tonumber(target) or 0 while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
                 "return function()\n",
                 txt,
                 "\nend"

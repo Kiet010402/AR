@@ -231,6 +231,9 @@ local Recorder = {
     lastEventTime = 0,
     hasStarted = false,
     buffer = nil,
+    moneyConn = nil,
+    lastMoney = nil,
+    pendingQueue = {},
 }
 
 local function appendLine(line)
@@ -269,6 +272,96 @@ local function installHookOnce()
                     Recorder.baseTime = os.clock()
                     Recorder.lastEventTime = Recorder.baseTime
                     Recorder.hasStarted = true
+                    -- init money tracking
+                    pcall(function()
+                        local stats = game:GetService("Players").LocalPlayer:WaitForChild("_stats")
+                        local res = stats:WaitForChild("resource")
+                        Recorder.lastMoney = tonumber(res.Value) or 0
+                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() end
+                        Recorder.moneyConn = res:GetPropertyChangedSignal("Value"):Connect(function()
+                            local newVal = tonumber(res.Value) or 0
+                            if Recorder.lastMoney and newVal < Recorder.lastMoney then
+                                local spent = Recorder.lastMoney - newVal
+                                -- flush one pending action if any
+                                local pending = table.remove(Recorder.pendingQueue, 1)
+                                if pending then
+                                    local now = os.clock()
+                                    local absSec = math.max(0, now - Recorder.baseTime)
+                                    local deltaSec = math.max(0, now - Recorder.lastEventTime)
+                                    Recorder.lastEventTime = now
+                                    appendLine(string.format("-- t=%.3f", absSec))
+                                    appendLine(string.format("task.wait(%.3f)", deltaSec))
+                                    appendLine("--note money: " .. tostring(spent))
+                                    -- serialize args
+                                    local function vecToStr(v)
+                                        if typeof and typeof(v) == "Vector3" then
+                                            return string.format("vector.create(%f, %f, %f)", v.X, v.Y, v.Z)
+                                        end
+                                        return tostring(v)
+                                    end
+                                    local function isArray(tbl)
+                                        local n = 0
+                                        for k,_ in pairs(tbl) do
+                                            if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then return false end
+                                            if k > n then n = k end
+                                        end
+                                        for i=1,n do if tbl[i]==nil then return false end end
+                                        return true, n
+                                    end
+                                    local function serialize(val, indent)
+                                        indent = indent or 0
+                                        local pad = string.rep(" ", indent)
+                                        if type(val) == "table" then
+                                            local arr,n = isArray(val)
+                                            local parts = {"{"}
+                                            if arr then
+                                                for i=1,n do
+                                                    local v = val[i]
+                                                    local valueStr
+                                                    if typeof and typeof(v) == "Vector3" then
+                                                        valueStr = vecToStr(v)
+                                                    elseif type(v) == "table" then
+                                                        valueStr = serialize(v, indent+4)
+                                                    elseif type(v) == "string" then
+                                                        valueStr = string.format("\"%s\"", v)
+                                                    else
+                                                        valueStr = tostring(v)
+                                                    end
+                                                    table.insert(parts, string.format("\n%s    %s,", pad, valueStr))
+                                                end
+                                            else
+                                                for k,v in pairs(val) do
+                                                    local key = tostring(k)
+                                                    local valueStr
+                                                    if typeof and typeof(v) == "Vector3" then
+                                                        valueStr = vecToStr(v)
+                                                    elseif type(v) == "table" then
+                                                        valueStr = serialize(v, indent+4)
+                                                    elseif type(v) == "string" then
+                                                        valueStr = string.format("\"%s\"", v)
+                                                    else
+                                                        valueStr = tostring(v)
+                                                    end
+                                                    table.insert(parts, string.format("\n%s    %s = %s,", pad, key, valueStr))
+                                                end
+                                            end
+                                            table.insert(parts, string.format("\n%s}", pad))
+                                            return table.concat(parts)
+                                        elseif type(val) == "string" then
+                                            return string.format("\"%s\"", val)
+                                        else
+                                            return tostring(val)
+                                        end
+                                    end
+                                    local argsStr = serialize(pending.args)
+                                    appendLine("--call: " .. pending.name)
+                                    appendLine("local args = " .. argsStr)
+                                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. pending.name .. "\"):InvokeServer(unpack(args))")
+                                end
+                            end
+                            Recorder.lastMoney = newVal
+                        end)
+                    end)
                     appendLine("--vote_start")
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
@@ -349,10 +442,14 @@ local function installHookOnce()
                     end
                 end
 
-                local argsStr = serialize(args)
-                appendLine("--call: " .. remoteName)
-                appendLine("local args = " .. argsStr)
-                appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
+                if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
+                    table.insert(Recorder.pendingQueue, { name = remoteName, args = args })
+                else
+                    local argsStr = serialize(args)
+                    appendLine("--call: " .. remoteName)
+                    appendLine("local args = " .. argsStr)
+                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
+                end
             end
             return oldNamecall(self, ...)
         end)

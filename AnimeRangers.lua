@@ -95,8 +95,7 @@ local Window = Fluent:CreateWindow({
 local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
-
--- Tab Main
+-- Tab Maps
 -- Section Story trong tab Maps
 local StorySection = MapsTab:AddSection("Story")
 
@@ -269,9 +268,6 @@ StorySection:AddToggle("AutoMatchingToggle", {
         end
     end
 })
-
--- Settings tab configuration
-local SettingsSection = SettingsTab:AddSection("Script Settings")
 
 -- Integration with SaveManager
 SaveManager:SetLibrary(Fluent)

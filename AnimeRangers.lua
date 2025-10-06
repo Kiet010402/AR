@@ -149,6 +149,7 @@ StorySection:AddDropdown("MapDropdown", {
     Title = "Select Map",
     Description = "Chọn map để chơi",
     Options = {"namek", "marineford", "karakura", "shibuya", "Entertainment_district"},
+    Values = {"namek", "marineford", "karakura", "shibuya", "Entertainment_district"},
     Default = ConfigSystem.CurrentConfig.SelectedMap or "namek",
     Callback = function(Value)
         selectedMap = Value
@@ -162,6 +163,7 @@ StorySection:AddDropdown("ActDropdown", {
     Title = "Act",
     Description = "Chọn act để chơi",
     Options = {"Act 1", "Act 2", "Act 3", "Act 4", "Act 5", "Act 6"},
+    Values = {"Act 1", "Act 2", "Act 3", "Act 4", "Act 5", "Act 6"},
     Default = ConfigSystem.CurrentConfig.SelectedAct or "Act 1",
     Callback = function(Value)
         selectedAct = Value
@@ -175,6 +177,7 @@ StorySection:AddDropdown("DifficultyDropdown", {
     Title = "Difficulty",
     Description = "Chọn độ khó",
     Options = {"normal", "hard"},
+    Values = {"normal", "hard"},
     Default = ConfigSystem.CurrentConfig.SelectedDifficulty or "normal",
     Callback = function(Value)
         selectedDifficulty = Value

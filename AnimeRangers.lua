@@ -227,7 +227,8 @@ MacroSection:AddButton({
 -- Recorder state
 local Recorder = {
     isRecording = false,
-    startTime = 0,
+    baseTime = 0,
+    lastEventTime = 0,
     buffer = nil,
 }
 
@@ -259,9 +260,11 @@ local function installHookOnce()
                     return oldNamecall(self, ...)
                 end
                 local now = os.clock()
-                local delaySec = math.max(0, now - Recorder.startTime)
-                Recorder.startTime = now
-                appendLine(string.format("task.wait(%.3f)", delaySec))
+                local absSec = math.max(0, now - Recorder.baseTime)
+                local deltaSec = math.max(0, now - Recorder.lastEventTime)
+                Recorder.lastEventTime = now
+                appendLine(string.format("-- t=%.3f", absSec))
+                appendLine(string.format("task.wait(%.3f)", deltaSec))
 
                 -- spawn_unit formatting expects vector.create for vectors
                 local function vecToStr(v)
@@ -361,7 +364,8 @@ MacroSection:AddToggle("RecordMacroToggle", {
             end
             local path = macroPath(selectedMacro)
             Recorder.isRecording = true
-            Recorder.startTime = os.clock()
+            Recorder.baseTime = os.clock()
+            Recorder.lastEventTime = Recorder.baseTime
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording started ->", selectedMacro)
         else

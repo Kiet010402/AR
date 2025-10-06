@@ -346,27 +346,53 @@ end
 })
 
 -- Play macro
-MacroSection:AddButton({
+local macroPlaying = false
+MacroSection:AddToggle("PlayMacroToggle", {
     Title = "Play Macro",
-    Description = "Phát lại macro đang chọn",
-    Callback = function()
-        if not selectedMacro or selectedMacro == "" then return end
-        local path = macroPath(selectedMacro)
-        local ok, content = pcall(function()
-            if isfile(path) then return readfile(path) end
-            return nil
-        end)
-        if ok and content then
-            local runnerCode = "return function()\n" .. content .. "\nend"
+    Description = "Bật/tắt phát macro đang chọn",
+    Default = false,
+    Callback = function(isOn)
+        if isOn then
+            if not selectedMacro or selectedMacro == "" then
+                warn("Chưa chọn macro để phát")
+                return
+            end
+            local path = macroPath(selectedMacro)
+            local ok, content = pcall(function()
+                if isfile(path) then return readfile(path) end
+                return nil
+            end)
+            if not (ok and content) then
+                warn("Read macro failed")
+                return
+            end
+            _G.__HT_MACRO_PLAYING = true
+            macroPlaying = true
+            -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng
+            local transformed = tostring(content):gsub("task%.wait%(", "SAFE_WAIT(")
+            local runnerCode = table.concat({
+                "local SAFE_WAIT=function(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
+                "return function()\n",
+                transformed,
+                "\nend"
+            })
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then
-                local runOk, runErr = pcall(fnOrErr)
-                if not runOk then warn("Run macro error:", runErr) end
+                task.spawn(function()
+                    local runOk, runErr = pcall(fnOrErr)
+                    if not runOk then warn("Run macro error:", runErr) end
+                    macroPlaying = false
+                    _G.__HT_MACRO_PLAYING = false
+                    print("Macro finished")
+                end)
             else
                 warn("Load macro error:", fnOrErr)
             end
         else
-            warn("Read macro failed")
+            -- turn off
+            _G.__HT_MACRO_PLAYING = false
+            macroPlaying = false
+            print("Macro stopped")
         end
     end
 })

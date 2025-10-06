@@ -66,6 +66,8 @@ end
 ConfigSystem.LoadConfig()
 
 -- Biến lưu trạng thái của tab Main
+
+-- Biến lưu trạng thái cho Story selections và toggles
 local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "namek"
 local selectedAct = ConfigSystem.CurrentConfig.SelectedAct or "Act 1"
 local selectedDifficulty = ConfigSystem.CurrentConfig.SelectedDifficulty or "normal"
@@ -89,19 +91,59 @@ local Window = Fluent:CreateWindow({
 
 -- Hệ thống Tạo Tab
 
+-- Tạo Tab Maps
+local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311802307" })
 -- Tạo Tab Settings
 local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
 
--- Tạo Tab Maps
-local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311798537" })
-
 -- Tab Main
--- Section Auto Play trong tab Main
-local AutoPlaySection = MainTab:AddSection("Auto Play")
-
--- Tab Maps
 -- Section Story trong tab Maps
 local StorySection = MapsTab:AddSection("Story")
+
+-- Hàm Auto Join theo 3 bước
+local function executeAutoJoin()
+    if autoJoin then
+        local success, err = pcall(function()
+            -- Bước 1: Join lobby
+            local args = {"P1"}
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
+
+            wait(1)
+
+            -- Bước 2: Lock level
+            local actNumber = string.match(selectedAct, "%d+") -- lấy số từ "Act X"
+            local levelName = ""
+
+            if selectedMap == "Entertainment_district" then
+                levelName = "Entertainment_district_" .. actNumber
+            else
+                levelName = selectedMap .. "_level_" .. actNumber
+            end
+
+            local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
+
+            local args2 = {
+                "P1",
+                levelName,
+                friendOnly,
+                difficultyPretty
+            }
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args2))
+
+            wait(1)
+
+            -- Bước 3: Start game
+            local args3 = {"P1"}
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args3))
+        end)
+
+        if not success then
+            warn("Lỗi Auto Join: " .. tostring(err))
+        else
+            print("Auto Join executed successfully")
+        end
+    end
+end
 
 -- Dropdown Select Map
 StorySection:AddDropdown("MapDropdown", {
@@ -160,51 +202,6 @@ StorySection:AddToggle("FriendOnlyToggle", {
     end
 })
 
--- Hàm Auto Join
-local function executeAutoJoin()
-    if autoJoin then
-        local success, err = pcall(function()
-            -- Bước 1: Join lobby
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
-            
-            wait(1) -- Đợi 1 giây
-            
-            -- Bước 2: Lock level
-            local actNumber = string.match(selectedAct, "%d+") -- Lấy số từ "Act X"
-            local levelName = ""
-            
-            if selectedMap == "Entertainment_district" then
-                levelName = "Entertainment_district_" .. actNumber
-            else
-                levelName = selectedMap .. "_level_" .. actNumber
-            end
-            
-            local difficulty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
-            
-            local args = {
-                "P1",
-                levelName,
-                friendOnly,
-                difficulty
-            }
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args))
-            
-            wait(1) -- Đợi 1 giây
-            
-            -- Bước 3: Start game
-            local args = {"P1"}
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args))
-        end)
-        
-        if not success then
-            warn("Lỗi Auto Join: " .. tostring(err))
-        else
-            print("Auto Join executed successfully")
-        end
-    end
-end
-
 -- Toggle Auto Join
 StorySection:AddToggle("AutoJoinToggle", {
     Title = "Auto Join",
@@ -217,7 +214,6 @@ StorySection:AddToggle("AutoJoinToggle", {
         
         if autoJoin then
             print("Auto Join Enabled - Đã bật tự động tham gia game")
-            -- Thực hiện Auto Join
             executeAutoJoin()
         else
             print("Auto Join Disabled - Đã tắt tự động tham gia game")
@@ -225,28 +221,28 @@ StorySection:AddToggle("AutoJoinToggle", {
     end
 })
 
--- Hàm Auto Matching
+-- Hàm Auto Matching theo 2 bước
 local function executeAutoMatching()
     if autoMatching then
         local success, err = pcall(function()
             -- Bước 1: Join lobby
             local args = {"P1"}
             game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args))
-            
-            wait(1) -- Đợi 1 giây
-            
+
+            wait(1)
+
             -- Bước 2: Request matchmaking
-            local difficulty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
-            
-            local args = {
+            local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2) -- Normal/Hard
+
+            local args2 = {
                 selectedMap .. "_level_1",
                 {
-                    Difficulty = difficulty
+                    Difficulty = difficultyPretty
                 }
             }
-            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args))
+            game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args2))
         end)
-        
+
         if not success then
             warn("Lỗi Auto Matching: " .. tostring(err))
         else
@@ -267,7 +263,6 @@ StorySection:AddToggle("AutoMatchingToggle", {
         
         if autoMatching then
             print("Auto Matching Enabled - Đã bật tự động tìm kiếm game")
-            -- Thực hiện Auto Matching
             executeAutoMatching()
         else
             print("Auto Matching Disabled - Đã tắt tự động tìm kiếm game")

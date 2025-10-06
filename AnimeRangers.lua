@@ -248,8 +248,16 @@ local function installHookOnce()
             local method = getnamecallmethod and getnamecallmethod() or ""
             if Recorder.isRecording and tostring(method) == "InvokeServer" then
                 local args = {...}
-                -- Only record known endpoints
-                local path = tostring(self)
+                -- Only record whitelisted endpoints
+                local remoteName = tostring(self and self.Name or "")
+                local allowed = {
+                    spawn_unit = true,
+                    upgrade_unit_ingame = true,
+                    sell_unit_ingame = true,
+                }
+                if not allowed[remoteName] then
+                    return oldNamecall(self, ...)
+                end
                 local now = os.clock()
                 local delaySec = math.max(0, now - Recorder.startTime)
                 Recorder.startTime = now
@@ -263,28 +271,60 @@ local function installHookOnce()
                     return tostring(v)
                 end
 
-                -- Build args string (basic serializer for tables with vectors)
+                local function isArray(tbl)
+                    local n = 0
+                    for k, _ in pairs(tbl) do
+                        if type(k) ~= "number" or k < 1 or math.floor(k) ~= k then
+                            return false
+                        end
+                        if k > n then n = k end
+                    end
+                    for i = 1, n do
+                        if tbl[i] == nil then return false end
+                    end
+                    return true, n
+                end
+
+                -- Build args string (serializer with array/object support and vectors)
                 local function serialize(val, indent)
                     indent = indent or 0
                     local pad = string.rep(" ", indent)
                     if type(val) == "table" then
+                        local arr, n = isArray(val)
                         local parts = {"{"}
-                        for k, v in pairs(val) do
-                            local key = tostring(k)
-                            local valueStr
-                            if typeof and typeof(v) == "Vector3" then
-                                valueStr = vecToStr(v)
-                            elseif type(v) == "table" then
-                                valueStr = serialize(v, indent + 4)
-                            elseif type(v) == "string" then
-                                valueStr = string.format("\"%s\"", v)
-                            else
-                                valueStr = tostring(v)
+                        if arr then
+                            for i = 1, n do
+                                local v = val[i]
+                                local valueStr
+                                if typeof and typeof(v) == "Vector3" then
+                                    valueStr = vecToStr(v)
+                                elseif type(v) == "table" then
+                                    valueStr = serialize(v, indent + 4)
+                                elseif type(v) == "string" then
+                                    valueStr = string.format("\"%s\"", v)
+                                else
+                                    valueStr = tostring(v)
+                                end
+                                table.insert(parts, string.format("\n%s    %s,", pad, valueStr))
                             end
-                            table.insert(parts, string.format("\n%s    %s = %s,", pad, key, valueStr))
+                        else
+                            for k, v in pairs(val) do
+                                local key = tostring(k)
+                                local valueStr
+                                if typeof and typeof(v) == "Vector3" then
+                                    valueStr = vecToStr(v)
+                                elseif type(v) == "table" then
+                                    valueStr = serialize(v, indent + 4)
+                                elseif type(v) == "string" then
+                                    valueStr = string.format("\"%s\"", v)
+                                else
+                                    valueStr = tostring(v)
+                                end
+                                table.insert(parts, string.format("\n%s    %s = %s,", pad, key, valueStr))
+                            end
                         end
                         table.insert(parts, string.format("\n%s}", pad))
-                        return table.concat(parts, "")
+                        return table.concat(parts)
                     elseif type(val) == "string" then
                         return string.format("\"%s\"", val)
                     else
@@ -293,9 +333,9 @@ local function installHookOnce()
                 end
 
                 local argsStr = serialize(args)
-                appendLine("-- call: " .. path)
+                appendLine("--call: " .. remoteName)
                 appendLine("local args = " .. argsStr)
-                appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"" .. self.Parent and self.Parent.Name or "" .. "\"):WaitForChild(\"" .. self.Name .. "\"):InvokeServer(unpack(args))")
+                appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
             end
             return oldNamecall(self, ...)
         end)

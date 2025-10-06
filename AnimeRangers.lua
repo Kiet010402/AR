@@ -230,7 +230,7 @@ local Recorder = {
     baseTime = 0,
     lastEventTime = 0,
     hasStarted = false,
-    pending = {},
+    lastCostAction = nil,
     lastMoney = nil,
     moneyConn = nil,
     buffer = nil,
@@ -375,11 +375,10 @@ local function installHookOnce()
                             if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                                 if current < Recorder.lastMoney then
                                     local delta = Recorder.lastMoney - current
-                                    -- flush one pending cost action if available
-                                    local pending = table.remove(Recorder.pending, 1)
-                                    if pending then
-                                        recordNow(pending.remote, pending.args, delta)
-                                    end
+                                    -- record only the most recent cost action, discard older spam
+                                    local action = Recorder.lastCostAction
+                                    Recorder.lastCostAction = nil
+                                    if action then recordNow(action.remote, action.args, delta) end
                                 end
                                 Recorder.lastMoney = current
                             end
@@ -465,7 +464,8 @@ local function installHookOnce()
 
                 -- Money-gated record for spawn/upgrade; immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    table.insert(Recorder.pending, { remote = remoteName, args = args })
+                    -- Only keep the latest attempt; previous attempts are discarded
+                    Recorder.lastCostAction = { remote = remoteName, args = args }
                 else
                     recordNow(remoteName, args)
                 end

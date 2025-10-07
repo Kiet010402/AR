@@ -379,7 +379,7 @@ local function installHookOnce()
                                             Fluent:Notify({
                                                 Title = "Record: " .. tostring(delta) .. " money",
                                                 Content = "Type: " .. action.remote,
-                                                Duration = 2
+                                                Duration = 3
                                             })
                                         end)
                                         recordNow(action.remote, action.args, delta)

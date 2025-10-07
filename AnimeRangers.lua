@@ -227,8 +227,6 @@ MacroSection:AddButton({
 -- Recorder state
 local Recorder = {
     isRecording = false,
-    baseTime = 0,
-    lastEventTime = 0,
     stt = 0, -- Sequence number
     hasStarted = false,
     pendingAction = nil, -- Store only the latest action
@@ -315,18 +313,10 @@ end
 local function recordNow(remoteName, args, noteMoney)
     if not Recorder.isRecording or not Recorder.hasStarted then return end
 
-    local currentTime = tick()
-    local elapsedTime = currentTime - Recorder.baseTime
-    local waitTime = currentTime - Recorder.lastEventTime
-    Recorder.lastEventTime = currentTime
     Recorder.stt = Recorder.stt + 1
 
     appendLine(string.format("--STT: %d", Recorder.stt))
-    appendLine(string.format("--Time: %.2f", elapsedTime))
-    if waitTime > 0.05 then
-        appendLine(string.format("task.wait(%.2f)", waitTime))
-    end
-
+    
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
@@ -421,10 +411,8 @@ MacroSection:AddToggle("RecordMacroToggle", {
 
                 print("Game started! Recording has begun ->", selectedMacro)
                 
-                -- Start timer and counters
+                -- Start counter
                 Recorder.hasStarted = true
-                Recorder.baseTime = tick()
-                Recorder.lastEventTime = Recorder.baseTime
                 Recorder.stt = 0
 
                 -- money watcher
@@ -504,8 +492,8 @@ local function parseMacro(content)
             
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
-                -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment trừ comment đặc biệt
-                if not line:match("^%s*--STT") and not line:match("^%s*--Time") and not line:match("^%s*--note money") then
+                -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
+                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
                     code = code .. line .. "\n"
                 end
             end

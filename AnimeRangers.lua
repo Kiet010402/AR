@@ -328,6 +328,8 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine("local args = {}")
     end
     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
+    -- Thêm delay nhỏ để tránh spam quá nhanh
+    appendLine("task.wait(0.1)")
 end
 
 -- Install namecall hook (once)
@@ -478,7 +480,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             local runnerCode = table.concat({
                 "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
-                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+15; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
+                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+10; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
                 "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function RUN_ONCE()\n",
                 txt,

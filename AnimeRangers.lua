@@ -479,7 +479,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
             -- Trình phát theo Time (không đợi tiền)
-            local runnerCode = table.concat({
+            local runnerParts = {
                 "local function READ_NOTES(lines)\n",
                 "  local steps = {}\n",
                 "  local i=1 local line\n",
@@ -502,7 +502,12 @@ MacroSection:AddToggle("PlayMacroToggle", {
                 "  return steps\n",
                 "end\n",
                 "return function()\n",
-                "  local src=[[%s]]\n",
+                "  local src=[[",
+                -- content inserted here safely without string.format
+                
+                -- placeholder; actual content appended below
+                
+                "]]\n",
                 "  local lines={} for s in string.gmatch(src,'([^\\n]*)\\n?') do table.insert(lines,s) end\n",
                 "  local steps=READ_NOTES(lines)\n",
                 "  local t0=tick()\n",
@@ -515,7 +520,10 @@ MacroSection:AddToggle("PlayMacroToggle", {
                 "    if f then local ok,er2=pcall(f) if not ok then warn('macro step error:',er2) end else warn('macro load error:',err) end\n",
                 "  end\n",
                 "end\n"
-            }):format(content)
+            }
+            -- Safely assemble runner by concatenation to avoid string.format issues with '%'
+            local runnerCode = table.concat(runnerParts)
+            runnerCode = runnerCode:gsub("%[%[\n%]%]", "[[" .. content .. "]]", 1)
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then
                 task.spawn(function()

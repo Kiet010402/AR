@@ -146,6 +146,22 @@ local pendingMacroName = ""
 -- Macro UI
 local MacroSection = MacroTab:AddSection("Macro Recorder")
 
+-- Macro Status UI
+local MacroStatusPara = MacroTab:AddParagraph({
+    Title = "Status",
+    Content = "Idle"
+})
+
+local function setMacroStatus(text)
+    pcall(function()
+        if MacroStatusPara and MacroStatusPara.SetDesc then
+            MacroStatusPara:SetDesc(text)
+        elseif MacroStatusPara and MacroStatusPara.SetContent then
+            MacroStatusPara:SetContent(text)
+        end
+    end)
+end
+
 -- Dropdown select macro
 local MacroDropdown = MacroSection:AddDropdown("MacroSelect", {
     Title = "Select Macro",
@@ -374,8 +390,10 @@ local function installHookOnce()
                                     local action = Recorder.pendingAction
                                     Recorder.pendingAction = nil
                                     if action then
-                                        -- Show notification during recording
-                                        print("Record STT " .. (Recorder.sequenceNumber + 1) .. ": " .. tostring(delta) .. " money - Type: " .. action.remote)
+                                        -- Show status during recording
+                                        local statusMsg = "Record STT " .. (Recorder.sequenceNumber + 1) .. ": " .. tostring(delta) .. " money - Type: " .. action.remote
+                                        print(statusMsg)
+                                        setMacroStatus(statusMsg)
                                         recordNow(action.remote, action.args, delta)
                                     end
                                 end
@@ -425,6 +443,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.sequenceNumber = 0
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording started ->", selectedMacro)
+            setMacroStatus("Recording...")
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false
@@ -434,12 +453,14 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 end)
                 if ok then
                     print("Recording saved:", selectedMacro)
+                    setMacroStatus("Saved: " .. tostring(selectedMacro))
                     pcall(function()
                         MacroDropdown:SetValues(listMacros())
                         MacroDropdown:SetValue(selectedMacro)
                     end)
                 else
                     warn("Save macro failed:", errMsg)
+                    setMacroStatus("Save failed")
                 end
         end
     end
@@ -469,6 +490,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             end
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
+            setMacroStatus("Playing...")
             -- Biến đổi nội dung: chờ theo tiền dựa trên --note money: X (mốc tuyệt đối)
             local txt = tostring(content)
             -- Chèn hàm WAIT_MONEY(target) trước mỗi hành động có ghi note
@@ -478,11 +500,11 @@ MacroSection:AddToggle("PlayMacroToggle", {
             local runnerCode = table.concat({
                 "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
-                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+10; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
+                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+30; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.5) end end\n",
                 "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function RUN_ONCE()\n",
                 txt,
-                "\nSAFE_WAIT(0.5)\nend\n",
+                "\nend\n",
                 "return function()\n",
                 "while _G.__HT_MACRO_PLAYING do RUN_ONCE(); if not _G.__HT_MACRO_PLAYING then break end; while _G.__HT_MACRO_PLAYING and GET_WAVE()~=0 do task.wait(0.5) end end\n",
                 "end"
@@ -495,6 +517,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     macroPlaying = false
                     _G.__HT_MACRO_PLAYING = false
                     print("Macro finished")
+                    setMacroStatus("Idle")
                 end)
             else
                 warn("Load macro error:", fnOrErr)
@@ -504,6 +527,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
             print("Macro stopped")
+            setMacroStatus("Stopped")
         end
     end
 })

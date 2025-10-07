@@ -364,48 +364,10 @@ local function installHookOnce()
                 if not allowed[remoteName] then
                     return oldNamecall(self, ...)
                 end
-                -- Start only when vote_start is seen, also setup watchers
                 if not Recorder.hasStarted then
-                    if remoteName ~= "vote_start" then
-                        return oldNamecall(self, ...)
-                    end
-                    -- ensure wave exists (non-blocking)
-                    pcall(function()
-                        workspace:WaitForChild("_wave_num", 5)
-                    end)
-                    
-                    -- Start timer and counters
-                    Recorder.hasStarted = true
-                    Recorder.baseTime = tick()
-                    Recorder.lastEventTime = Recorder.baseTime
-                    Recorder.stt = 0
-
-                    -- money watcher
-                    pcall(function()
-                        local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
-                        Recorder.lastMoney = tonumber(res.Value)
-                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
-                        Recorder.moneyConn = res.Changed:Connect(function(newVal)
-                            local current = tonumber(newVal)
-                            if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
-                                if current < Recorder.lastMoney then
-                                    local delta = Recorder.lastMoney - current
-                                    local action = Recorder.pendingAction
-                                    Recorder.pendingAction = nil
-                                    if action then
-                                        recordNow(action.remote, action.args, delta)
-                                    end
-                                end
-                                Recorder.lastMoney = current
-                            end
-                        end)
-                    end)
-                    
-                    -- Record the vote_start action itself
-                    recordNow(remoteName, args)
-                    
                     return oldNamecall(self, ...)
                 end
+
                 -- Money-gated recording: queue cost actions, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
@@ -435,14 +397,55 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 ConfigSystem.CurrentConfig.SelectedMacro = selectedMacro
                 ConfigSystem.SaveConfig()
             end
-            local path = macroPath(selectedMacro)
+            
             Recorder.isRecording = true
-            Recorder.baseTime = 0
-            Recorder.lastEventTime = 0
-            Recorder.stt = 0
             Recorder.hasStarted = false
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
-            print("Recording started ->", selectedMacro)
+            print("Recording armed. Waiting for game to start...")
+
+            -- Wait for game to start before actually recording
+            task.spawn(function()
+                local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
+                if not gameStarted then
+                    warn("Could not find GameStarted value. Recording will not start.")
+                    return
+                end
+
+                while Recorder.isRecording and not gameStarted.Value do
+                    task.wait(0.5)
+                end
+
+                if not Recorder.isRecording then return end -- Canceled before game started
+
+                print("Game started! Recording has begun ->", selectedMacro)
+                
+                -- Start timer and counters
+                Recorder.hasStarted = true
+                Recorder.baseTime = tick()
+                Recorder.lastEventTime = Recorder.baseTime
+                Recorder.stt = 0
+
+                -- money watcher
+                pcall(function()
+                    local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
+                    Recorder.lastMoney = tonumber(res.Value)
+                    if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
+                    Recorder.moneyConn = res.Changed:Connect(function(newVal)
+                        local current = tonumber(newVal)
+                        if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
+                            if current < Recorder.lastMoney then
+                                local delta = Recorder.lastMoney - current
+                                local action = Recorder.pendingAction
+                                Recorder.pendingAction = nil
+                                if action then
+                                    recordNow(action.remote, action.args, delta)
+                                end
+                            end
+                            Recorder.lastMoney = current
+                        end
+                    end)
+                end)
+            end)
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false
@@ -502,6 +505,23 @@ MacroSection:AddToggle("PlayMacroToggle", {
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then
                 task.spawn(function()
+                    -- Wait for game to start before playing
+                    print("Macro armed. Waiting for game to start...")
+                    local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
+                    if not gameStarted then
+                        warn("Could not find GameStarted value. Macro will not play.")
+                        _G.__HT_MACRO_PLAYING = false
+                        macroPlaying = false
+                        return
+                    end
+
+                    while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
+                        task.wait(0.5)
+                    end
+
+                    if not _G.__HT_MACRO_PLAYING then return end -- Canceled before game started
+
+                    print("Game started! Playing macro...")
                     local runOk, runErr = pcall(fnOrErr)
                     if not runOk then warn("Run macro error:", runErr) end
                     macroPlaying = false

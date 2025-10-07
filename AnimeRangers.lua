@@ -233,7 +233,7 @@ local Recorder = {
     pendingAction = nil,
     lastMoney = nil,
     moneyConn = nil,
-    sequenceNumber = 0,
+    stt = 0,
     buffer = nil,
 }
 
@@ -312,8 +312,15 @@ local function serialize(val, indent)
 end
 
 local function recordNow(remoteName, args, noteMoney)
-    Recorder.sequenceNumber = Recorder.sequenceNumber + 1
-    appendLine(string.format("--stt: %d", Recorder.sequenceNumber))
+    -- annotate time and sequence
+    local t = 0
+    local okT, now = pcall(os.clock)
+    if okT and Recorder.baseTime and Recorder.baseTime > 0 then
+        t = math.max(0, now - Recorder.baseTime)
+    end
+    Recorder.stt = (Recorder.stt or 0) + 1
+    appendLine(string.format("--Time: %.3f", t))
+    appendLine(string.format("--STT: %d", Recorder.stt))
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
@@ -374,8 +381,6 @@ local function installHookOnce()
                                     local action = Recorder.pendingAction
                                     Recorder.pendingAction = nil
                                     if action then
-                                        -- Show notification during recording
-                                        print("Record STT " .. (Recorder.sequenceNumber + 1) .. ": " .. tostring(delta) .. " money - Type: " .. action.remote)
                                         recordNow(action.remote, action.args, delta)
                                     end
                                 end
@@ -384,7 +389,12 @@ local function installHookOnce()
                         end)
                     end)
                     Recorder.hasStarted = true
+                    Recorder.baseTime = os.clock()
+                    Recorder.lastEventTime = Recorder.baseTime
+                    Recorder.stt = 0
                     appendLine("--vote_start")
+                    appendLine("--Time: 0.000")
+                    appendLine("--STT: 0")
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
@@ -422,7 +432,6 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.baseTime = 0
             Recorder.lastEventTime = 0
             Recorder.hasStarted = false
-            Recorder.sequenceNumber = 0
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording started ->", selectedMacro)
         else
@@ -469,29 +478,44 @@ MacroSection:AddToggle("PlayMacroToggle", {
             end
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            -- Biến đổi nội dung: chờ theo tiền và theo STT tuyệt đối
-            local txt = tostring(content)
-            -- Chèn hàm WAIT_STT và ADVANCE_STT quanh mỗi stt để đảm bảo thứ tự tuyệt đối
-            txt = txt:gsub("%-%-stt:%s*(%d+)", "WAIT_STT(%1)\n--stt: %1\nADVANCE_STT(%1)")
-            -- Chèn hàm WAIT_MONEY(target) trước mỗi hành động có ghi note
-            txt = txt:gsub("%-%-note money:%s*(%d+)", "WAIT_MONEY(%1)\n--note money: %1")
-            -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng (nếu còn sót)
-            txt = txt:gsub("task%.wait%(", "SAFE_WAIT(")
+            -- Trình phát theo Time (không đợi tiền)
             local runnerCode = table.concat({
-                "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
-                "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
-                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+10; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
-                "local CURRENT_STT=1\n",
-                "local function WAIT_STT(stt) stt=tonumber(stt) or 1; while _G.__HT_MACRO_PLAYING and CURRENT_STT~=stt do task.wait(0.1) end end\n",
-                "local function ADVANCE_STT(stt) stt=tonumber(stt) or CURRENT_STT; if stt==CURRENT_STT then CURRENT_STT=CURRENT_STT+1 end end\n",
-                "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
-                "local function RUN_ONCE()\n",
-                txt,
-                "\nend\n",
+                "local function READ_NOTES(lines)\n",
+                "  local steps = {}\n",
+                "  local i=1 local line\n",
+                "  while i<=#lines do line=lines[i] \n",
+                "    local t=string.match(line,'^%-%-Time:%s*([%d%.]+)')\n",
+                "    if t then \n",
+                "      local sttLine=lines[i+1] or ''\n",
+                "      local stt=tonumber(string.match(sttLine,'^%-%-STT:%s*(%d+)') or '0') or 0\n",
+                "      local j=i+2\n",
+                "      if lines[j] and string.find(lines[j],'^%-%-note money:') then j=j+1 end\n",
+                "      local callLine=lines[j] or ''\n",
+                "      local callName=string.match(callLine,'^%-%-call:%s*(%S+)') or ''\n",
+                "      local argsLine=lines[j+1] or ''\n",
+                "      local invokeLine=lines[j+2] or ''\n",
+                "      table.insert(steps,{time=tonumber(t) or 0, stt=stt, call=callName, argsLine=argsLine, invokeLine=invokeLine})\n",
+                "      i=j+3\n",
+                "    else i=i+1 end\n",
+                "  end \n",
+                "  table.sort(steps,function(a,b) if a.time==b.time then return a.stt<b.stt else return a.time<b.time end end)\n",
+                "  return steps\n",
+                "end\n",
                 "return function()\n",
-                "while _G.__HT_MACRO_PLAYING do CURRENT_STT=1; RUN_ONCE(); if not _G.__HT_MACRO_PLAYING then break end; while _G.__HT_MACRO_PLAYING and GET_WAVE()~=0 do task.wait(0.5) end end\n",
-                "end"
-            })
+                "  local src=[[%s]]\n",
+                "  local lines={} for s in string.gmatch(src,'([^\\n]*)\\n?') do table.insert(lines,s) end\n",
+                "  local steps=READ_NOTES(lines)\n",
+                "  local t0=tick()\n",
+                "  for _,st in ipairs(steps) do\n",
+                "    if not _G.__HT_MACRO_PLAYING then break end\n",
+                "    while _G.__HT_MACRO_PLAYING and (tick()-t0) < (st.time or 0) do task.wait(0.02) end\n",
+                "    if not _G.__HT_MACRO_PLAYING then break end\n",
+                "    local chunk=st.argsLine..\"\\n\"..st.invokeLine\n",
+                "    local f,err=loadstring(chunk)\n",
+                "    if f then local ok,er2=pcall(f) if not ok then warn('macro step error:',er2) end else warn('macro load error:',err) end\n",
+                "  end\n",
+                "end\n"
+            }):format(content)
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then
                 task.spawn(function()

@@ -231,7 +231,7 @@ local Recorder = {
     lastEventTime = 0,
     stt = 0, -- Sequence number
     hasStarted = false,
-    pendingAction = nil,
+    pendingActions = {}, -- Use a queue for actions
     lastMoney = nil,
     moneyConn = nil,
     buffer = nil,
@@ -370,7 +370,7 @@ local function installHookOnce()
 
                 -- Money-gated recording: queue cost actions, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    Recorder.pendingAction = { remote = remoteName, args = args }
+                    table.insert(Recorder.pendingActions, { remote = remoteName, args = args })
                 else
                     recordNow(remoteName, args)
                 end
@@ -400,6 +400,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
             
             Recorder.isRecording = true
             Recorder.hasStarted = false
+            Recorder.pendingActions = {}
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording armed. Waiting for game to start...")
 
@@ -435,8 +436,8 @@ MacroSection:AddToggle("RecordMacroToggle", {
                         if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                             if current < Recorder.lastMoney then
                                 local delta = Recorder.lastMoney - current
-                                local action = Recorder.pendingAction
-                                Recorder.pendingAction = nil
+                                -- Process the next action in the queue
+                                local action = table.remove(Recorder.pendingActions, 1)
                                 if action then
                                     recordNow(action.remote, action.args, delta)
                                 end
@@ -505,28 +506,49 @@ MacroSection:AddToggle("PlayMacroToggle", {
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then
                 task.spawn(function()
-                    -- Wait for game to start before playing
-                    print("Macro armed. Waiting for game to start...")
-                    local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
-                    if not gameStarted then
-                        warn("Could not find GameStarted value. Macro will not play.")
-                        _G.__HT_MACRO_PLAYING = false
-                        macroPlaying = false
-                        return
+                    while _G.__HT_MACRO_PLAYING do
+                        -- Wait for game to start before playing
+                        print("Macro armed. Waiting for game to start...")
+                        local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
+                        if not gameStarted then
+                            warn("Could not find GameStarted value. Macro will not play.")
+                            _G.__HT_MACRO_PLAYING = false
+                            macroPlaying = false
+                            return
+                        end
+
+                        while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
+                            task.wait(0.2)
+                        end
+
+                        if not _G.__HT_MACRO_PLAYING then break end -- Canceled before game started
+
+                        print("Game started! Playing macro...")
+                        local runOk, runErr = pcall(fnOrErr)
+                        if not runOk then warn("Run macro error:", runErr) end
+                        
+                        print("Macro finished. Waiting for next game...")
+
+                        -- Wait for the game to end (wave_num goes to 0)
+                        local waveNum = workspace:WaitForChild("_wave_num", 5)
+                        if not waveNum then
+                            warn("Could not find _wave_num. Auto-loop will not work.")
+                            break -- Exit the loop
+                        end
+
+                        while _G.__HT_MACRO_PLAYING and waveNum.Value ~= 0 do
+                            task.wait(1)
+                        end
+                        
+                        if _G.__HT_MACRO_PLAYING then
+                            print("Game ended. Looping macro.")
+                            task.wait(2) -- Small delay before next loop
+                        end
                     end
-
-                    while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
-                        task.wait(0.2)
-                    end
-
-                    if not _G.__HT_MACRO_PLAYING then return end -- Canceled before game started
-
-                    print("Game started! Playing macro...")
-                    local runOk, runErr = pcall(fnOrErr)
-                    if not runOk then warn("Run macro error:", runErr) end
+                    
                     macroPlaying = false
                     _G.__HT_MACRO_PLAYING = false
-                    print("Macro finished")
+                    print("Macro loop stopped.")
                 end)
             else
                 warn("Load macro error:", fnOrErr)

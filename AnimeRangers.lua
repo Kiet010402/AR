@@ -494,9 +494,13 @@ MacroSection:AddToggle("PlayMacroToggle", {
             end
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            setMacroStatus("Playing...")
-            -- Biến đổi nội dung: chờ theo tiền dựa trên --note money: X (mốc tuyệt đối)
+            setMacroStatus("Playing\nNext: parsing...")
+            -- Biến đổi nội dung: chờ theo tiền dựa trên --note money: X (mốc tuyệt đối) và cập nhật Status Next
             local txt = tostring(content)
+            -- Chèn cập nhật Status cho Next action ngay trước call tương ứng
+            txt = txt:gsub("%-%-stt:%s*(%d+)[^\n]*\n%-%-note money:%s*(%d+)[^\n]*\n%-%-call:%s*([%w_]+)", function(stt, money, call)
+                return string.format("--stt: %s\n--note money: %s\n--call: %s\nsetMacroStatus('Playing\nNext: STT %s: %s money - Type: %s')", stt, money, call, stt, money, call)
+            end)
             -- Chèn hàm WAIT_MONEY(target) trước mỗi hành động có ghi note
             txt = txt:gsub("%-%-note money:%s*(%d+)", "WAIT_MONEY(%1)\n--note money: %1")
             -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng (nếu còn sót)

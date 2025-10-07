@@ -153,12 +153,16 @@ local MacroStatusPara = MacroTab:AddParagraph({
 })
 
 local function setMacroStatus(text)
+    -- Always print as fallback for visibility
+    print("[Macro Status] " .. tostring(text))
     pcall(function()
-        if MacroStatusPara and MacroStatusPara.SetDesc then
-            MacroStatusPara:SetDesc(text)
-        elseif MacroStatusPara and MacroStatusPara.SetContent then
-            MacroStatusPara:SetContent(text)
-        end
+        if not MacroStatusPara then return end
+        if MacroStatusPara.SetDesc then MacroStatusPara:SetDesc(text) end
+        if MacroStatusPara.SetContent then MacroStatusPara:SetContent(text) end
+        if MacroStatusPara.Set then MacroStatusPara:Set("Content", text) end
+        -- Direct field assignment fallback for older Fluent builds
+        if rawget(MacroStatusPara, "Desc") ~= nil then MacroStatusPara.Desc = text end
+        if rawget(MacroStatusPara, "Content") ~= nil then MacroStatusPara.Content = text end
     end)
 end
 

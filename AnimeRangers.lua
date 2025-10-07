@@ -516,7 +516,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     end
 
                     while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
-                        task.wait(0.5)
+                        task.wait(0.2)
                     end
 
                     if not _G.__HT_MACRO_PLAYING then return end -- Canceled before game started

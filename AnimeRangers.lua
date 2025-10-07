@@ -231,8 +231,9 @@ local Recorder = {
     lastEventTime = 0,
     stt = 0, -- Sequence number
     hasStarted = false,
-    pendingActions = {}, -- Use a queue for actions
+    pendingAction = nil, -- Store only the latest action
     lastMoney = nil,
+    lastMoneyRecordTime = 0, -- Debounce timer
     moneyConn = nil,
     buffer = nil,
 }
@@ -368,9 +369,9 @@ local function installHookOnce()
                     return oldNamecall(self, ...)
                 end
 
-                -- Money-gated recording: queue cost actions, immediate for sell
+                -- Money-gated recording: overwrite pending action, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    table.insert(Recorder.pendingActions, { remote = remoteName, args = args })
+                    Recorder.pendingAction = { remote = remoteName, args = args }
                 else
                     recordNow(remoteName, args)
                 end
@@ -400,7 +401,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
             
             Recorder.isRecording = true
             Recorder.hasStarted = false
-            Recorder.pendingActions = {}
+            Recorder.pendingAction = nil
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording armed. Waiting for game to start...")
 
@@ -435,11 +436,15 @@ MacroSection:AddToggle("RecordMacroToggle", {
                         local current = tonumber(newVal)
                         if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                             if current < Recorder.lastMoney then
-                                local delta = Recorder.lastMoney - current
-                                -- Process the next action in the queue
-                                local action = table.remove(Recorder.pendingActions, 1)
-                                if action then
-                                    recordNow(action.remote, action.args, delta)
+                                local now = tick()
+                                if now - Recorder.lastMoneyRecordTime > 0.1 then
+                                    Recorder.lastMoneyRecordTime = now
+                                    local delta = Recorder.lastMoney - current
+                                    local action = Recorder.pendingAction
+                                    Recorder.pendingAction = nil
+                                    if action then
+                                        recordNow(action.remote, action.args, delta)
+                                    end
                                 end
                             end
                             Recorder.lastMoney = current

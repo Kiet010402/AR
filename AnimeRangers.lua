@@ -233,8 +233,9 @@ local Recorder = {
     pendingAction = nil,
     lastMoney = nil,
     moneyConn = nil,
-    stt = 0,
     buffer = nil,
+    actionCounter = 0,
+    startTime = 0,
 }
 
 local function appendLine(line)
@@ -312,15 +313,10 @@ local function serialize(val, indent)
 end
 
 local function recordNow(remoteName, args, noteMoney)
-    -- annotate time and sequence
-    local t = 0
-    local okT, now = pcall(os.clock)
-    if okT and Recorder.baseTime and Recorder.baseTime > 0 then
-        t = math.max(0, now - Recorder.baseTime)
-    end
-    Recorder.stt = (Recorder.stt or 0) + 1
-    appendLine(string.format("--Time: %.3f", t))
-    appendLine(string.format("--STT: %d", Recorder.stt))
+    Recorder.actionCounter = Recorder.actionCounter + 1
+    local currentTime = tick() - Recorder.startTime
+    appendLine(string.format("--STT: %d", Recorder.actionCounter))
+    appendLine(string.format("--Time: %.2f", currentTime))
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
@@ -389,12 +385,7 @@ local function installHookOnce()
                         end)
                     end)
                     Recorder.hasStarted = true
-                    Recorder.baseTime = os.clock()
-                    Recorder.lastEventTime = Recorder.baseTime
-                    Recorder.stt = 0
                     appendLine("--vote_start")
-                    appendLine("--Time: 0.000")
-                    appendLine("--STT: 0")
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
@@ -432,6 +423,8 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.baseTime = 0
             Recorder.lastEventTime = 0
             Recorder.hasStarted = false
+            Recorder.actionCounter = 0
+            Recorder.startTime = tick()
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording started ->", selectedMacro)
         else
@@ -478,52 +471,24 @@ MacroSection:AddToggle("PlayMacroToggle", {
             end
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            -- Trình phát theo Time (không đợi tiền)
-            local runnerParts = {
-                "local function READ_NOTES(lines)\n",
-                "  local steps = {}\n",
-                "  local i=1 local line\n",
-                "  while i<=#lines do line=lines[i] \n",
-                "    local t=string.match(line,'^%-%-Time:%s*([%d%.]+)')\n",
-                "    if t then \n",
-                "      local sttLine=lines[i+1] or ''\n",
-                "      local stt=tonumber(string.match(sttLine,'^%-%-STT:%s*(%d+)') or '0') or 0\n",
-                "      local j=i+2\n",
-                "      if lines[j] and string.find(lines[j],'^%-%-note money:') then j=j+1 end\n",
-                "      local callLine=lines[j] or ''\n",
-                "      local callName=string.match(callLine,'^%-%-call:%s*(%S+)') or ''\n",
-                "      local argsLine=lines[j+1] or ''\n",
-                "      local invokeLine=lines[j+2] or ''\n",
-                "      table.insert(steps,{time=tonumber(t) or 0, stt=stt, call=callName, argsLine=argsLine, invokeLine=invokeLine})\n",
-                "      i=j+3\n",
-                "    else i=i+1 end\n",
-                "  end \n",
-                "  table.sort(steps,function(a,b) if a.time==b.time then return a.stt<b.stt else return a.time<b.time end end)\n",
-                "  return steps\n",
+            -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng
+            local transformed = tostring(content):gsub("task%.wait%(", "SAFE_WAIT(")
+            local startTime = tick()
+            local runnerCode = table.concat({
+                "local START_TIME=" .. startTime .. "\n",
+                "local SAFE_WAIT=function(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
+                "local WAIT_UNTIL_TIME=function(targetTime) ",
+                "  local current = tick()-START_TIME ",
+                "  if current < targetTime then SAFE_WAIT(targetTime - current) end ",
                 "end\n",
                 "return function()\n",
-                "  local src=[[",
-                -- content inserted here safely without string.format
-                
-                -- placeholder; actual content appended below
-                
-                "]]\n",
-                "  local lines={} for s in string.gmatch(src,'([^\\n]*)\\n?') do table.insert(lines,s) end\n",
-                "  local steps=READ_NOTES(lines)\n",
-                "  local t0=tick()\n",
-                "  for _,st in ipairs(steps) do\n",
-                "    if not _G.__HT_MACRO_PLAYING then break end\n",
-                "    while _G.__HT_MACRO_PLAYING and (tick()-t0) < (st.time or 0) do task.wait(0.02) end\n",
-                "    if not _G.__HT_MACRO_PLAYING then break end\n",
-                "    local chunk=st.argsLine..\"\\n\"..st.invokeLine\n",
-                "    local f,err=loadstring(chunk)\n",
-                "    if f then local ok,er2=pcall(f) if not ok then warn('macro step error:',er2) end else warn('macro load error:',err) end\n",
-                "  end\n",
-                "end\n"
-            }
-            -- Safely assemble runner by concatenation to avoid string.format issues with '%'
-            local runnerCode = table.concat(runnerParts)
-            runnerCode = runnerCode:gsub("%[%[\n%]%]", "[[" .. content .. "]]", 1)
+                "local line = 1\n",
+                "while _G.__HT_MACRO_PLAYING do\n",
+                "  local timeMatch = string.match(debug.getinfo(1).source:sub(line,line+100), '--Time: ([0-9%.]+)')",
+                "  if timeMatch then WAIT_UNTIL_TIME(tonumber(timeMatch)) end\n",
+                transformed,
+                "\nend\nend"
+            })
             local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
             if loadOk and type(fnOrErr) == "function" then
                 task.spawn(function()

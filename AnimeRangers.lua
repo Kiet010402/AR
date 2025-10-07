@@ -146,12 +146,6 @@ local pendingMacroName = ""
 -- Macro UI
 local MacroSection = MacroTab:AddSection("Macro Recorder")
 
--- Status display for recording
-local StatusParagraph = MacroSection:AddParagraph({
-    Title = "Recording Status",
-    Content = "Chưa bắt đầu ghi"
-})
-
 -- Dropdown select macro
 local MacroDropdown = MacroSection:AddDropdown("MacroSelect", {
     Title = "Select Macro",
@@ -331,12 +325,6 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine("local args = {}")
     end
     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
-    
-    -- Update status display
-    local statusText = string.format("Type: %s | Money: %d", remoteName, noteMoney or 0)
-    pcall(function()
-        StatusParagraph:SetContent(statusText)
-    end)
 end
 
 -- Install namecall hook (once)
@@ -366,7 +354,6 @@ local function installHookOnce()
                     if remoteName ~= "vote_start" then
                         return oldNamecall(self, ...)
                     end
-                    print("DEBUG: Vote start detected, setting up watchers...")
                     -- ensure wave exists (non-blocking)
                     pcall(function()
                         workspace:WaitForChild("_wave_num", 5)
@@ -375,22 +362,29 @@ local function installHookOnce()
                     pcall(function()
                         local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
                         Recorder.lastMoney = tonumber(res.Value)
-                        print("DEBUG: Initial money:", Recorder.lastMoney)
                         if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
                         Recorder.moneyConn = res.Changed:Connect(function(newVal)
                             local current = tonumber(newVal)
-                            print("DEBUG: Money changed from", Recorder.lastMoney, "to", current)
                             if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                                 if current < Recorder.lastMoney then
                                     local delta = Recorder.lastMoney - current
-                                    print("DEBUG: Money decreased by", delta)
-                                    local action = Recorder.pendingAction
-                                    Recorder.pendingAction = nil
-                                    if action then
-                                        print("DEBUG: Recording action:", action.remote)
-                                        recordNow(action.remote, action.args, delta)
-                                    else
-                                        print("DEBUG: No pending action to record")
+                                    -- Add money note to the most recent action
+                                    if Recorder.pendingAction then
+                                        local lastAction = Recorder.pendingAction
+                                        Recorder.pendingAction = nil
+                                        -- Find and update the last recorded action with money note
+                                        local bufferLines = {}
+                                        for line in Recorder.buffer:gmatch("[^\n]+") do
+                                            table.insert(bufferLines, line)
+                                        end
+                                        -- Find the last --call: line and insert money note before it
+                                        for i = #bufferLines, 1, -1 do
+                                            if bufferLines[i]:match("--call: " .. lastAction.remote) then
+                                                table.insert(bufferLines, i, string.format("--note money: %d", delta))
+                                                break
+                                            end
+                                        end
+                                        Recorder.buffer = table.concat(bufferLines, "\n") .. "\n"
                                     end
                                 end
                                 Recorder.lastMoney = current
@@ -400,21 +394,14 @@ local function installHookOnce()
                     Recorder.hasStarted = true
                     appendLine("--vote_start")
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
-                    pcall(function()
-                        StatusParagraph:SetContent("Đã bắt đầu ghi - chờ action...")
-                    end)
-                    print("DEBUG: Recording started, waiting for actions...")
                     return oldNamecall(self, ...)
                 end
-                -- Money-gated recording: queue cost actions, immediate for sell
+                -- Record all actions immediately for 100% capture
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    print("DEBUG: Queuing action:", remoteName)
+                    -- Record immediately, then track for money note
+                    recordNow(remoteName, args, 0) -- 0 = no money note yet
                     Recorder.pendingAction = { remote = remoteName, args = args }
-                    pcall(function()
-                        StatusParagraph:SetContent("Đã queue: " .. remoteName .. " - chờ tiền giảm...")
-                    end)
                 else
-                    print("DEBUG: Recording immediate action:", remoteName)
                     recordNow(remoteName, args)
                 end
             end
@@ -446,18 +433,10 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.lastEventTime = 0
             Recorder.hasStarted = false
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
-            -- Reset status
-            pcall(function()
-                StatusParagraph:SetContent("Đang chờ vote_start...")
-            end)
             print("Recording started ->", selectedMacro)
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false
-                -- Clear status
-                pcall(function()
-                    StatusParagraph:SetContent("Đã dừng ghi")
-                end)
                 local path = macroPath(selectedMacro)
                 local ok, errMsg = pcall(function()
                     writefile(path, Recorder.buffer or "-- empty macro\n")

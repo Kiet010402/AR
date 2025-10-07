@@ -479,6 +479,89 @@ end
 
 -- Play macro
 local macroPlaying = false
+
+-- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
+local function parseMacro(content)
+    local commands = {}
+    -- Tách các khối lệnh bằng --STT:
+    local blocks = {}
+    local lastPos = 1
+    for pos, stt in content:gmatch("()--STT:%s*(%d+)") do
+        if #blocks > 0 then
+            blocks[#blocks].text = content:sub(lastPos, pos - 1)
+        end
+        table.insert(blocks, {stt = tonumber(stt)})
+        lastPos = pos
+    end
+    if #blocks > 0 then
+        blocks[#blocks].text = content:sub(lastPos)
+    end
+
+    for _, block in ipairs(blocks) do
+        if block.text then
+            local moneyMatch = block.text:match("--note money:%s*(%d+)")
+            local money = moneyMatch and tonumber(moneyMatch) or 0
+            
+            local code = ""
+            for line in block.text:gmatch("[^\r\n]+") do
+                -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment trừ comment đặc biệt
+                if not line:match("^%s*--STT") and not line:match("^%s*--Time") and not line:match("^%s*--note money") then
+                    code = code .. line .. "\n"
+                end
+            end
+
+            if code ~= "" then
+                table.insert(commands, {
+                    stt = block.stt,
+                    money = money,
+                    code = code
+                })
+            end
+        end
+    end
+    
+    return commands
+end
+
+-- Hàm mới để thực thi các lệnh đã phân tích
+local function executeMacro(commands)
+    local player = game:GetService("Players").LocalPlayer
+    local resource = player:WaitForChild("_stats", 5) and player._stats:WaitForChild("resource", 5)
+
+    if not resource then
+        warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
+        return
+    end
+
+    for _, command in ipairs(commands) do
+        if not _G.__HT_MACRO_PLAYING then break end
+
+        -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
+        if command.money > 0 then
+            print(string.format("Đang đợi đủ tiền cho STT %d: Cần %d, Hiện có %.0f", command.stt, command.money, resource.Value))
+            while _G.__HT_MACRO_PLAYING and resource.Value < command.money do
+                task.wait(0.2)
+            end
+        end
+        
+        if not _G.__HT_MACRO_PLAYING then break end
+
+        print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
+        
+        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
+        if loadOk and type(fnOrErr) == "function" then
+            local runOk, runErr = pcall(fnOrErr)
+            if not runOk then
+                warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
+            end
+        else
+            warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
+        end
+        
+        task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
+    end
+end
+
 MacroSection:AddToggle("PlayMacroToggle", {
     Title = "Play Macro",
     Description = "Bật/tắt phát macro đang chọn",
@@ -495,74 +578,71 @@ MacroSection:AddToggle("PlayMacroToggle", {
                 return nil
             end)
             if not (ok and content) then
-                warn("Read macro failed")
+                warn("Đọc file macro thất bại")
                 return
             end
+
+            -- Phân tích macro một lần
+            local commands = parseMacro(content)
+            if #commands == 0 then
+                warn("Macro rỗng hoặc không hợp lệ. Không có lệnh nào để thực thi.")
+                return
+            end
+
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng
-            local transformed = tostring(content):gsub("task%.wait%(", "SAFE_WAIT(")
-            local runnerCode = table.concat({
-                "local SAFE_WAIT=function(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
-                "return function()\n",
-                transformed,
-                "\nend"
-            })
-            local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
-            if loadOk and type(fnOrErr) == "function" then
-                task.spawn(function()
-                    while _G.__HT_MACRO_PLAYING do
-                        -- Wait for game to start before playing
-                        print("Macro armed. Waiting for game to start...")
-                        local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
-                        if not gameStarted then
-                            warn("Could not find GameStarted value. Macro will not play.")
-                            _G.__HT_MACRO_PLAYING = false
-                            macroPlaying = false
-                            return
-                        end
+            
+            task.spawn(function()
+                while _G.__HT_MACRO_PLAYING do
+                    -- Đợi game bắt đầu trước khi chơi
+                    print("Macro đã sẵn sàng. Đang chờ game bắt đầu...")
+                    local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
+                    if not gameStarted then
+                        warn("Không tìm thấy giá trị GameStarted. Macro sẽ không chạy.")
+                        _G.__HT_MACRO_PLAYING = false
+                        macroPlaying = false
+                        return
+                    end
 
-                        while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
-                            task.wait(0.2)
-                        end
+                    while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
+                        task.wait(0.2)
+                    end
 
-                        if not _G.__HT_MACRO_PLAYING then break end -- Canceled before game started
+                    if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
 
-                        print("Game started! Playing macro...")
-                        local runOk, runErr = pcall(fnOrErr)
-                        if not runOk then warn("Run macro error:", runErr) end
-                        
-                        print("Macro finished. Waiting for next game...")
+                    print("Game đã bắt đầu! Đang chạy macro...")
+                    executeMacro(commands) -- Gọi hàm thực thi mới
+                    
+                    if not _G.__HT_MACRO_PLAYING then break end
 
-                        -- Wait for the game to end (wave_num goes to 0)
-                        local waveNum = workspace:WaitForChild("_wave_num", 5)
-                        if not waveNum then
-                            warn("Could not find _wave_num. Auto-loop will not work.")
-                            break -- Exit the loop
-                        end
+                    print("Macro đã hoàn thành. Đang chờ game tiếp theo...")
 
-                        while _G.__HT_MACRO_PLAYING and waveNum.Value ~= 0 do
-                            task.wait(1)
-                        end
-                        
-                        if _G.__HT_MACRO_PLAYING then
-                            print("Game ended. Looping macro.")
-                            task.wait(2) -- Small delay before next loop
-                        end
+                    -- Đợi game kết thúc (wave_num về 0)
+                    local waveNum = workspace:WaitForChild("_wave_num", 5)
+                    if not waveNum then
+                        warn("Không tìm thấy _wave_num. Tự động lặp lại sẽ không hoạt động.")
+                        break -- Thoát khỏi vòng lặp
+                    end
+
+                    while _G.__HT_MACRO_PLAYING and waveNum.Value ~= 0 do
+                        task.wait(1)
                     end
                     
-                    macroPlaying = false
-                    _G.__HT_MACRO_PLAYING = false
-                    print("Macro loop stopped.")
-                end)
-            else
-                warn("Load macro error:", fnOrErr)
-            end
+                    if _G.__HT_MACRO_PLAYING then
+                        print("Game đã kết thúc. Lặp lại macro.")
+                        task.wait(2) -- Chờ một chút trước khi lặp lại
+                    end
+                end
+                
+                macroPlaying = false
+                _G.__HT_MACRO_PLAYING = false
+                print("Vòng lặp macro đã dừng.")
+            end)
         else
-            -- turn off
+            -- Tắt
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
-            print("Macro stopped")
+            print("Macro đã dừng")
         end
     end
 })

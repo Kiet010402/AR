@@ -328,8 +328,6 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine("local args = {}")
     end
     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
-    -- Thêm delay nhỏ để tránh spam quá nhanh
-    appendLine("task.wait(0.1)")
 end
 
 -- Install namecall hook (once)
@@ -484,7 +482,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
                 "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function RUN_ONCE()\n",
                 txt,
-                "\nend\n",
+                "\nSAFE_WAIT(0.5)\nend\n",
                 "return function()\n",
                 "while _G.__HT_MACRO_PLAYING do RUN_ONCE(); if not _G.__HT_MACRO_PLAYING then break end; while _G.__HT_MACRO_PLAYING and GET_WAVE()~=0 do task.wait(0.5) end end\n",
                 "end"

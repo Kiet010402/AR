@@ -146,6 +146,12 @@ local pendingMacroName = ""
 -- Macro UI
 local MacroSection = MacroTab:AddSection("Macro Recorder")
 
+-- Status display for recording
+local StatusParagraph = MacroSection:AddParagraph({
+    Title = "Recording Status",
+    Content = "Chưa bắt đầu ghi"
+})
+
 -- Dropdown select macro
 local MacroDropdown = MacroSection:AddDropdown("MacroSelect", {
     Title = "Select Macro",
@@ -325,6 +331,12 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine("local args = {}")
     end
     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
+    
+    -- Update status display
+    local statusText = string.format("Type: %s | Money: %d", remoteName, noteMoney or 0)
+    pcall(function()
+        StatusParagraph:SetContent(statusText)
+    end)
 end
 
 -- Install namecall hook (once)
@@ -418,10 +430,18 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.lastEventTime = 0
             Recorder.hasStarted = false
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
+            -- Reset status
+            pcall(function()
+                StatusParagraph:SetContent("Đang chờ vote_start...")
+            end)
             print("Recording started ->", selectedMacro)
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false
+                -- Clear status
+                pcall(function()
+                    StatusParagraph:SetContent("Đã dừng ghi")
+                end)
                 local path = macroPath(selectedMacro)
                 local ok, errMsg = pcall(function()
                     writefile(path, Recorder.buffer or "-- empty macro\n")

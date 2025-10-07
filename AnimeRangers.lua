@@ -368,23 +368,11 @@ local function installHookOnce()
                             if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                                 if current < Recorder.lastMoney then
                                     local delta = Recorder.lastMoney - current
-                                    -- Add money note to the most recent action
+                                    -- Only record actions that actually cost money
                                     if Recorder.pendingAction then
-                                        local lastAction = Recorder.pendingAction
+                                        local action = Recorder.pendingAction
                                         Recorder.pendingAction = nil
-                                        -- Find and update the last recorded action with money note
-                                        local bufferLines = {}
-                                        for line in Recorder.buffer:gmatch("[^\n]+") do
-                                            table.insert(bufferLines, line)
-                                        end
-                                        -- Find the last --call: line and insert money note before it
-                                        for i = #bufferLines, 1, -1 do
-                                            if bufferLines[i]:match("--call: " .. lastAction.remote) then
-                                                table.insert(bufferLines, i, string.format("--note money: %d", delta))
-                                                break
-                                            end
-                                        end
-                                        Recorder.buffer = table.concat(bufferLines, "\n") .. "\n"
+                                        recordNow(action.remote, action.args, delta)
                                     end
                                 end
                                 Recorder.lastMoney = current
@@ -396,12 +384,12 @@ local function installHookOnce()
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
-                -- Record all actions immediately for 100% capture
+                -- Only record actions that actually cost money
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    -- Record immediately, then track for money note
-                    recordNow(remoteName, args, 0) -- 0 = no money note yet
+                    -- Queue for money tracking, only record when money actually decreases
                     Recorder.pendingAction = { remote = remoteName, args = args }
-                else
+                elseif remoteName == "sell_unit_ingame" then
+                    -- Sell actions are free, record immediately
                     recordNow(remoteName, args)
                 end
             end

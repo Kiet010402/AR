@@ -366,6 +366,7 @@ local function installHookOnce()
                     if remoteName ~= "vote_start" then
                         return oldNamecall(self, ...)
                     end
+                    print("DEBUG: Vote start detected, setting up watchers...")
                     -- ensure wave exists (non-blocking)
                     pcall(function()
                         workspace:WaitForChild("_wave_num", 5)
@@ -374,16 +375,22 @@ local function installHookOnce()
                     pcall(function()
                         local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
                         Recorder.lastMoney = tonumber(res.Value)
+                        print("DEBUG: Initial money:", Recorder.lastMoney)
                         if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
                         Recorder.moneyConn = res.Changed:Connect(function(newVal)
                             local current = tonumber(newVal)
+                            print("DEBUG: Money changed from", Recorder.lastMoney, "to", current)
                             if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                                 if current < Recorder.lastMoney then
                                     local delta = Recorder.lastMoney - current
+                                    print("DEBUG: Money decreased by", delta)
                                     local action = Recorder.pendingAction
                                     Recorder.pendingAction = nil
                                     if action then
+                                        print("DEBUG: Recording action:", action.remote)
                                         recordNow(action.remote, action.args, delta)
+                                    else
+                                        print("DEBUG: No pending action to record")
                                     end
                                 end
                                 Recorder.lastMoney = current
@@ -393,12 +400,21 @@ local function installHookOnce()
                     Recorder.hasStarted = true
                     appendLine("--vote_start")
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
+                    pcall(function()
+                        StatusParagraph:SetContent("Đã bắt đầu ghi - chờ action...")
+                    end)
+                    print("DEBUG: Recording started, waiting for actions...")
                     return oldNamecall(self, ...)
                 end
                 -- Money-gated recording: queue cost actions, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
+                    print("DEBUG: Queuing action:", remoteName)
                     Recorder.pendingAction = { remote = remoteName, args = args }
+                    pcall(function()
+                        StatusParagraph:SetContent("Đã queue: " .. remoteName .. " - chờ tiền giảm...")
+                    end)
                 else
+                    print("DEBUG: Recording immediate action:", remoteName)
                     recordNow(remoteName, args)
                 end
             end

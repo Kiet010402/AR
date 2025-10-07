@@ -233,6 +233,7 @@ local Recorder = {
     pendingAction = nil,
     lastMoney = nil,
     moneyConn = nil,
+    sequenceNumber = 0,
     buffer = nil,
 }
 
@@ -311,6 +312,8 @@ local function serialize(val, indent)
 end
 
 local function recordNow(remoteName, args, noteMoney)
+    Recorder.sequenceNumber = Recorder.sequenceNumber + 1
+    appendLine(string.format("--stt: %d", Recorder.sequenceNumber))
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
@@ -368,10 +371,17 @@ local function installHookOnce()
                             if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
                                 if current < Recorder.lastMoney then
                                     local delta = Recorder.lastMoney - current
-                                    -- Only record actions that actually cost money
-                                    if Recorder.pendingAction then
-                                        local action = Recorder.pendingAction
-                                        Recorder.pendingAction = nil
+                                    local action = Recorder.pendingAction
+                                    Recorder.pendingAction = nil
+                                    if action then
+                                        -- Show notification during recording
+                                        pcall(function()
+                                            Fluent:Notify({
+                                                Title = "Record: " .. tostring(delta) .. " money",
+                                                Content = "Type: " .. action.remote,
+                                                Duration = 2
+                                            })
+                                        end)
                                         recordNow(action.remote, action.args, delta)
                                     end
                                 end
@@ -384,12 +394,10 @@ local function installHookOnce()
                     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
-                -- Only record actions that actually cost money
+                -- Money-gated recording: queue cost actions, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
-                    -- Queue for money tracking, only record when money actually decreases
                     Recorder.pendingAction = { remote = remoteName, args = args }
-                elseif remoteName == "sell_unit_ingame" then
-                    -- Sell actions are free, record immediately
+                else
                     recordNow(remoteName, args)
                 end
             end
@@ -420,6 +428,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.baseTime = 0
             Recorder.lastEventTime = 0
             Recorder.hasStarted = false
+            Recorder.sequenceNumber = 0
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
             print("Recording started ->", selectedMacro)
         else
@@ -475,7 +484,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             local runnerCode = table.concat({
                 "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
-                "local function WAIT_MONEY(target) target=tonumber(target) or 0 while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
+                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+10; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
                 "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
                 "local function RUN_ONCE()\n",
                 txt,

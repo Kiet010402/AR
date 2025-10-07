@@ -375,13 +375,7 @@ local function installHookOnce()
                                     Recorder.pendingAction = nil
                                     if action then
                                         -- Show notification during recording
-                                        pcall(function()
-                                            Fluent:Notify({
-                                                Title = "Record: " .. tostring(delta) .. " money",
-                                                Content = "Type: " .. action.remote,
-                                                Duration = 3
-                                            })
-                                        end)
+                                        print("Record STT " .. (Recorder.sequenceNumber + 1) .. ": " .. tostring(delta) .. " money - Type: " .. action.remote)
                                         recordNow(action.remote, action.args, delta)
                                     end
                                 end

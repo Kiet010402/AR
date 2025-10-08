@@ -330,9 +330,9 @@ local function recordNow(remoteName, args, noteMoney)
     Recorder.stt = Recorder.stt + 1
 
     -- Cập nhật trạng thái
-    local statusContent = string.format("-Type: %s", remoteName)
+    local statusContent = string.format("-STT: %d\n-Type: %s", Recorder.stt, remoteName)
     if noteMoney and noteMoney > 0 then
-        statusContent = string.format("-Money: %d\n%s", noteMoney, statusContent)
+        statusContent = statusContent .. string.format("\n-Money: %d", noteMoney)
     end
     updateMacroStatus(statusContent)
 
@@ -414,6 +414,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.hasStarted = false
             Recorder.pendingAction = nil
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
+            updateMacroStatus("Recording armed. Waiting for game...")
             print("Recording armed. Waiting for game to start...")
 
             -- Wait for game to start before actually recording
@@ -421,6 +422,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
                 if not gameStarted then
                     warn("Could not find GameStarted value. Recording will not start.")
+                    updateMacroStatus("Error: GameStarted not found")
                     return
                 end
 
@@ -431,6 +433,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 if not Recorder.isRecording then return end -- Canceled before game started
 
                 print("Game started! Recording has begun ->", selectedMacro)
+                updateMacroStatus("Recording...")
                 
                 -- Start counter
                 Recorder.hasStarted = true
@@ -454,7 +457,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                                     if action then
                                         recordNow(action.remote, action.args, delta)
                                     end
-                                end
+                                 end
                             end
                             Recorder.lastMoney = current
                         end
@@ -474,6 +477,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 end)
                 if ok then
                     print("Recording saved:", selectedMacro)
+                    updateMacroStatus("Record Completed")
                     pcall(function()
                         MacroDropdown:SetValues(listMacros())
                         MacroDropdown:SetValue(selectedMacro)
@@ -536,6 +540,7 @@ end
 local function executeMacro(commands)
     local player = game:GetService("Players").LocalPlayer
     local resource = player:WaitForChild("_stats", 5) and player._stats:WaitForChild("resource", 5)
+    local totalCommands = #commands
 
     if not resource then
         warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
@@ -554,7 +559,7 @@ local function executeMacro(commands)
             if callMatch then
                 nextType = callMatch
             end
-            updateMacroStatus(string.format("-Next Money: %d\n-Next Type: %s", nextCommand.money, nextType))
+            updateMacroStatus(string.format("-STT: %d/%d\n-Next Type: %s\n-Next Money: %d", i, totalCommands, nextType, nextCommand.money))
         end
 
         -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
@@ -641,7 +646,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     
                     if not _G.__HT_MACRO_PLAYING then break end
 
-                    updateMacroStatus("Chờ game tiếp theo...")
+                    updateMacroStatus("Macro Completed. Waiting for next game...")
                     print("Macro đã hoàn thành. Đang chờ game tiếp theo...")
 
                     -- Đợi game kết thúc (wave_num về 0)

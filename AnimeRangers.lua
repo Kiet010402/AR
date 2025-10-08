@@ -432,6 +432,9 @@ MacroSection:AddToggle("RecordMacroToggle", {
                                     Recorder.pendingAction = nil
                                     if action then
                                         recordNow(action.remote, action.args, delta)
+                                        -- Update status UI
+                                        StatusLine1:SetTitle("Recorded Action:")
+                                        StatusLine2:SetContent(string.format("- Money: %d\n- Type: %s", delta, action.remote))
                                     end
                                 end
                             end
@@ -447,6 +450,9 @@ MacroSection:AddToggle("RecordMacroToggle", {
                     Recorder.moneyConn:Disconnect()
                     Recorder.moneyConn = nil
                 end
+                -- Clear status on stop
+                StatusLine1:SetTitle("Current Status")
+                StatusLine2:SetContent("Idle")
                 local path = macroPath(selectedMacro)
                 local ok, errMsg = pcall(function()
                     writefile(path, Recorder.buffer or "-- empty macro\n")
@@ -489,11 +495,13 @@ local function parseMacro(content)
         if block.text then
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
+            local typeMatch = block.text:match("--call:%s*(%S+)")
+            local actionType = typeMatch or "unknown"
             
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
                 -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
-                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
+                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") and not line:match("^%s*--call") then
                     code = code .. line .. "\n"
                 end
             end
@@ -502,6 +510,7 @@ local function parseMacro(content)
                 table.insert(commands, {
                     stt = block.stt,
                     money = money,
+                    type = actionType,
                     code = code
                 })
             end
@@ -518,11 +527,17 @@ local function executeMacro(commands)
 
     if not resource then
         warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
+        StatusLine1:SetTitle("Error:")
+        StatusLine2:SetContent("Could not find player resource.")
         return
     end
 
-    for _, command in ipairs(commands) do
+    for i, command in ipairs(commands) do
         if not _G.__HT_MACRO_PLAYING then break end
+
+        -- Cập nhật status cho hành động tiếp theo
+        StatusLine1:SetTitle("Next Action:")
+        StatusLine2:SetContent(string.format("- Money: %d\n- Type: %s", command.money, command.type))
 
         -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
         if command.money > 0 then
@@ -631,6 +646,9 @@ MacroSection:AddToggle("PlayMacroToggle", {
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
             print("Macro đã dừng")
+            -- Clear status on stop
+            StatusLine1:SetTitle("Current Status")
+            StatusLine2:SetContent("Idle")
         end
     end
 })
@@ -943,3 +961,8 @@ end)
 
 print("HT Hub Anime Crusaders Script đã tải thành công!")
 print("Sử dụng Left Ctrl để thu nhỏ/mở rộng UI")
+
+-- Status UI
+local StatusSection = MacroTab:AddSection("Status")
+local StatusLine1 = StatusSection:AddParagraph({Title = "Current Status", Content = "Idle"})
+local StatusLine2 = StatusSection:AddParagraph({Title = "", Content = ""})

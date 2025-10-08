@@ -264,6 +264,36 @@ local function vecToStr(v)
     return tostring(v)
 end
 
+-- Helper function to find unit by position
+local function findUnitByPosition(position, tolerance)
+    tolerance = tolerance or 1 -- Default tolerance of 1 stud
+    local unitsFolder = workspace:FindFirstChild("_UNITS")
+    if not unitsFolder then return nil end
+    
+    for _, unit in pairs(unitsFolder:GetChildren()) do
+        if unit:IsA("Model") and unit:FindFirstChild("HumanoidRootPart") then
+            local unitPos = unit.HumanoidRootPart.Position
+            local distance = (unitPos - position).Magnitude
+            if distance <= tolerance then
+                return unit.Name
+            end
+        end
+    end
+    return nil
+end
+
+-- Helper function to get unit position by ID
+local function getUnitPosition(unitId)
+    local unitsFolder = workspace:FindFirstChild("_UNITS")
+    if not unitsFolder then return nil end
+    
+    local unit = unitsFolder:FindFirstChild(unitId)
+    if unit and unit:IsA("Model") and unit:FindFirstChild("HumanoidRootPart") then
+        return unit.HumanoidRootPart.Position
+    end
+    return nil
+end
+
 local function isArray(tbl)
     local n = 0
     for k, _ in pairs(tbl) do
@@ -324,24 +354,6 @@ local function serialize(val, indent)
     end
 end
 
--- Hàm để lấy position của unit từ ID
-local function getUnitPosition(unitId)
-    local success, position = pcall(function()
-        local units = workspace:WaitForChild("_UNITS", 5)
-        if not units then return nil end
-        
-        local unit = units:FindFirstChild(unitId)
-        if not unit then return nil end
-        
-        local humanoidRootPart = unit:FindFirstChild("HumanoidRootPart")
-        if not humanoidRootPart then return nil end
-        
-        return humanoidRootPart.Position
-    end)
-    
-    return success and position or nil
-end
-
 local function recordNow(remoteName, args, noteMoney)
     if not Recorder.isRecording or not Recorder.hasStarted then return end
 
@@ -357,32 +369,54 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine(string.format("--note money: %d", noteMoney))
     end
     
-    -- Xử lý đặc biệt cho spawn_unit - ghi position của Origin
-    if remoteName == "spawn_unit" and args and args[2] and args[2].Origin then
-        appendLine(string.format("--position: %s", vecToStr(args[2].Origin)))
-    end
-    
-    -- Xử lý đặc biệt cho upgrade_unit_ingame và sell_unit_ingame - ghi position thay vì ID
-    if (remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame") and args and args[1] then
-        local unitId = tostring(args[1])
-        local position = getUnitPosition(unitId)
-        if position then
-            appendLine(string.format("--position: %s", vecToStr(position)))
+    -- Special handling for upgrade_unit_ingame and sell_unit_ingame
+    if remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame" then
+        local unitId = args[1]
+        local unitPosition = getUnitPosition(unitId)
+        
+        if unitPosition then
+            appendLine(string.format("--position: %.3f,%.3f,%.3f", unitPosition.X, unitPosition.Y, unitPosition.Z))
+            -- Replace the unit ID with placeholder
+            local modifiedArgs = table.clone(args)
+            modifiedArgs[1] = "{UNIT_ID_BY_POS}"
+            
+            local okSer, argsStr = pcall(function()
+                return serialize(modifiedArgs)
+            end)
+            appendLine("--call: " .. remoteName)
+            if okSer and argsStr then
+                appendLine("local args = " .. argsStr)
+            else
+                appendLine("-- serialize error: " .. tostring(argsStr))
+                appendLine("local args = {}")
+            end
         else
-            appendLine(string.format("--position: unknown (unit %s not found)", unitId))
+            -- Fallback to original method if position not found
+            local okSer, argsStr = pcall(function()
+                return serialize(args)
+            end)
+            appendLine("--call: " .. remoteName)
+            if okSer and argsStr then
+                appendLine("local args = " .. argsStr)
+            else
+                appendLine("-- serialize error: " .. tostring(argsStr))
+                appendLine("local args = {}")
+            end
+        end
+    else
+        -- Original logic for other commands
+        local okSer, argsStr = pcall(function()
+            return serialize(args)
+        end)
+        appendLine("--call: " .. remoteName)
+        if okSer and argsStr then
+            appendLine("local args = " .. argsStr)
+        else
+            appendLine("-- serialize error: " .. tostring(argsStr))
+            appendLine("local args = {}")
         end
     end
     
-    local okSer, argsStr = pcall(function()
-        return serialize(args)
-    end)
-    appendLine("--call: " .. remoteName)
-    if okSer and argsStr then
-        appendLine("local args = " .. argsStr)
-    else
-        appendLine("-- serialize error: " .. tostring(argsStr))
-        appendLine("local args = {}")
-    end
     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
 end
 
@@ -523,37 +557,6 @@ end
 -- Play macro
 local macroPlaying = false
 
--- Hàm để tìm unit ID theo position
-local function findUnitByPosition(targetPosition, tolerance)
-    tolerance = tolerance or 1 -- Độ sai lệch cho phép
-    local success, result = pcall(function()
-        local units = workspace:WaitForChild("_UNITS", 5)
-        if not units then return nil end
-        
-        for _, unit in pairs(units:GetChildren()) do
-            local humanoidRootPart = unit:FindFirstChild("HumanoidRootPart")
-            if humanoidRootPart then
-                local distance = (humanoidRootPart.Position - targetPosition).Magnitude
-                if distance <= tolerance then
-                    return unit.Name
-                end
-            end
-        end
-        return nil
-    end)
-    
-    return success and result or nil
-end
-
--- Hàm để parse position từ string
-local function parsePosition(positionStr)
-    local x, y, z = positionStr:match("vector%.create%(([^,]+),%s*([^,]+),%s*([^,]+)%)")
-    if x and y and z then
-        return Vector3.new(tonumber(x), tonumber(y), tonumber(z))
-    end
-    return nil
-end
-
 -- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
 local function parseMacro(content)
     local commands = {}
@@ -576,11 +579,12 @@ local function parseMacro(content)
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
             
-            local positionMatch = block.text:match("--position:%s*(.+)")
-            local position = positionMatch and parsePosition(positionMatch) or nil
-            
-            local callMatch = block.text:match("--call:%s*([%w_]+)")
-            local callType = callMatch or "unknown"
+            -- Extract position if available
+            local x, y, z = block.text:match("--position:%s*([%d%.%-]+),([%d%.%-]+),([%d%.%-]+)")
+            local position = nil
+            if x and y and z then
+                position = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
+            end
             
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
@@ -594,9 +598,8 @@ local function parseMacro(content)
                 table.insert(commands, {
                     stt = block.stt,
                     money = money,
-                    position = position,
-                    callType = callType,
-                    code = code
+                    code = code,
+                    position = position
                 })
             end
         end
@@ -626,7 +629,12 @@ local function executeMacro(commands)
 
         local nextCommand = commands[i]
         if nextCommand then
-            updateMacroStatus(string.format("-STT: %d/%d\n-Next Type: %s\n-Next Money: %d", i, total, nextCommand.callType, nextCommand.money))
+            local nextType = "N/A"
+            local callMatch = nextCommand.code:match("--call:%s*([%w_]+)")
+            if callMatch then
+                nextType = callMatch
+            end
+            updateMacroStatus(string.format("-STT: %d/%d\n-Next Type: %s\n-Next Money: %d", i, total, nextType, nextCommand.money))
         end
 
         -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
@@ -644,28 +652,22 @@ local function executeMacro(commands)
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
         
-        -- Xử lý đặc biệt cho upgrade_unit_ingame và sell_unit_ingame
-        local modifiedCode = command.code
-        local shouldSkip = false
-        if (command.callType == "upgrade_unit_ingame" or command.callType == "sell_unit_ingame") and command.position then
-            local currentUnitId = findUnitByPosition(command.position)
-            if currentUnitId then
-                print(string.format("Tìm thấy unit tại position %s với ID: %s", tostring(command.position), currentUnitId))
-                -- Thay thế ID cũ bằng ID mới trong code
-                modifiedCode = modifiedCode:gsub('"[^"]*"', '"' .. currentUnitId .. '"', 1)
+        -- Process code to replace placeholder with actual unit ID
+        local processedCode = command.code
+        if command.position and command.code:find("{UNIT_ID_BY_POS}") then
+            local newUnitId = findUnitByPosition(command.position)
+            if newUnitId then
+                processedCode = command.code:gsub("{UNIT_ID_BY_POS}", '"' .. newUnitId .. '"')
+                print(string.format("STT %d: Thay thế placeholder bằng unit ID: %s tại vị trí (%.1f, %.1f, %.1f)", 
+                    command.stt, newUnitId, command.position.X, command.position.Y, command.position.Z))
             else
-                warn(string.format("Không tìm thấy unit tại position %s cho STT %d", tostring(command.position), command.stt))
-                -- Skip command này nếu không tìm thấy unit
-                shouldSkip = true
+                warn(string.format("STT %d: Không tìm thấy unit tại vị trí (%.1f, %.1f, %.1f). Bỏ qua lệnh này.", 
+                    command.stt, command.position.X, command.position.Y, command.position.Z))
+                goto continue
             end
         end
         
-        if shouldSkip then
-            task.wait(0.1)
-            goto continue
-        end
-        
-        local loadOk, fnOrErr = pcall(function() return loadstring(modifiedCode) end)
+        local loadOk, fnOrErr = pcall(function() return loadstring(processedCode) end)
         if loadOk and type(fnOrErr) == "function" then
             local runOk, runErr = pcall(fnOrErr)
             if not runOk then
@@ -675,8 +677,9 @@ local function executeMacro(commands)
             warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
         end
         
-        task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
         ::continue::
+        
+        task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
     end
     -- Hoàn tất macro
     updateMacroStatus("Macro Completed")

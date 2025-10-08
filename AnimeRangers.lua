@@ -264,36 +264,6 @@ local function vecToStr(v)
     return tostring(v)
 end
 
--- Helper function to find unit by position
-local function findUnitByPosition(position, tolerance)
-    tolerance = tolerance or 1 -- Default tolerance of 1 stud
-    local unitsFolder = workspace:FindFirstChild("_UNITS")
-    if not unitsFolder then return nil end
-    
-    for _, unit in pairs(unitsFolder:GetChildren()) do
-        if unit:IsA("Model") and unit:FindFirstChild("HumanoidRootPart") then
-            local unitPos = unit.HumanoidRootPart.Position
-            local distance = (unitPos - position).Magnitude
-            if distance <= tolerance then
-                return unit.Name
-            end
-        end
-    end
-    return nil
-end
-
--- Helper function to get unit position by ID
-local function getUnitPosition(unitId)
-    local unitsFolder = workspace:FindFirstChild("_UNITS")
-    if not unitsFolder then return nil end
-    
-    local unit = unitsFolder:FindFirstChild(unitId)
-    if unit and unit:IsA("Model") and unit:FindFirstChild("HumanoidRootPart") then
-        return unit.HumanoidRootPart.Position
-    end
-    return nil
-end
-
 local function isArray(tbl)
     local n = 0
     for k, _ in pairs(tbl) do
@@ -368,55 +338,32 @@ local function recordNow(remoteName, args, noteMoney)
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
-    
-    -- Special handling for upgrade_unit_ingame and sell_unit_ingame
-    if remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame" then
-        local unitId = args[1]
-        local unitPosition = getUnitPosition(unitId)
-        
-        if unitPosition then
-            appendLine(string.format("--position: %.3f,%.3f,%.3f", unitPosition.X, unitPosition.Y, unitPosition.Z))
-            -- Replace the unit ID with placeholder
-            local modifiedArgs = table.clone(args)
-            modifiedArgs[1] = "{UNIT_ID_BY_POS}"
-            
-            local okSer, argsStr = pcall(function()
-                return serialize(modifiedArgs)
-            end)
-            appendLine("--call: " .. remoteName)
-            if okSer and argsStr then
-                appendLine("local args = " .. argsStr)
-            else
-                appendLine("-- serialize error: " .. tostring(argsStr))
-                appendLine("local args = {}")
+    -- If spawn_unit, try to record spawn position (args[2].Origin) and spawn id (args[1])
+    if remoteName == "spawn_unit" then
+        local okPos, pos = pcall(function()
+            if args and args[2] and args[2].Origin then
+                return Vector3.new(args[2].Origin.X, args[2].Origin.Y, args[2].Origin.Z)
             end
-        else
-            -- Fallback to original method if position not found
-            local okSer, argsStr = pcall(function()
-                return serialize(args)
-            end)
-            appendLine("--call: " .. remoteName)
-            if okSer and argsStr then
-                appendLine("local args = " .. argsStr)
-            else
-                appendLine("-- serialize error: " .. tostring(argsStr))
-                appendLine("local args = {}")
-            end
-        end
-    else
-        -- Original logic for other commands
-        local okSer, argsStr = pcall(function()
-            return serialize(args)
+            return nil
         end)
-        appendLine("--call: " .. remoteName)
-        if okSer and argsStr then
-            appendLine("local args = " .. argsStr)
-        else
-            appendLine("-- serialize error: " .. tostring(argsStr))
-            appendLine("local args = {}")
+        if okPos and pos then
+            appendLine(string.format("--spawn_pos: %f,%f,%f", pos.X, pos.Y, pos.Z))
+        end
+        if args and args[1] then
+            appendLine(string.format("--spawn_id: %s", tostring(args[1])))
         end
     end
-    
+
+    local okSer, argsStr = pcall(function()
+        return serialize(args)
+    end)
+    appendLine("--call: " .. remoteName)
+    if okSer and argsStr then
+        appendLine("local args = " .. argsStr)
+    else
+        appendLine("-- serialize error: " .. tostring(argsStr))
+        appendLine("local args = {}")
+    end
     appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
 end
 
@@ -446,9 +393,11 @@ local function installHookOnce()
                     return oldNamecall(self, ...)
                 end
 
-                -- Money-gated recording: overwrite pending action, immediate for sell
-                if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
+                -- Money-gated recording: upgrade remains pending (money-gated). spawn_unit will be recorded immediately so we can capture spawn position and id.
+                if remoteName == "upgrade_unit_ingame" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
+                elseif remoteName == "spawn_unit" then
+                    recordNow(remoteName, args)
                 else
                     recordNow(remoteName, args)
                 end
@@ -578,18 +527,18 @@ local function parseMacro(content)
         if block.text then
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
-            
-            -- Extract position if available
-            local x, y, z = block.text:match("--position:%s*([%d%.%-]+),([%d%.%-]+),([%d%.%-]+)")
-            local position = nil
+
+            local spawnPos = nil
+            local spawnIdMatch = block.text:match("--spawn_id:%s*([%w_%-]+)")
+            local x,y,z = block.text:match("--spawn_pos:%s*([%d%.%-]+),([%d%.%-]+),([%d%.%-]+)")
             if x and y and z then
-                position = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
+                spawnPos = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
             end
-            
+
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
                 -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
-                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*--position") and not line:match("^%s*task%.wait") then
+                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
                     code = code .. line .. "\n"
                 end
             end
@@ -599,16 +548,56 @@ local function parseMacro(content)
                     stt = block.stt,
                     money = money,
                     code = code,
-                    position = position
+                    spawnPos = spawnPos,
+                    spawnId = spawnIdMatch
                 })
             end
         end
     end
-    
-    return commands
+return commands
 end
 
 -- Hàm mới để thực thi các lệnh đã phân tích
+
+local function findUnitNear(pos, idPrefix)
+    if not pos then return nil end
+    local folder = workspace:FindFirstChild("_UNITS")
+    if not folder then return nil end
+    local closestUnit = nil
+    local closestDist = math.huge
+    for _, u in ipairs(folder:GetChildren()) do
+        local uuidVal = u:FindFirstChild("_uuid")
+        local root = u:FindFirstChild("HumanoidRootPart") or u:FindFirstChild("PrimaryPart")
+        if uuidVal and root then
+            local ok, val = pcall(function() return tostring(uuidVal.Value) end)
+            if ok and val and idPrefix and string.find(val, idPrefix, 1, true) then
+                local dist = (root.Position - pos).Magnitude
+                if dist < closestDist then
+                    closestDist = dist
+                    closestUnit = val
+                end
+            end
+        end
+    end
+    -- fallback to nearest unit if none matched by prefix
+    if not closestUnit then
+        local fallbackDist = math.huge
+        for _, u in ipairs(folder:GetChildren()) do
+            local uuidVal = u:FindFirstChild("_uuid")
+            local root = u:FindFirstChild("HumanoidRootPart") or u:FindFirstChild("PrimaryPart")
+            if uuidVal and root then
+                local dist = (root.Position - pos).Magnitude
+                if dist < fallbackDist then
+                    fallbackDist = dist
+                    local ok, val = pcall(function() return tostring(uuidVal.Value) end)
+                    if ok then closestUnit = val end
+                end
+            end
+        end
+    end
+    return closestUnit
+end
+
 local function executeMacro(commands)
     local player = game:GetService("Players").LocalPlayer
     local resource = player:WaitForChild("_stats", 5) and player._stats:WaitForChild("resource", 5)
@@ -652,22 +641,7 @@ local function executeMacro(commands)
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
         
-        -- Process code to replace placeholder with actual unit ID
-        local processedCode = command.code
-        if command.position and command.code:find("{UNIT_ID_BY_POS}") then
-            local newUnitId = findUnitByPosition(command.position)
-            if newUnitId then
-                processedCode = command.code:gsub("{UNIT_ID_BY_POS}", '"' .. newUnitId .. '"')
-                print(string.format("STT %d: Thay thế placeholder bằng unit ID: %s tại vị trí (%.1f, %.1f, %.1f)", 
-                    command.stt, newUnitId, command.position.X, command.position.Y, command.position.Z))
-            else
-                warn(string.format("STT %d: Không tìm thấy unit tại vị trí (%.1f, %.1f, %.1f). Bỏ qua lệnh này.", 
-                    command.stt, command.position.X, command.position.Y, command.position.Z))
-                goto continue
-            end
-        end
-        
-        local loadOk, fnOrErr = pcall(function() return loadstring(processedCode) end)
+        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
         if loadOk and type(fnOrErr) == "function" then
             local runOk, runErr = pcall(fnOrErr)
             if not runOk then
@@ -676,8 +650,6 @@ local function executeMacro(commands)
         else
             warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
         end
-        
-        ::continue::
         
         task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
     end

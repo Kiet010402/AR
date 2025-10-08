@@ -964,5 +964,4 @@ print("Sử dụng Left Ctrl để thu nhỏ/mở rộng UI")
 
 -- Status UI
 local StatusSection = MacroTab:AddSection("Status")
-local StatusLine1 = StatusSection:AddParagraph({Title = "Current Status", Content = "Idle"})
-local StatusLine2 = StatusSection:AddParagraph({Title = "", Content = ""})
+StatusLine1, StatusLine2 = StatusSection:AddParagraph({Title = "Current Status", Content = "Idle"}), StatusSection:AddParagraph({Title = "", Content = ""})

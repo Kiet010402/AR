@@ -238,6 +238,30 @@ MacroSection:AddButton({
     end
 })
 
+-- Game run counter
+local gameRunCount = 0
+local resultsUIConn
+
+local function setupResultsUIWatcher()
+    if resultsUIConn then resultsUIConn:Disconnect() end
+    
+    local function onResultsUIChanged()
+        local resultsUI = game:GetService("Players").LocalPlayer.PlayerGui:FindFirstChild("ResultsUI")
+        if resultsUI and resultsUI.Enabled then
+            gameRunCount = gameRunCount + 1
+            print("Game finished - Run count:", gameRunCount)
+        end
+    end
+
+    local player = game:GetService("Players").LocalPlayer
+    if player and player.PlayerGui then
+        local resultsUI = player.PlayerGui:WaitForChild("ResultsUI", 5)
+        if resultsUI then
+            resultsUIConn = resultsUI:GetPropertyChangedSignal("Enabled"):Connect(onResultsUIChanged)
+        end
+    end
+end
+
 -- Recorder state
 local Recorder = {
     isRecording = false,
@@ -487,20 +511,6 @@ end
 
 -- Play macro
 local macroPlaying = false
-local gameRunCount = 0 -- Đếm số lần game đã chạy
-
--- Hàm để cập nhật ID trong các lệnh upgrade và sell
-local function updateUnitIds(code, increment)
-    if not code then return code end
-    -- Cập nhật ID trong upgrade_unit_ingame và sell_unit_ingame
-    return code:gsub('"([%x]+)(%d+)"', function(prefix, num)
-        local newNum = tonumber(num)
-        if newNum then
-            return string.format('"%s%02d"', prefix, newNum + increment)
-        end
-        return nil -- giữ nguyên nếu không match pattern
-    end)
-end
 
 -- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
 local function parseMacro(content)
@@ -545,6 +555,19 @@ local function parseMacro(content)
     return commands
 end
 
+-- Hàm để cập nhật ID trong code dựa vào gameRunCount
+local function updateCodeWithGameCount(code)
+    -- Tìm và thay thế ID trong upgrade_unit_ingame và sell_unit_ingame
+    if code:find("upgrade_unit_ingame") or code:find("sell_unit_ingame") then
+        local newCode = code:gsub('"([%x]+)%d+"', function(prefix)
+            -- Giữ nguyên prefix và thêm số game count vào cuối
+            return string.format('"%s%02d"', prefix, gameRunCount)
+        end)
+        return newCode
+    end
+    return code
+end
+
 -- Hàm mới để thực thi các lệnh đã phân tích
 local function executeMacro(commands)
     local player = game:GetService("Players").LocalPlayer
@@ -554,17 +577,6 @@ local function executeMacro(commands)
         warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
         updateMacroStatus("Lỗi: Không tìm thấy tiền người chơi.")
         return
-    end
-
-    -- Kiểm tra kết quả game để tăng gameRunCount
-    local function checkResultsUI()
-        pcall(function()
-            local resultsUI = game:GetService("Players").LocalPlayer.PlayerGui:WaitForChild("ResultsUI", 1)
-            if resultsUI and resultsUI.Enabled then
-                gameRunCount = gameRunCount + 1
-                print("Game kết thúc, tăng gameRunCount lên:", gameRunCount)
-            end
-        end)
     end
 
     for i, command in ipairs(commands) do
@@ -600,18 +612,9 @@ local function executeMacro(commands)
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
         
-        -- Kiểm tra ResultsUI và cập nhật code nếu cần
-        checkResultsUI()
+        -- Cập nhật code với gameRunCount mới
+        local updatedCode = updateCodeWithGameCount(command.code)
         
-        -- Cập nhật ID nếu là lệnh upgrade hoặc sell và đã qua game mới
-        local updatedCode = command.code
-        if gameRunCount > 0 and (command.code:find("upgrade_unit_ingame") or command.code:find("sell_unit_ingame")) then
-            updatedCode = updateUnitIds(command.code, gameRunCount)
-            if updatedCode ~= command.code then
-                print(string.format("Đã cập nhật ID cho STT %d (Game thứ %d)", command.stt, gameRunCount + 1))
-            end
-        end
-
         local loadOk, fnOrErr = pcall(function() return loadstring(updatedCode) end)
         if loadOk and type(fnOrErr) == "function" then
             local runOk, runErr = pcall(fnOrErr)
@@ -658,6 +661,9 @@ MacroSection:AddToggle("PlayMacroToggle", {
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
             
+            -- Khởi tạo watcher cho ResultsUI khi bắt đầu macro
+            setupResultsUIWatcher()
+            
             task.spawn(function()
                 while _G.__HT_MACRO_PLAYING do
                     -- Đợi game bắt đầu trước khi chơi
@@ -678,13 +684,15 @@ MacroSection:AddToggle("PlayMacroToggle", {
 
                     if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
 
-            print("Game đã bắt đầu! Đang chạy macro... (Lần chạy thứ " .. (gameRunCount + 1) .. ")")
-            executeMacro(commands) -- Gọi hàm thực thi mới
-            
-            if not _G.__HT_MACRO_PLAYING then break end
+                    print("Game đã bắt đầu! Đang chạy macro...")
+                    executeMacro(commands) -- Gọi hàm thực thi mới
+                    
+                    if not _G.__HT_MACRO_PLAYING then break end
 
-            updateMacroStatus("Chờ game tiếp theo...")
-            print("Macro đã hoàn thành. Đang chờ game tiếp theo...")                    -- Đợi game kết thúc (wave_num về 0)
+                    updateMacroStatus("Chờ game tiếp theo...")
+                    print("Macro đã hoàn thành. Đang chờ game tiếp theo...")
+
+                    -- Đợi game kết thúc (wave_num về 0)
                     local waveNum = workspace:WaitForChild("_wave_num", 5)
                     if not waveNum then
                         warn("Không tìm thấy _wave_num. Tự động lặp lại sẽ không hoạt động.")

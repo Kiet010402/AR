@@ -518,11 +518,31 @@ local function parseMacro(content)
                 end
             end
 
-            if code ~= "" then
+            -- Try to extract the recorded remote name and the serialized args table
+            local remote = block.text:match("%-%-call:%s*([%w_]+)")
+            local argsCode = nil
+            do
+                local argsStart = block.text:find("local args = ")
+                if argsStart then
+                    argsStart = argsStart + #"local args = "
+                    -- find the line that starts the invocation (game:GetService...) to know end of args
+                    local invokePos = block.text:find("game:GetService", argsStart, true)
+                    if invokePos then
+                        argsCode = block.text:sub(argsStart, invokePos - 1)
+                    else
+                        argsCode = block.text:sub(argsStart)
+                    end
+                    argsCode = argsCode:gsub("\n$", "")
+                end
+            end
+
+            if remote or code ~= "" then
                 table.insert(commands, {
                     stt = block.stt,
                     money = money,
-                    code = code
+                    code = code,
+                    remote = remote,
+                    argsCode = argsCode,
                 })
             end
         end
@@ -574,18 +594,41 @@ local function executeMacro(commands)
         if not _G.__HT_MACRO_PLAYING then break end
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
-        
-        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
-        if loadOk and type(fnOrErr) == "function" then
-            local runOk, runErr = pcall(fnOrErr)
-            if not runOk then
-                warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
+
+        -- Nếu có thông tin remote + args, gọi trực tiếp endpoint (đáng tin cậy hơn)
+        local executed = false
+        if command.remote and command.argsCode then
+            local ok, argsFunc = pcall(function()
+                return loadstring("return " .. command.argsCode)
+            end)
+            if ok and type(argsFunc) == "function" then
+                local argsOk, argsTbl = pcall(argsFunc)
+                if argsOk then
+                    local successInvoke, invokeErr = pcall(function()
+                        local endpoint = game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild(command.remote)
+                        endpoint:InvokeServer(unpack(argsTbl))
+                    end)
+                    if not successInvoke then
+                        warn(string.format("Lỗi khi invoke remote %s cho STT %d: %s", tostring(command.remote), command.stt, tostring(invokeErr)))
+                    else
+                        executed = true
+                    end
+                end
             end
-        else
-            warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
         end
-        
-        task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
+
+        -- Fallback: chạy lại code thô nếu không thể invoke trực tiếp
+        if not executed and command.code and command.code ~= "" then
+            local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
+            if loadOk and type(fnOrErr) == "function" then
+                local runOk, runErr = pcall(fnOrErr)
+                if not runOk then
+                    warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
+                end
+            else
+                warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
+            end
+        end
     end
     -- Hoàn tất macro
     updateMacroStatus("Macro Completed")
@@ -642,6 +685,11 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
 
                     print("Game đã bắt đầu! Đang chạy macro...")
+                    -- Re-read and parse macro before execution in case file changed or to ensure fresh args
+                    local ok2, newContent = pcall(function() if isfile(path) then return readfile(path) end end)
+                    if ok2 and newContent then
+                        commands = parseMacro(newContent)
+                    end
                     executeMacro(commands) -- Gọi hàm thực thi mới
                     
                     if not _G.__HT_MACRO_PLAYING then break end

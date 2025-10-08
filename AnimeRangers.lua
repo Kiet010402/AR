@@ -642,7 +642,26 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
 
                     print("Game đã bắt đầu! Đang chạy macro...")
-                    executeMacro(commands) -- Gọi hàm thực thi mới
+                    
+                    -- Đọc và phân tích lại file macro mỗi lần loop
+                    local ok, content = pcall(function()
+                        if isfile(path) then return readfile(path) end
+                        return nil
+                    end)
+                    if not (ok and content) then
+                        warn("Đọc file macro thất bại khi loop")
+                        break
+                    end
+
+                    -- Phân tích lại macro
+                    local freshCommands = parseMacro(content)
+                    if #freshCommands == 0 then
+                        warn("Macro rỗng hoặc không hợp lệ khi loop")
+                        break
+                    end
+
+                    -- Thực thi macro với commands mới phân tích
+                    executeMacro(freshCommands)
                     
                     if not _G.__HT_MACRO_PLAYING then break end
 
@@ -658,29 +677,12 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     end
 
                     while _G.__HT_MACRO_PLAYING and waveNum.Value ~= 0 do
-                        task.wait(1)
+                        task.wait(0.5)
                     end
                     
                     if _G.__HT_MACRO_PLAYING then
-                        print("Game đã kết thúc. Đọc lại và phân tích macro từ đầu...")
-                        task.wait(2) -- Chờ một chút trước khi lặp lại
-                        
-                        -- Đọc và phân tích lại file macro
-                        local ok, content = pcall(function()
-                            if isfile(path) then return readfile(path) end
-                            return nil
-                        end)
-                        if ok and content then
-                            commands = parseMacro(content) -- Cập nhật lại danh sách lệnh
-                            if #commands == 0 then
-                                warn("Macro rỗng hoặc không hợp lệ sau khi đọc lại.")
-                                break
-                            end
-                            print("Đã phân tích lại macro thành công, tiếp tục vòng lặp mới.")
-                        else
-                            warn("Không thể đọc lại file macro.")
-                            break
-                        end
+                        print("Game đã kết thúc. Lặp lại macro từ đầu.")
+                        task.wait(0.5) -- Chờ một chút trước khi lặp lại
                     end
                 end
                 
@@ -693,7 +695,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             -- Tắt
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
-            updateMacroStatus("Record Completed")
+            updateMacroStatus("Idle")
             print("Macro đã dừng")
         end
     end

@@ -107,6 +107,11 @@ local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://133
 -- Section Story trong tab Maps
 local StorySection = MapsTab:AddSection("Story")
 
+-- Macro Status UI
+local StatusSection = MacroTab:AddSection("Status")
+local RecordStatusDisplay = StatusSection:AddParagraph({Title = "Record Status", Content = "Idle"})
+local PlayStatusDisplay = StatusSection:AddParagraph({Title = "Play Status", Content = "Idle"})
+
 -- Macro helpers
 local MacroSystem = {}
 MacroSystem.BaseFolder = "HTHubAnimeCrusaders_Macros"
@@ -236,6 +241,28 @@ local Recorder = {
     buffer = nil,
 }
 
+local function updateRecordStatus(money, actionType)
+    if RecordStatusDisplay then
+        if money and actionType then
+            local content = string.format("- Money: %d\n- Type: %s", money, actionType)
+            RecordStatusDisplay:SetContent(content)
+        else
+            RecordStatusDisplay:SetContent("Idle")
+        end
+    end
+end
+
+local function updatePlayStatus(money, actionType)
+    if PlayStatusDisplay then
+        if money and actionType then
+            local content = string.format("- Next Money: %d\n- Next Type: %s", money, actionType)
+            PlayStatusDisplay:SetContent(content)
+        else
+            PlayStatusDisplay:SetContent("Idle")
+        end
+    end
+end
+
 local function appendLine(line)
     if Recorder.buffer then
         Recorder.buffer = Recorder.buffer .. line .. "\n"
@@ -362,6 +389,9 @@ local function installHookOnce()
                 -- Money-gated recording: overwrite pending action, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
+                elseif remoteName == "sell_unit_ingame" then
+                    recordNow(remoteName, args)
+                    updateRecordStatus(0, remoteName) -- Selling doesn't have a 'cost' in the same way
                 else
                     recordNow(remoteName, args)
                 end
@@ -432,9 +462,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                                     Recorder.pendingAction = nil
                                     if action then
                                         recordNow(action.remote, action.args, delta)
-                                        -- Update status UI
-                                        StatusLine1:SetTitle("Recorded Action:")
-                                        StatusLine2:SetContent(string.format("- Money: %d\n- Type: %s", delta, action.remote))
+                                        updateRecordStatus(delta, action.remote)
                                     end
                                 end
                             end
@@ -450,9 +478,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                     Recorder.moneyConn:Disconnect()
                     Recorder.moneyConn = nil
                 end
-                -- Clear status on stop
-                StatusLine1:SetTitle("Current Status")
-                StatusLine2:SetContent("Idle")
+                updateRecordStatus(nil, nil) -- Clear status
                 local path = macroPath(selectedMacro)
                 local ok, errMsg = pcall(function()
                     writefile(path, Recorder.buffer or "-- empty macro\n")
@@ -495,13 +521,11 @@ local function parseMacro(content)
         if block.text then
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
-            local typeMatch = block.text:match("--call:%s*(%S+)")
-            local actionType = typeMatch or "unknown"
             
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
                 -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
-                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") and not line:match("^%s*--call") then
+                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
                     code = code .. line .. "\n"
                 end
             end
@@ -510,7 +534,6 @@ local function parseMacro(content)
                 table.insert(commands, {
                     stt = block.stt,
                     money = money,
-                    type = actionType,
                     code = code
                 })
             end
@@ -527,17 +550,15 @@ local function executeMacro(commands)
 
     if not resource then
         warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
-        StatusLine1:SetTitle("Error:")
-        StatusLine2:SetContent("Could not find player resource.")
         return
     end
 
-    for i, command in ipairs(commands) do
+    for _, command in ipairs(commands) do
         if not _G.__HT_MACRO_PLAYING then break end
 
-        -- Cập nhật status cho hành động tiếp theo
-        StatusLine1:SetTitle("Next Action:")
-        StatusLine2:SetContent(string.format("- Money: %d\n- Type: %s", command.money, command.type))
+        -- Cập nhật trạng thái cho hành động tiếp theo
+        local nextType = command.code:match("--call:%s*([%w_]+)") or "unknown"
+        updatePlayStatus(command.money, nextType)
 
         -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
         if command.money > 0 then
@@ -645,10 +666,8 @@ MacroSection:AddToggle("PlayMacroToggle", {
             -- Tắt
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
+            updatePlayStatus(nil, nil) -- Xóa trạng thái khi dừng
             print("Macro đã dừng")
-            -- Clear status on stop
-            StatusLine1:SetTitle("Current Status")
-            StatusLine2:SetContent("Idle")
         end
     end
 })
@@ -961,7 +980,3 @@ end)
 
 print("HT Hub Anime Crusaders Script đã tải thành công!")
 print("Sử dụng Left Ctrl để thu nhỏ/mở rộng UI")
-
--- Status UI
-local StatusSection = MacroTab:AddSection("Status")
-StatusLine1, StatusLine2 = StatusSection:AddParagraph({Title = "Current Status", Content = "Idle"}), StatusSection:AddParagraph({Title = "", Content = ""})

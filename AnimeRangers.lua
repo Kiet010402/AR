@@ -248,7 +248,8 @@ local Recorder = {
     lastMoneyRecordTime = 0, -- Debounce timer
     moneyConn = nil,
     buffer = nil,
-    unitPositions = {}, -- Map unit ID to position during recording
+    unitPositions = {}, -- Maps unit IDs to their spawn positions
+    nextUnitId = 1, -- Counter for generating position-based unit IDs
 }
 
 local function appendLine(line)
@@ -340,35 +341,45 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine(string.format("--note money: %d", noteMoney))
     end
 
-    -- Logic mới: Ghi lại hành động dựa trên vị trí
+    -- Track unit positions for spawn_unit
     if remoteName == "spawn_unit" then
-        local position = args[2] and args[2].Origin
-        if position then
-            Recorder.unitPositions[#Recorder.unitPositions + 1] = position -- Lưu vị trí spawn
-            appendLine("--action: spawn")
-            appendLine(string.format("local args = %s", serialize(args)))
-            appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"spawn_unit\"):InvokeServer(unpack(args))")
+        local positionArgs = args[1] and type(args[1]) == "table" and args[1].cframe
+        if positionArgs then
+            local posId = Recorder.nextUnitId
+            Recorder.nextUnitId = Recorder.nextUnitId + 1
+            appendLine(string.format("--position: %d", posId))
+            Recorder.unitPositions[posId] = positionArgs
         end
-    elseif remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame" then
-        local unitId = args[1]
-        local unitModel = workspace._UNITS:FindFirstChild(unitId)
-        if unitModel and unitModel:IsA("Model") and unitModel.PrimaryPart then
-            local position = unitModel.PrimaryPart.Position
-            local action = (remoteName == "upgrade_unit_ingame") and "upgrade" or "sell"
-            appendLine(string.format("--action: %s", action))
-            appendLine(string.format("--position: %s", vecToStr(position)))
-        else
-             -- Fallback cho trường hợp không tìm thấy model, ghi lại như cũ
-            appendLine("--call: " .. remoteName)
-            appendLine("local args = " .. serialize(args))
-            appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
-        end
-    else
-        -- Các lệnh khác không liên quan đến unit
-        appendLine("--call: " .. remoteName)
-        appendLine("local args = " .. serialize(args))
-        appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
     end
+    -- Track upgrades and sells by position
+    if remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame" then
+        local unitId = args[1] and type(args[1]) == "table" and args[1].unit
+        if unitId then
+            -- Find position by checking workspace._UNITS
+            local units = workspace:FindFirstChild("_UNITS")
+            if units then
+                for _, unit in ipairs(units:GetChildren()) do
+                    if unit:IsA("Model") and unit:GetAttribute("uid") == unitId then
+                        local pos = unit:GetPivot()
+                        appendLine(string.format("--unit_position: %s", tostring(pos)))
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    local okSer, argsStr = pcall(function()
+        return serialize(args)
+    end)
+    appendLine("--call: " .. remoteName)
+    if okSer and argsStr then
+        appendLine("local args = " .. argsStr)
+    else
+        appendLine("-- serialize error: " .. tostring(argsStr))
+        appendLine("local args = {}")
+    end
+    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
 end
 
 -- Install namecall hook (once)
@@ -530,56 +541,26 @@ local function parseMacro(content)
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
             
-            local actionMatch = block.text:match("--action:%s*([%w_]+)")
-            local positionMatch = block.text:match("--position:%s*(vector.create%b())")
-
-            local command = {
-                stt = block.stt,
-                money = money,
-                action = actionMatch,
-                positionCode = positionMatch,
-                rawCode = ""
-            }
-
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
-                if not line:match("^%s*--") then
+                -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
+                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
                     code = code .. line .. "\n"
                 end
             end
-            command.rawCode = code
 
-            table.insert(commands, command)
+            if code ~= "" then
+                table.insert(commands, {
+                    stt = block.stt,
+                    money = money,
+                    code = code
+                })
+            end
         end
     end
     
     return commands
 end
-
--- Helper function to find the closest unit
-local function findUnitByPosition(position)
-    local unitsFolder = workspace:WaitForChild("_UNITS", 2)
-    if not unitsFolder then return nil end
-
-    local closestUnit = nil
-    local minDistance = math.huge
-
-    for _, unit in ipairs(unitsFolder:GetChildren()) do
-        if unit:IsA("Model") and unit.PrimaryPart then
-            local distance = (unit.PrimaryPart.Position - position).Magnitude
-            if distance < minDistance then
-                minDistance = distance
-                closestUnit = unit
-            end
-        end
-    end
-
-    if minDistance < 5 then -- Ngưỡng khoảng cách, có thể điều chỉnh
-        return closestUnit
-    end
-    return nil
-end
-
 
 -- Hàm mới để thực thi các lệnh đã phân tích
 local function executeMacro(commands)
@@ -592,16 +573,45 @@ local function executeMacro(commands)
         return
     end
 
+    -- Create position mapping for existing units
+    local positionToUnit = {}
+    local units = workspace:FindFirstChild("_UNITS")
+    if units then
+        for _, unit in ipairs(units:GetChildren()) do
+            if unit:IsA("Model") then
+                local pos = unit:GetPivot()
+                local uid = unit:GetAttribute("uid")
+                if uid then
+                    positionToUnit[tostring(pos)] = uid
+                end
+            end
+        end
+    end
+
     for i, command in ipairs(commands) do
         if not _G.__HT_MACRO_PLAYING then break end
 
         -- Cập nhật trạng thái cho hành động tiếp theo
+        -- Hiển thị STT hiện tại / tổng
         local total = #commands
-        local nextType = command.action or "raw"
-        updateMacroStatus(string.format("-STT: %d/%d\n-Next Type: %s\n-Next Money: %d", i, total, nextType, command.money))
+        updateMacroStatus(string.format("-STT: %d/%d", i, total))
 
-        -- Đợi đủ tiền
+        local nextCommand = commands[i]
+        if nextCommand then
+            local nextType = "N/A"
+            local callMatch = nextCommand.code:match("--call:%s*([%w_]+)")
+            if callMatch then
+                nextType = callMatch
+            end
+            updateMacroStatus(string.format("-STT: %d/%d\n-Next Type: %s\n-Next Money: %d", i, total, nextType, nextCommand.money))
+        end
+
+        -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
         if command.money > 0 then
+            -- Cập nhật print để hiển thị cả tiền hiện có
+            local currentMoney = resource.Value
+            print(string.format("Đang đợi đủ tiền cho STT %d: Cần %d, Hiện có %.0f", command.stt, command.money, currentMoney))
+            
             while _G.__HT_MACRO_PLAYING and resource.Value < command.money do
                 task.wait(0.2)
             end
@@ -609,38 +619,19 @@ local function executeMacro(commands)
         
         if not _G.__HT_MACRO_PLAYING then break end
 
-        print(string.format("Thực thi STT %d (Action: %s)", command.stt, nextType))
+        print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
         
-        if command.action == "upgrade" or command.action == "sell" then
-            local posFunc, err = loadstring("return " .. command.positionCode)
-            if not posFunc then
-                warn("Lỗi vị trí không hợp lệ cho STT", command.stt, err)
-                goto continue_loop
+        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
+        if loadOk and type(fnOrErr) == "function" then
+            local runOk, runErr = pcall(fnOrErr)
+            if not runOk then
+                warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
             end
-            local position = posFunc()
-            
-            local unitToAct = findUnitByPosition(position)
-            if unitToAct then
-                local remoteName = (command.action == "upgrade") and "upgrade_unit_ingame" or "sell_unit_ingame"
-                local args = { unitToAct.Name }
-                game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild(remoteName):InvokeServer(unpack(args))
-            else
-                warn("Không tìm thấy unit nào tại vị trí cho STT", command.stt)
-            end
-        else -- "spawn" hoặc các lệnh raw khác
-            local loadOk, fnOrErr = pcall(function() return loadstring(command.rawCode) end)
-            if loadOk and type(fnOrErr) == "function" then
-                local runOk, runErr = pcall(fnOrErr)
-                if not runOk then
-                    warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
-                end
-            else
-                warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
-            end
+        else
+            warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
         end
         
-        task.wait(0.1)
-        ::continue_loop::
+        task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
     end
     -- Hoàn tất macro
     updateMacroStatus("Macro Completed")

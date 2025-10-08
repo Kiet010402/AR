@@ -248,8 +248,6 @@ local Recorder = {
     lastMoneyRecordTime = 0, -- Debounce timer
     moneyConn = nil,
     buffer = nil,
-    unitPositions = {}, -- Maps unit IDs to their spawn positions
-    nextUnitId = 1, -- Counter for generating position-based unit IDs
 }
 
 local function appendLine(line)
@@ -326,7 +324,7 @@ local function serialize(val, indent)
     end
 end
 
-local function recordNow(remoteName, args, noteMoney)
+local function recordNow(remoteName, args, noteMoney, position)
     if not Recorder.isRecording or not Recorder.hasStarted then return end
 
     Recorder.stt = Recorder.stt + 1
@@ -341,32 +339,8 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine(string.format("--note money: %d", noteMoney))
     end
 
-    -- Track unit positions for spawn_unit
-    if remoteName == "spawn_unit" then
-        local positionArgs = args[1] and type(args[1]) == "table" and args[1].cframe
-        if positionArgs then
-            local posId = Recorder.nextUnitId
-            Recorder.nextUnitId = Recorder.nextUnitId + 1
-            appendLine(string.format("--position: %d", posId))
-            Recorder.unitPositions[posId] = positionArgs
-        end
-    end
-    -- Track upgrades and sells by position
-    if remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame" then
-        local unitId = args[1] and type(args[1]) == "table" and args[1].unit
-        if unitId then
-            -- Find position by checking workspace._UNITS
-            local units = workspace:FindFirstChild("_UNITS")
-            if units then
-                for _, unit in ipairs(units:GetChildren()) do
-                    if unit:IsA("Model") and unit:GetAttribute("uid") == unitId then
-                        local pos = unit:GetPivot()
-                        appendLine(string.format("--unit_position: %s", tostring(pos)))
-                        break
-                    end
-                end
-            end
-        end
+    if position then
+        appendLine(string.format("--position: vector.create(%.3f, %.3f, %.3f)", position.X, position.Y, position.Z))
     end
 
     local okSer, argsStr = pcall(function()
@@ -408,9 +382,19 @@ local function installHookOnce()
                     return oldNamecall(self, ...)
                 end
 
-                -- Money-gated recording: overwrite pending action, immediate for sell
-                if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
+                -- Money-gated recording for spawn, position-based for upgrade/sell
+                if remoteName == "spawn_unit" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
+                elseif remoteName == "upgrade_unit_ingame" or remoteName == "sell_unit_ingame" then
+                    local unitId = args[1]
+                    local unitModel = unitId and workspace._UNITS:FindFirstChild(tostring(unitId))
+                    if unitModel and unitModel:IsA("Model") and unitModel.PrimaryPart then
+                        local position = unitModel:GetPivot().Position
+                        -- For upgrade/sell, we need to know the cost, so we still use the money watcher
+                        Recorder.pendingAction = { remote = remoteName, args = args, position = position }
+                    else
+                        warn("Could not find unit model to record position for:", unitId)
+                    end
                 else
                     recordNow(remoteName, args)
                 end
@@ -482,7 +466,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                                     local action = Recorder.pendingAction
                                     Recorder.pendingAction = nil
                                     if action then
-                                        recordNow(action.remote, action.args, delta)
+                                        recordNow(action.remote, action.args, delta, action.position)
                                     end
                                 end
                             end
@@ -504,6 +488,7 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 end)
                 if ok then
                     print("Recording saved:", selectedMacro)
+                    updateMacroStatus("Record Completed")
                     pcall(function()
                         MacroDropdown:SetValues(listMacros())
                         MacroDropdown:SetValue(selectedMacro)
@@ -540,11 +525,13 @@ local function parseMacro(content)
         if block.text then
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
+            local posMatch = block.text:match("--position:%s*(vector%.create%b())")
+            local positionCode = posMatch
             
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
                 -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
-                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
+                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*--position") and not line:match("^%s*task%.wait") then
                     code = code .. line .. "\n"
                 end
             end
@@ -553,6 +540,7 @@ local function parseMacro(content)
                 table.insert(commands, {
                     stt = block.stt,
                     money = money,
+                    positionCode = positionCode,
                     code = code
                 })
             end
@@ -573,25 +561,9 @@ local function executeMacro(commands)
         return
     end
 
-    -- Create position mapping for existing units
-    local positionToUnit = {}
-    local units = workspace:FindFirstChild("_UNITS")
-    if units then
-        for _, unit in ipairs(units:GetChildren()) do
-            if unit:IsA("Model") then
-                local pos = unit:GetPivot()
-                local uid = unit:GetAttribute("uid")
-                if uid then
-                    positionToUnit[tostring(pos)] = uid
-                end
-            end
-        end
-    end
-
     for i, command in ipairs(commands) do
         if not _G.__HT_MACRO_PLAYING then break end
 
-        -- Cập nhật trạng thái cho hành động tiếp theo
         -- Hiển thị STT hiện tại / tổng
         local total = #commands
         updateMacroStatus(string.format("-STT: %d/%d", i, total))
@@ -621,7 +593,35 @@ local function executeMacro(commands)
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
         
-        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
+        local finalCode = command.code
+        if command.positionCode then
+            -- Tìm unit gần nhất với vị trí đã lưu và thay thế ID
+            local loadPos, posVector = pcall(function() return loadstring("return " .. command.positionCode)() end)
+            if loadPos and posVector then
+                local closestUnit, minDist = nil, math.huge
+                for _, unit in ipairs(workspace._UNITS:GetChildren()) do
+                    if unit:IsA("Model") and unit.PrimaryPart then
+                        local dist = (unit:GetPivot().Position - posVector).Magnitude
+                        if dist < minDist then
+                            minDist = dist
+                            closestUnit = unit
+                        end
+                    end
+                end
+
+                if closestUnit and minDist < 5 then -- Ngưỡng khoảng cách, có thể điều chỉnh
+                    local oldId = finalCode:match("local args =%s*{%s*\"([^\"]+)\"")
+                    if oldId then
+                        finalCode = finalCode:gsub(oldId, closestUnit.Name)
+                        print(string.format("Đã thay thế Unit ID: %s -> %s", oldId, closestUnit.Name))
+                    end
+                else
+                    warn("Không tìm thấy unit nào gần vị trí đã lưu cho STT " .. command.stt)
+                end
+            end
+        end
+
+        local loadOk, fnOrErr = pcall(function() return loadstring(finalCode) end)
         if loadOk and type(fnOrErr) == "function" then
             local runOk, runErr = pcall(fnOrErr)
             if not runOk then

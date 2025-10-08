@@ -338,22 +338,6 @@ local function recordNow(remoteName, args, noteMoney)
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
-    -- If spawn_unit, try to record spawn position (args[2].Origin) and spawn id (args[1])
-    if remoteName == "spawn_unit" then
-        local okPos, pos = pcall(function()
-            if args and args[2] and args[2].Origin then
-                return Vector3.new(args[2].Origin.X, args[2].Origin.Y, args[2].Origin.Z)
-            end
-            return nil
-        end)
-        if okPos and pos then
-            appendLine(string.format("--spawn_pos: %f,%f,%f", pos.X, pos.Y, pos.Z))
-        end
-        if args and args[1] then
-            appendLine(string.format("--spawn_id: %s", tostring(args[1])))
-        end
-    end
-
     local okSer, argsStr = pcall(function()
         return serialize(args)
     end)
@@ -393,11 +377,9 @@ local function installHookOnce()
                     return oldNamecall(self, ...)
                 end
 
-                -- Money-gated recording: upgrade remains pending (money-gated). spawn_unit will be recorded immediately so we can capture spawn position and id.
-                if remoteName == "upgrade_unit_ingame" then
+                -- Money-gated recording: overwrite pending action, immediate for sell
+                if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
-                elseif remoteName == "spawn_unit" then
-                    recordNow(remoteName, args)
                 else
                     recordNow(remoteName, args)
                 end
@@ -527,14 +509,7 @@ local function parseMacro(content)
         if block.text then
             local moneyMatch = block.text:match("--note money:%s*(%d+)")
             local money = moneyMatch and tonumber(moneyMatch) or 0
-
-            local spawnPos = nil
-            local spawnIdMatch = block.text:match("--spawn_id:%s*([%w_%-]+)")
-            local x,y,z = block.text:match("--spawn_pos:%s*([%d%.%-]+),([%d%.%-]+),([%d%.%-]+)")
-            if x and y and z then
-                spawnPos = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
-            end
-
+            
             local code = ""
             for line in block.text:gmatch("[^\r\n]+") do
                 -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
@@ -547,57 +522,16 @@ local function parseMacro(content)
                 table.insert(commands, {
                     stt = block.stt,
                     money = money,
-                    code = code,
-                    spawnPos = spawnPos,
-                    spawnId = spawnIdMatch
+                    code = code
                 })
             end
         end
     end
-return commands
+    
+    return commands
 end
 
 -- Hàm mới để thực thi các lệnh đã phân tích
-
-local function findUnitNear(pos, idPrefix)
-    if not pos then return nil end
-    local folder = workspace:FindFirstChild("_UNITS")
-    if not folder then return nil end
-    local closestUnit = nil
-    local closestDist = math.huge
-    for _, u in ipairs(folder:GetChildren()) do
-        local uuidVal = u:FindFirstChild("_uuid")
-        local root = u:FindFirstChild("HumanoidRootPart") or u:FindFirstChild("PrimaryPart")
-        if uuidVal and root then
-            local ok, val = pcall(function() return tostring(uuidVal.Value) end)
-            if ok and val and idPrefix and string.find(val, idPrefix, 1, true) then
-                local dist = (root.Position - pos).Magnitude
-                if dist < closestDist then
-                    closestDist = dist
-                    closestUnit = val
-                end
-            end
-        end
-    end
-    -- fallback to nearest unit if none matched by prefix
-    if not closestUnit then
-        local fallbackDist = math.huge
-        for _, u in ipairs(folder:GetChildren()) do
-            local uuidVal = u:FindFirstChild("_uuid")
-            local root = u:FindFirstChild("HumanoidRootPart") or u:FindFirstChild("PrimaryPart")
-            if uuidVal and root then
-                local dist = (root.Position - pos).Magnitude
-                if dist < fallbackDist then
-                    fallbackDist = dist
-                    local ok, val = pcall(function() return tostring(uuidVal.Value) end)
-                    if ok then closestUnit = val end
-                end
-            end
-        end
-    end
-    return closestUnit
-end
-
 local function executeMacro(commands)
     local player = game:GetService("Players").LocalPlayer
     local resource = player:WaitForChild("_stats", 5) and player._stats:WaitForChild("resource", 5)

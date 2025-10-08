@@ -144,20 +144,6 @@ local selectedMacro = ConfigSystem.CurrentConfig.SelectedMacro or ""
 local pendingMacroName = ""
 
 -- Macro UI
-local macroStatusParagraph
-local function updateMacroStatus(content)
-    if macroStatusParagraph and macroStatusParagraph.SetDesc then
-        pcall(function()
-            macroStatusParagraph:SetDesc(content)
-        end)
-    end
-end
-
-macroStatusParagraph = MacroTab:AddParagraph({
-    Title = "Status",
-    Content = "Idle"
-})
-
 local MacroSection = MacroTab:AddSection("Macro Recorder")
 
 -- Dropdown select macro
@@ -241,12 +227,13 @@ MacroSection:AddButton({
 -- Recorder state
 local Recorder = {
     isRecording = false,
-    stt = 0, -- Sequence number
+    baseTime = 0,
+    lastEventTime = 0,
     hasStarted = false,
-    pendingAction = nil, -- Store only the latest action
+    pendingAction = nil,
     lastMoney = nil,
-    lastMoneyRecordTime = 0, -- Debounce timer
     moneyConn = nil,
+    sequenceNumber = 0,
     buffer = nil,
 }
 
@@ -325,16 +312,8 @@ local function serialize(val, indent)
 end
 
 local function recordNow(remoteName, args, noteMoney)
-    if not Recorder.isRecording or not Recorder.hasStarted then return end
-
-    Recorder.stt = Recorder.stt + 1
-
-    -- Cập nhật trạng thái (STT / Type / Money)
-    local statusContent = string.format("-STT: %d\n-Type: %s\n-Money: %d", Recorder.stt, tostring(remoteName), tonumber(noteMoney) or 0)
-    updateMacroStatus(statusContent)
-
-    appendLine(string.format("--STT: %d", Recorder.stt))
-    
+    Recorder.sequenceNumber = Recorder.sequenceNumber + 1
+    appendLine(string.format("--stt: %d", Recorder.sequenceNumber))
     if noteMoney and noteMoney > 0 then
         appendLine(string.format("--note money: %d", noteMoney))
     end
@@ -373,11 +352,43 @@ local function installHookOnce()
                 if not allowed[remoteName] then
                     return oldNamecall(self, ...)
                 end
+                -- Start only when vote_start is seen, also setup watchers
                 if not Recorder.hasStarted then
+                    if remoteName ~= "vote_start" then
+                        return oldNamecall(self, ...)
+                    end
+                    -- ensure wave exists (non-blocking)
+                    pcall(function()
+                        workspace:WaitForChild("_wave_num", 5)
+                    end)
+                    -- money watcher
+                    pcall(function()
+                        local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
+                        Recorder.lastMoney = tonumber(res.Value)
+                        if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
+                        Recorder.moneyConn = res.Changed:Connect(function(newVal)
+                            local current = tonumber(newVal)
+                            if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
+                                if current < Recorder.lastMoney then
+                                    local delta = Recorder.lastMoney - current
+                                    local action = Recorder.pendingAction
+                                    Recorder.pendingAction = nil
+                                    if action then
+                                        -- Show notification during recording
+                                        print("Record STT " .. (Recorder.sequenceNumber + 1) .. ": " .. tostring(delta) .. " money - Type: " .. action.remote)
+                                        recordNow(action.remote, action.args, delta)
+                                    end
+                                end
+                                Recorder.lastMoney = current
+                            end
+                        end)
+                    end)
+                    Recorder.hasStarted = true
+                    appendLine("--vote_start")
+                    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"vote_start\"):InvokeServer()")
                     return oldNamecall(self, ...)
                 end
-
-                -- Money-gated recording: overwrite pending action, immediate for sell
+                -- Money-gated recording: queue cost actions, immediate for sell
                 if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
                 else
@@ -406,67 +417,17 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 ConfigSystem.CurrentConfig.SelectedMacro = selectedMacro
                 ConfigSystem.SaveConfig()
             end
-            
+            local path = macroPath(selectedMacro)
             Recorder.isRecording = true
+            Recorder.baseTime = 0
+            Recorder.lastEventTime = 0
             Recorder.hasStarted = false
-            Recorder.pendingAction = nil
+            Recorder.sequenceNumber = 0
             Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
-            print("Recording armed. Waiting for game to start...")
-
-            -- Wait for game to start before actually recording
-            task.spawn(function()
-                local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
-                if not gameStarted then
-                    warn("Could not find GameStarted value. Recording will not start.")
-                    return
-                        updateMacroStatus("Record Completed")
-                end
-
-                while Recorder.isRecording and not gameStarted.Value do
-                    task.wait(0.5)
-                end
-
-                if not Recorder.isRecording then return end -- Canceled before game started
-
-                print("Game started! Recording has begun ->", selectedMacro)
-                
-                -- Start counter
-                Recorder.hasStarted = true
-                Recorder.stt = 0
-                updateMacroStatus("Recording...")
-
-                -- money watcher
-                pcall(function()
-                    local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
-                    Recorder.lastMoney = tonumber(res.Value)
-                    if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
-                    Recorder.moneyConn = res.Changed:Connect(function(newVal)
-                        local current = tonumber(newVal)
-                        if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
-                            if current < Recorder.lastMoney then
-                                local now = tick()
-                                if now - Recorder.lastMoneyRecordTime > 0.1 then
-                                    Recorder.lastMoneyRecordTime = now
-                                    local delta = Recorder.lastMoney - current
-                                    local action = Recorder.pendingAction
-                                    Recorder.pendingAction = nil
-                                    if action then
-                                        recordNow(action.remote, action.args, delta)
-                                    end
-                                end
-                            end
-                            Recorder.lastMoney = current
-                        end
-                    end)
-                end)
-            end)
+            print("Recording started ->", selectedMacro)
         else
             if Recorder.isRecording then
                 Recorder.isRecording = false
-                if Recorder.moneyConn then
-                    Recorder.moneyConn:Disconnect()
-                    Recorder.moneyConn = nil
-                end
                 local path = macroPath(selectedMacro)
                 local ok, errMsg = pcall(function()
                     writefile(path, Recorder.buffer or "-- empty macro\n")
@@ -487,110 +448,6 @@ end
 
 -- Play macro
 local macroPlaying = false
-
--- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
-local function parseMacro(content)
-    local commands = {}
-    -- Tách các khối lệnh bằng --STT:
-    local blocks = {}
-    local lastPos = 1
-    for pos, stt in content:gmatch("()--STT:%s*(%d+)") do
-        if #blocks > 0 then
-            blocks[#blocks].text = content:sub(lastPos, pos - 1)
-        end
-        table.insert(blocks, {stt = tonumber(stt)})
-        lastPos = pos
-    end
-    if #blocks > 0 then
-        blocks[#blocks].text = content:sub(lastPos)
-    end
-
-    for _, block in ipairs(blocks) do
-        if block.text then
-            local moneyMatch = block.text:match("--note money:%s*(%d+)")
-            local money = moneyMatch and tonumber(moneyMatch) or 0
-            
-            local code = ""
-            for line in block.text:gmatch("[^\r\n]+") do
-                -- Chỉ bao gồm các dòng code có thể thực thi, loại bỏ các comment và task.wait
-                if not line:match("^%s*--STT") and not line:match("^%s*--note money") and not line:match("^%s*task%.wait") then
-                    code = code .. line .. "\n"
-                end
-            end
-
-            if code ~= "" then
-                table.insert(commands, {
-                    stt = block.stt,
-                    money = money,
-                    code = code
-                })
-            end
-        end
-    end
-    
-    return commands
-end
-
--- Hàm mới để thực thi các lệnh đã phân tích
-local function executeMacro(commands)
-    local player = game:GetService("Players").LocalPlayer
-    local resource = player:WaitForChild("_stats", 5) and player._stats:WaitForChild("resource", 5)
-
-    if not resource then
-        warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
-        updateMacroStatus("Lỗi: Không tìm thấy tiền người chơi.")
-        return
-    end
-
-    for i, command in ipairs(commands) do
-        if not _G.__HT_MACRO_PLAYING then break end
-
-        -- Cập nhật trạng thái cho hành động tiếp theo
-        -- Hiển thị STT hiện tại / tổng
-        local total = #commands
-        updateMacroStatus(string.format("-STT: %d/%d", i, total))
-
-        local nextCommand = commands[i]
-        if nextCommand then
-            local nextType = "N/A"
-            local callMatch = nextCommand.code:match("--call:%s*([%w_]+)")
-            if callMatch then
-                nextType = callMatch
-            end
-            updateMacroStatus(string.format("-STT: %d/%d\n-Next Type: %s\n-Next Money: %d", i, total, nextType, nextCommand.money))
-        end
-
-        -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
-        if command.money > 0 then
-            -- Cập nhật print để hiển thị cả tiền hiện có
-            local currentMoney = resource.Value
-            print(string.format("Đang đợi đủ tiền cho STT %d: Cần %d, Hiện có %.0f", command.stt, command.money, currentMoney))
-            
-            while _G.__HT_MACRO_PLAYING and resource.Value < command.money do
-                task.wait(0.2)
-            end
-        end
-        
-        if not _G.__HT_MACRO_PLAYING then break end
-
-        print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
-        
-        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
-        if loadOk and type(fnOrErr) == "function" then
-            local runOk, runErr = pcall(fnOrErr)
-            if not runOk then
-                warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
-            end
-        else
-            warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
-        end
-        
-        task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
-    end
-    -- Hoàn tất macro
-    updateMacroStatus("Macro Completed")
-end
-
 MacroSection:AddToggle("PlayMacroToggle", {
     Title = "Play Macro",
     Description = "Bật/tắt phát macro đang chọn",
@@ -607,96 +464,51 @@ MacroSection:AddToggle("PlayMacroToggle", {
                 return nil
             end)
             if not (ok and content) then
-                warn("Đọc file macro thất bại")
+                warn("Read macro failed")
                 return
             end
-
-            -- Phân tích macro một lần
-            local commands = parseMacro(content)
-            if #commands == 0 then
-                warn("Macro rỗng hoặc không hợp lệ. Không có lệnh nào để thực thi.")
-                return
-            end
-
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            
-            task.spawn(function()
-                while _G.__HT_MACRO_PLAYING do
-                    -- Đợi game bắt đầu trước khi chơi
-                    updateMacroStatus("Chờ game bắt đầu...")
-                    print("Macro đã sẵn sàng. Đang chờ game bắt đầu...")
-                    local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
-                    if not gameStarted then
-                        warn("Không tìm thấy giá trị GameStarted. Macro sẽ không chạy.")
-                        updateMacroStatus("Lỗi: Không tìm thấy GameStarted")
-                        _G.__HT_MACRO_PLAYING = false
-                        macroPlaying = false
-                        return
-                    end
-
-                    while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
-                        task.wait(0.2)
-                    end
-
-                    if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
-
-                    print("Game đã bắt đầu! Đang chạy macro...")
-                    
-                    -- Đọc và phân tích lại file macro mỗi lần loop
-                    local ok, content = pcall(function()
-                        if isfile(path) then return readfile(path) end
-                        return nil
-                    end)
-                    if not (ok and content) then
-                        warn("Đọc file macro thất bại khi loop")
-                        break
-                    end
-
-                    -- Phân tích lại macro
-                    local freshCommands = parseMacro(content)
-                    if #freshCommands == 0 then
-                        warn("Macro rỗng hoặc không hợp lệ khi loop")
-                        break
-                    end
-
-                    -- Thực thi macro với commands mới phân tích
-                    executeMacro(freshCommands)
-                    
-                    if not _G.__HT_MACRO_PLAYING then break end
-
-                    updateMacroStatus("Chờ game tiếp theo...")
-                    print("Macro đã hoàn thành. Đang chờ game tiếp theo...")
-
-                    -- Đợi game kết thúc (wave_num về 0)
-                    local waveNum = workspace:WaitForChild("_wave_num", 5)
-                    if not waveNum then
-                        warn("Không tìm thấy _wave_num. Tự động lặp lại sẽ không hoạt động.")
-                        updateMacroStatus("Lỗi: Không tìm thấy _wave_num")
-                        break -- Thoát khỏi vòng lặp
-                    end
-
-                    while _G.__HT_MACRO_PLAYING and waveNum.Value ~= 0 do
-                        task.wait(0.5)
-                    end
-                    
-                    if _G.__HT_MACRO_PLAYING then
-                        print("Game đã kết thúc. Lặp lại macro từ đầu.")
-                        task.wait(0.5) -- Chờ một chút trước khi lặp lại
-                    end
-                end
-                
-                macroPlaying = false
-                _G.__HT_MACRO_PLAYING = false
-                updateMacroStatus("Idle")
-                print("Vòng lặp macro đã dừng.")
-            end)
+            -- Biến đổi nội dung: chờ theo tiền và theo STT tuyệt đối
+            local txt = tostring(content)
+            -- Chèn hàm WAIT_STT và ADVANCE_STT quanh mỗi stt để đảm bảo thứ tự tuyệt đối
+            txt = txt:gsub("%-%-stt:%s*(%d+)", "WAIT_STT(%1)\n--stt: %1\nADVANCE_STT(%1)")
+            -- Chèn hàm WAIT_MONEY(target) trước mỗi hành động có ghi note
+            txt = txt:gsub("%-%-note money:%s*(%d+)", "WAIT_MONEY(%1)\n--note money: %1")
+            -- thay task.wait bằng SAFE_WAIT để có thể dừng giữa chừng (nếu còn sót)
+            txt = txt:gsub("task%.wait%(", "SAFE_WAIT(")
+            local runnerCode = table.concat({
+                "local function GET_MONEY() local ok,v=pcall(function() return game:GetService('Players').LocalPlayer._stats.resource.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
+                "local function SAFE_WAIT(t) local s=tick() while _G.__HT_MACRO_PLAYING and (tick()-s)<t do task.wait(0.05) end end\n",
+                "local function WAIT_MONEY(target) target=tonumber(target) or 0; target=target+10; while _G.__HT_MACRO_PLAYING and GET_MONEY()<target do task.wait(0.1) end end\n",
+                "local CURRENT_STT=1\n",
+                "local function WAIT_STT(stt) stt=tonumber(stt) or 1; while _G.__HT_MACRO_PLAYING and CURRENT_STT~=stt do task.wait(0.1) end end\n",
+                "local function ADVANCE_STT(stt) stt=tonumber(stt) or CURRENT_STT; if stt==CURRENT_STT then CURRENT_STT=CURRENT_STT+1 end end\n",
+                "local function GET_WAVE() local ok,v=pcall(function() return workspace._wave_num.Value end); if ok then return tonumber(v) or 0 end; return 0 end\n",
+                "local function RUN_ONCE()\n",
+                txt,
+                "\nend\n",
+                "return function()\n",
+                "while _G.__HT_MACRO_PLAYING do CURRENT_STT=1; RUN_ONCE(); if not _G.__HT_MACRO_PLAYING then break end; while _G.__HT_MACRO_PLAYING and GET_WAVE()~=0 do task.wait(0.5) end end\n",
+                "end"
+            })
+            local loadOk, fnOrErr = pcall(function() return loadstring(runnerCode)() end)
+            if loadOk and type(fnOrErr) == "function" then
+                task.spawn(function()
+                    local runOk, runErr = pcall(fnOrErr)
+                    if not runOk then warn("Run macro error:", runErr) end
+                    macroPlaying = false
+                    _G.__HT_MACRO_PLAYING = false
+                    print("Macro finished")
+                end)
+            else
+                warn("Load macro error:", fnOrErr)
+            end
         else
-            -- Tắt
+            -- turn off
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
-            updateMacroStatus("Idle")
-            print("Macro đã dừng")
+            print("Macro stopped")
         end
     end
 })

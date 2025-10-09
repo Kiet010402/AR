@@ -487,6 +487,49 @@ end
 
 -- Play macro
 local macroPlaying = false
+local gameRunCount = 1
+local __resultsUiConn
+local __runIncrementedThisMatch = false
+
+local function resetRunIncrementFlag()
+    __runIncrementedThisMatch = false
+end
+
+local function incrementRunCount(reason)
+    if __runIncrementedThisMatch then return end
+    gameRunCount = gameRunCount + 1
+    __runIncrementedThisMatch = true
+    print(string.format("[Macro] Game run advanced to %d (%s)", gameRunCount, tostring(reason or "unknown")))
+end
+
+local function setupResultsUiWatcher()
+    pcall(function()
+        if __resultsUiConn then __resultsUiConn:Disconnect() __resultsUiConn = nil end
+        local pg = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 5)
+        if not pg then return end
+        local results = pg:FindFirstChild("ResultsUI") or pg:WaitForChild("ResultsUI", 5)
+        if not results then return end
+        -- Prefer Enabled property if exists (ScreenGui), fallback to Visible
+        local function getShown()
+            local okEnabled, enabled = pcall(function() return results.Enabled end)
+            if okEnabled and type(enabled) == "boolean" then return enabled end
+            local okVisible, visible = pcall(function() return results.Visible end)
+            if okVisible and type(visible) == "boolean" then return visible end
+            return false
+        end
+        __resultsUiConn = results:GetPropertyChangedSignal("Enabled"):Connect(function()
+            if _G.__HT_MACRO_PLAYING and getShown() then
+                incrementRunCount("ResultsUI.Enabled")
+            end
+        end)
+        -- Also listen to Visible to be safe
+        results:GetPropertyChangedSignal("Visible"):Connect(function()
+            if _G.__HT_MACRO_PLAYING and getShown() then
+                incrementRunCount("ResultsUI.Visible")
+            end
+        end)
+    end)
+end
 
 -- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
 local function parseMacro(content)
@@ -542,6 +585,36 @@ local function executeMacro(commands)
         return
     end
 
+    local function adjustUnitIdForRun(unitId)
+        if type(unitId) ~= "string" then return unitId end
+        -- Detect a trailing 2-digit suffix and shift by (gameRunCount-1)
+        local base, suffix = unitId:match("^(.-)(%d%d)$")
+        if base and suffix then
+            local n = tonumber(suffix)
+            if n then
+                local adjusted = n + math.max(0, gameRunCount - 1)
+                local newSuffix = string.format("%02d", adjusted)
+                return base .. newSuffix
+            end
+        end
+        return unitId
+    end
+
+    local function extractRemoteAndArgs(code)
+        local remote = nil
+        local callMatch = code:match("%-%-call:%s*([%w_]+)")
+        if callMatch then remote = callMatch end
+        local argsText = code:match("local%s+args%s*=%s*(%b{})")
+        if not argsText then return remote, nil end
+        local ok, argsTblOrErr = pcall(function()
+            return (loadstring("return " .. argsText))()
+        end)
+        if ok and type(argsTblOrErr) == "table" then
+            return remote, argsTblOrErr
+        end
+        return remote, nil
+    end
+
     for i, command in ipairs(commands) do
         if not _G.__HT_MACRO_PLAYING then break end
 
@@ -574,15 +647,30 @@ local function executeMacro(commands)
         if not _G.__HT_MACRO_PLAYING then break end
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
-        
-        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
-        if loadOk and type(fnOrErr) == "function" then
-            local runOk, runErr = pcall(fnOrErr)
-            if not runOk then
-                warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
+
+        -- Prefer structured invoke to allow ID adjustments
+        local remote, argsTbl = extractRemoteAndArgs(command.code)
+        if remote and argsTbl then
+            if (remote == "upgrade_unit_ingame" or remote == "sell_unit_ingame") and argsTbl[1] then
+                argsTbl[1] = adjustUnitIdForRun(argsTbl[1])
+            end
+            local okInvoke, errInvoke = pcall(function()
+                game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild(remote):InvokeServer(unpack(argsTbl))
+            end)
+            if not okInvoke then
+                warn(string.format("Invoke lỗi tại STT %d (%s): %s", command.stt, tostring(remote), tostring(errInvoke)))
             end
         else
-            warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
+            -- Fallback to raw execution if parsing fails
+            local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
+            if loadOk and type(fnOrErr) == "function" then
+                local runOk, runErr = pcall(fnOrErr)
+                if not runOk then
+                    warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
+                end
+            else
+                warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
+            end
         end
         
         task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
@@ -620,6 +708,8 @@ MacroSection:AddToggle("PlayMacroToggle", {
 
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
+            gameRunCount = 1
+            setupResultsUiWatcher()
             
             task.spawn(function()
                 while _G.__HT_MACRO_PLAYING do
@@ -642,6 +732,8 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
 
                     print("Game đã bắt đầu! Đang chạy macro...")
+                    resetRunIncrementFlag()
+                    updateMacroStatus(string.format("Run #%d - Executing", gameRunCount))
                     executeMacro(commands) -- Gọi hàm thực thi mới
                     
                     if not _G.__HT_MACRO_PLAYING then break end
@@ -663,6 +755,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     
                     if _G.__HT_MACRO_PLAYING then
                         print("Game đã kết thúc. Lặp lại macro.")
+                        incrementRunCount("wave_num==0")
                         task.wait(2) -- Chờ một chút trước khi lặp lại
                     end
                 end

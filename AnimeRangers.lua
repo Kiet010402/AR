@@ -111,6 +111,53 @@ local StorySection = MapsTab:AddSection("Story")
 local MacroSystem = {}
 MacroSystem.BaseFolder = "HTHubAnimeCrusaders_Macros"
 
+-- Đếm số lần chơi (để offset ID unit giữa các ván)
+local gameRunCount = 0
+local idIncrementPerGame = 4 -- Theo ví dụ: mỗi ván ID tăng +4 ở 2 hex cuối
+
+-- Helpers để tăng 2 hex cuối của chuỗi hex (giữ nguyên độ dài)
+local function incrementHexSuffix(hexString, delta)
+    if type(hexString) ~= "string" then return hexString end
+    -- Chỉ xử lý chuỗi thuần hex có độ dài >= 2
+    if not hexString:match("^[0-9a-fA-F]+$") or #hexString < 2 then
+        return hexString
+    end
+    local prefix = hexString:sub(1, #hexString - 2)
+    local tail = hexString:sub(#hexString - 1)
+    local tailVal = tonumber(tail, 16)
+    if not tailVal then return hexString end
+    local newVal = (tailVal + (delta % 256)) % 256
+    local newTail = string.format("%02x", newVal)
+    return prefix .. newTail
+end
+
+-- Điều chỉnh code: nếu là upgrade/sell thì tăng ID unit trong args theo gameRunCount
+local function adjustIdsInCodeIfNeeded(codeStr, remoteName)
+    if type(codeStr) ~= "string" then return codeStr end
+    if remoteName ~= "upgrade_unit_ingame" and remoteName ~= "sell_unit_ingame" then
+        return codeStr
+    end
+    local delta = (gameRunCount or 0) * (idIncrementPerGame or 0)
+    if delta == 0 then return codeStr end
+    -- Tăng mọi chuỗi hex trong literal string "..." bên trong local args = {...}
+    -- Tránh thay đổi các phần không phải string literal
+    local function replaceQuotedHex(s)
+        return s:gsub('%b""', function(quoted)
+            local inner = quoted:sub(2, -2)
+            if inner:match("^[0-9a-fA-F]+$") and #inner >= 2 then
+                local bumped = incrementHexSuffix(inner, delta)
+                return '"' .. bumped .. '"'
+            end
+            return quoted
+        end)
+    end
+    -- Chỉ áp dụng trong block args để giảm rủi ro
+    local adjusted = codeStr:gsub("(local%s+args%s*=%s*%b{})([\r\n]?)", function(block, nl)
+        return replaceQuotedHex(block) .. (nl or "")
+    end)
+    return adjusted
+end
+
 local function ensureMacroFolder()
     pcall(function()
         if not isfolder(MacroSystem.BaseFolder) then
@@ -487,48 +534,58 @@ end
 
 -- Play macro
 local macroPlaying = false
-local gameRunCount = 1
-local __resultsUiConn
-local __runIncrementedThisMatch = false
+local resultsConn
+local lastResultsIncrease = 0
 
-local function resetRunIncrementFlag()
-    __runIncrementedThisMatch = false
-end
-
-local function incrementRunCount(reason)
-    if __runIncrementedThisMatch then return end
-    gameRunCount = gameRunCount + 1
-    __runIncrementedThisMatch = true
-    print(string.format("[Macro] Game run advanced to %d (%s)", gameRunCount, tostring(reason or "unknown")))
-end
-
-local function setupResultsUiWatcher()
-    pcall(function()
-        if __resultsUiConn then __resultsUiConn:Disconnect() __resultsUiConn = nil end
-        local pg = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 5)
-        if not pg then return end
-        local results = pg:FindFirstChild("ResultsUI") or pg:WaitForChild("ResultsUI", 5)
+local function startResultsWatcher()
+    if resultsConn then resultsConn:Disconnect() resultsConn = nil end
+    task.spawn(function()
+        local gui
+        pcall(function()
+            gui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 5)
+        end)
+        if not gui then return end
+        local results
+        pcall(function()
+            results = gui:WaitForChild("ResultsUI", 5)
+        end)
         if not results then return end
-        -- Prefer Enabled property if exists (ScreenGui), fallback to Visible
-        local function getShown()
-            local okEnabled, enabled = pcall(function() return results.Enabled end)
-            if okEnabled and type(enabled) == "boolean" then return enabled end
-            local okVisible, visible = pcall(function() return results.Visible end)
-            if okVisible and type(visible) == "boolean" then return visible end
-            return false
+
+        local function bump()
+            local now = tick()
+            if now - lastResultsIncrease > 3 then -- debounce
+                gameRunCount = (gameRunCount or 0) + 1
+                lastResultsIncrease = now
+                print("ResultsUI detected. gameRunCount =", gameRunCount)
+                updateMacroStatus("ResultsUI -> gameRunCount = " .. tostring(gameRunCount))
+            end
         end
-        __resultsUiConn = results:GetPropertyChangedSignal("Enabled"):Connect(function()
-            if _G.__HT_MACRO_PLAYING and getShown() then
-                incrementRunCount("ResultsUI.Enabled")
-            end
-        end)
-        -- Also listen to Visible to be safe
-        results:GetPropertyChangedSignal("Visible"):Connect(function()
-            if _G.__HT_MACRO_PLAYING and getShown() then
-                incrementRunCount("ResultsUI.Visible")
-            end
-        end)
+
+        -- Try common properties: Visible or Value
+        if results:IsA("GuiObject") then
+            resultsConn = results:GetPropertyChangedSignal("Visible"):Connect(function()
+                if results.Visible then bump() end
+            end)
+            if results.Visible then bump() end
+        elseif results:IsA("BoolValue") then
+            resultsConn = results.Changed:Connect(function(val)
+                if results.Value == true then bump() end
+            end)
+            if results.Value == true then bump() end
+        else
+            -- Fallback: generic Changed
+            resultsConn = results.Changed:Connect(function()
+                local visOk = pcall(function() return results.Visible end)
+                if visOk and results.Visible then bump() end
+                local valOk = pcall(function() return results.Value end)
+                if valOk and results.Value == true then bump() end
+            end)
+        end
     end)
+end
+
+local function stopResultsWatcher()
+    if resultsConn then resultsConn:Disconnect() resultsConn = nil end
 end
 
 -- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
@@ -585,36 +642,6 @@ local function executeMacro(commands)
         return
     end
 
-    local function adjustUnitIdForRun(unitId)
-        if type(unitId) ~= "string" then return unitId end
-        -- Detect a trailing 2-digit suffix and shift by (gameRunCount-1)
-        local base, suffix = unitId:match("^(.-)(%d%d)$")
-        if base and suffix then
-            local n = tonumber(suffix)
-            if n then
-                local adjusted = n + math.max(0, gameRunCount - 1)
-                local newSuffix = string.format("%02d", adjusted)
-                return base .. newSuffix
-            end
-        end
-        return unitId
-    end
-
-    local function extractRemoteAndArgs(code)
-        local remote = nil
-        local callMatch = code:match("%-%-call:%s*([%w_]+)")
-        if callMatch then remote = callMatch end
-        local argsText = code:match("local%s+args%s*=%s*(%b{})")
-        if not argsText then return remote, nil end
-        local ok, argsTblOrErr = pcall(function()
-            return (loadstring("return " .. argsText))()
-        end)
-        if ok and type(argsTblOrErr) == "table" then
-            return remote, argsTblOrErr
-        end
-        return remote, nil
-    end
-
     for i, command in ipairs(commands) do
         if not _G.__HT_MACRO_PLAYING then break end
 
@@ -647,30 +674,22 @@ local function executeMacro(commands)
         if not _G.__HT_MACRO_PLAYING then break end
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
+        
+        -- Nhận biết loại call để điều chỉnh ID nếu cần
+        local callMatchForAdjust = command.code:match("--call:%s*([%w_]+)")
+        local codeToRun = command.code
+        if callMatchForAdjust then
+            codeToRun = adjustIdsInCodeIfNeeded(codeToRun, callMatchForAdjust)
+        end
 
-        -- Prefer structured invoke to allow ID adjustments
-        local remote, argsTbl = extractRemoteAndArgs(command.code)
-        if remote and argsTbl then
-            if (remote == "upgrade_unit_ingame" or remote == "sell_unit_ingame") and argsTbl[1] then
-                argsTbl[1] = adjustUnitIdForRun(argsTbl[1])
-            end
-            local okInvoke, errInvoke = pcall(function()
-                game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild(remote):InvokeServer(unpack(argsTbl))
-            end)
-            if not okInvoke then
-                warn(string.format("Invoke lỗi tại STT %d (%s): %s", command.stt, tostring(remote), tostring(errInvoke)))
+        local loadOk, fnOrErr = pcall(function() return loadstring(codeToRun) end)
+        if loadOk and type(fnOrErr) == "function" then
+            local runOk, runErr = pcall(fnOrErr)
+            if not runOk then
+                warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
             end
         else
-            -- Fallback to raw execution if parsing fails
-            local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
-            if loadOk and type(fnOrErr) == "function" then
-                local runOk, runErr = pcall(fnOrErr)
-                if not runOk then
-                    warn(string.format("Lỗi khi chạy STT %d: %s", command.stt, tostring(runErr)))
-                end
-            else
-                warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
-            end
+            warn(string.format("Lỗi khi tải code cho STT %d: %s", command.stt, tostring(fnOrErr)))
         end
         
         task.wait(0.1) -- Thêm một khoảng chờ nhỏ giữa các lệnh để tránh quá tải
@@ -708,8 +727,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
 
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            gameRunCount = 1
-            setupResultsUiWatcher()
+            startResultsWatcher()
             
             task.spawn(function()
                 while _G.__HT_MACRO_PLAYING do
@@ -732,8 +750,6 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
 
                     print("Game đã bắt đầu! Đang chạy macro...")
-                    resetRunIncrementFlag()
-                    updateMacroStatus(string.format("Run #%d - Executing", gameRunCount))
                     executeMacro(commands) -- Gọi hàm thực thi mới
                     
                     if not _G.__HT_MACRO_PLAYING then break end
@@ -754,8 +770,11 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     end
                     
                     if _G.__HT_MACRO_PLAYING then
-                        print("Game đã kết thúc. Lặp lại macro.")
-                        incrementRunCount("wave_num==0")
+                    -- Tăng biến đếm ván khi thấy game kết thúc
+                    gameRunCount = (gameRunCount or 0) + 1
+                    print("Game đã kết thúc. Tăng gameRunCount lên:", gameRunCount)
+                    updateMacroStatus("Kết thúc ván. gameRunCount = " .. tostring(gameRunCount))
+                    print("Game đã kết thúc. Lặp lại macro.")
                         task.wait(2) -- Chờ một chút trước khi lặp lại
                     end
                 end
@@ -769,6 +788,7 @@ MacroSection:AddToggle("PlayMacroToggle", {
             -- Tắt
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
+            stopResultsWatcher()
             updateMacroStatus("Idle")
             print("Macro đã dừng")
         end

@@ -18,17 +18,8 @@ end
 
 -- Hệ thống lưu trữ cấu hình
 local ConfigSystem = {}
-ConfigSystem.FileName = "HTHubAnimeCrusaders_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
+ConfigSystem.FileName = "HTHubALS_" .. game:GetService("Players").LocalPlayer.Name .. ".json"
 ConfigSystem.DefaultConfig = {
-    -- Maps Settings
-    SelectedMap = "namek",
-    SelectedAct = "Act 1",
-    SelectedDifficulty = "normal",
-    FriendOnly = false,
-    AutoJoin = false,
-    AutoMatching = false,
-    -- Script Settings
-    AntiAFK = false,
     -- Macro Settings
     SelectedMacro = "",
 }
@@ -69,23 +60,14 @@ end
 -- Tải cấu hình khi khởi động
 ConfigSystem.LoadConfig()
 
--- Biến lưu trạng thái của tab Maps
--- Biến lưu trạng thái cho Story selections và toggles
-local selectedMap = ConfigSystem.CurrentConfig.SelectedMap or "namek"
-local selectedAct = ConfigSystem.CurrentConfig.SelectedAct or "Act 1"
-local selectedDifficulty = ConfigSystem.CurrentConfig.SelectedDifficulty or "normal"
-local friendOnly = ConfigSystem.CurrentConfig.FriendOnly or false
-local autoJoin = ConfigSystem.CurrentConfig.AutoJoin or false
-local autoMatching = ConfigSystem.CurrentConfig.AutoMatching or false
--- Biến lưu trạng thái cho Script Settings
-local antiAFKEnabled = ConfigSystem.CurrentConfig.AntiAFK or false
+-- Biến lưu trạng thái của tab Main (auto features removed)
 
 -- Lấy tên người chơi
 local playerName = game:GetService("Players").LocalPlayer.Name
 
 -- Cấu hình UI
 local Window = Fluent:CreateWindow({
-    Title = "HT HUB | Anime Crusaders",
+    Title = "HT HUB | Anime Last Stand",
     SubTitle = "",
     TabWidth = 80,
     Size = UDim2.fromOffset(300, 220),
@@ -96,67 +78,21 @@ local Window = Fluent:CreateWindow({
 
 -- Hệ thống Tạo Tab
 
--- Tạo Tab Maps
-local MapsTab = Window:AddTab({ Title = "Maps", Icon = "rbxassetid://13311802307" })
+-- Tạo Tab Joiner
+local JoinerTab = Window:AddTab({ Title = "Joiner", Icon = "rbxassetid://90319448802378" })
 -- Tạo Tab Macro
-local MacroTab = Window:AddTab({ Title = "Macro", Icon = "rbxassetid://13311802307" })
+local MacroTab = Window:AddTab({ Title = "Macro", Icon = "rbxassetid://90319448802378" })
 -- Tạo Tab Settings
-local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://13311798537" })
+local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "rbxassetid://90319448802378" })
 
--- Tab Maps
--- Section Story trong tab Maps
-local StorySection = MapsTab:AddSection("Story")
+-- Tab Joiner
+-- Section Auto Play trong tab Joiner
+local AutoPlaySection = JoinerTab:AddSection("Auto Play")
 
+-- Tab Macro
 -- Macro helpers
 local MacroSystem = {}
-MacroSystem.BaseFolder = "HTHubAnimeCrusaders_Macros"
-
--- Đếm số lần chơi (để offset ID unit giữa các ván)
-local gameRunCount = 0
-local idIncrementPerGame = 4 -- Theo ví dụ: mỗi ván ID tăng +4 ở 2 hex cuối
-
--- Helpers để tăng 2 hex cuối của chuỗi hex (giữ nguyên độ dài)
-local function incrementHexSuffix(hexString, delta)
-    if type(hexString) ~= "string" then return hexString end
-    -- Chỉ xử lý chuỗi thuần hex có độ dài >= 2
-    if not hexString:match("^[0-9a-fA-F]+$") or #hexString < 2 then
-        return hexString
-    end
-    local prefix = hexString:sub(1, #hexString - 2)
-    local tail = hexString:sub(#hexString - 1)
-    local tailVal = tonumber(tail, 16)
-    if not tailVal then return hexString end
-    local newVal = (tailVal + (delta % 256)) % 256
-    local newTail = string.format("%02x", newVal)
-    return prefix .. newTail
-end
-
--- Điều chỉnh code: nếu là upgrade/sell thì tăng ID unit trong args theo gameRunCount
-local function adjustIdsInCodeIfNeeded(codeStr, remoteName)
-    if type(codeStr) ~= "string" then return codeStr end
-    if remoteName ~= "upgrade_unit_ingame" and remoteName ~= "sell_unit_ingame" then
-        return codeStr
-    end
-    local delta = (gameRunCount or 0) * (idIncrementPerGame or 0)
-    if delta == 0 then return codeStr end
-    -- Tăng mọi chuỗi hex trong literal string "..." bên trong local args = {...}
-    -- Tránh thay đổi các phần không phải string literal
-    local function replaceQuotedHex(s)
-        return s:gsub('%b""', function(quoted)
-            local inner = quoted:sub(2, -2)
-            if inner:match("^[0-9a-fA-F]+$") and #inner >= 2 then
-                local bumped = incrementHexSuffix(inner, delta)
-                return '"' .. bumped .. '"'
-            end
-            return quoted
-        end)
-    end
-    -- Chỉ áp dụng trong block args để giảm rủi ro
-    local adjusted = codeStr:gsub("(local%s+args%s*=%s*%b{})([\r\n]?)", function(block, nl)
-        return replaceQuotedHex(block) .. (nl or "")
-    end)
-    return adjusted
-end
+MacroSystem.BaseFolder = "HTHubALS_Macros"
 
 local function ensureMacroFolder()
     pcall(function()
@@ -306,9 +242,19 @@ end
 -- Helpers for serialization and recording
 local function vecToStr(v)
     if typeof and typeof(v) == "Vector3" then
-        return string.format("vector.create(%f, %f, %f)", v.X, v.Y, v.Z)
+        return string.format("Vector3.new(%f, %f, %f)", v.X, v.Y, v.Z)
     end
     return tostring(v)
+end
+
+local function cframeToStr(cf)
+    if typeof and typeof(cf) == "CFrame" then
+        local x, y, z = cf.Position.X, cf.Position.Y, cf.Position.Z
+        local r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+        return string.format("CFrame.new(%f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f)", 
+            x, y, z, r00, r01, r02, r10, r11, r12, r20, r21, r22)
+    end
+    return tostring(cf)
 end
 
 local function isArray(tbl)
@@ -337,6 +283,15 @@ local function serialize(val, indent)
                 local valueStr
                 if typeof and typeof(v) == "Vector3" then
                     valueStr = vecToStr(v)
+                elseif typeof and typeof(v) == "CFrame" then
+                    valueStr = cframeToStr(v)
+                elseif typeof and typeof(v) == "Instance" then
+                    -- Special handling for Instance objects (like Tower references)
+                    if v.Parent and v.Name then
+                        valueStr = string.format("workspace:WaitForChild(\"Towers\"):WaitForChild(\"%s\")", v.Name)
+                    else
+                        valueStr = tostring(v)
+                    end
                 elseif type(v) == "table" then
                     valueStr = serialize(v, indent + 4)
                 elseif type(v) == "string" then
@@ -352,6 +307,15 @@ local function serialize(val, indent)
                 local valueStr
                 if typeof and typeof(v) == "Vector3" then
                     valueStr = vecToStr(v)
+                elseif typeof and typeof(v) == "CFrame" then
+                    valueStr = cframeToStr(v)
+                elseif typeof and typeof(v) == "Instance" then
+                    -- Special handling for Instance objects (like Tower references)
+                    if v.Parent and v.Name then
+                        valueStr = string.format("workspace:WaitForChild(\"Towers\"):WaitForChild(\"%s\")", v.Name)
+                    else
+                        valueStr = tostring(v)
+                    end
                 elseif type(v) == "table" then
                     valueStr = serialize(v, indent + 4)
                 elseif type(v) == "string" then
@@ -395,7 +359,13 @@ local function recordNow(remoteName, args, noteMoney)
         appendLine("-- serialize error: " .. tostring(argsStr))
         appendLine("local args = {}")
     end
-    appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"endpoints\"):WaitForChild(\"client_to_server\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
+    
+    -- Sử dụng FireServer cho PlaceTower và PlayerReady, InvokeServer cho Upgrade
+    if remoteName == "PlaceTower" or remoteName == "PlayerReady" then
+        appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"Remotes\"):WaitForChild(\"" .. remoteName .. "\"):FireServer(unpack(args))")
+    else
+        appendLine("game:GetService(\"ReplicatedStorage\"):WaitForChild(\"Remotes\"):WaitForChild(\"" .. remoteName .. "\"):InvokeServer(unpack(args))")
+    end
 end
 
 -- Install namecall hook (once)
@@ -407,15 +377,14 @@ local function installHookOnce()
     local ok, res = pcall(function()
         oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
             local method = getnamecallmethod and getnamecallmethod() or ""
-            if Recorder.isRecording and tostring(method) == "InvokeServer" then
+            if Recorder.isRecording and (tostring(method) == "FireServer" or tostring(method) == "InvokeServer") then
                 local args = {...}
                 -- Only record whitelisted endpoints
                 local remoteName = tostring(self and self.Name or "")
                 local allowed = {
-                    vote_start = true,
-                    spawn_unit = true,
-                    upgrade_unit_ingame = true,
-                    sell_unit_ingame = true,
+                    PlaceTower = true,
+                    Upgrade = true,
+                    PlayerReady = true,
                 }
                 if not allowed[remoteName] then
                     return oldNamecall(self, ...)
@@ -424,8 +393,8 @@ local function installHookOnce()
                     return oldNamecall(self, ...)
                 end
 
-                -- Money-gated recording: overwrite pending action, immediate for sell
-                if remoteName == "spawn_unit" or remoteName == "upgrade_unit_ingame" then
+                -- Money-gated recording: overwrite pending action, immediate for PlayerReady
+                if remoteName == "PlaceTower" or remoteName == "Upgrade" then
                     Recorder.pendingAction = { remote = remoteName, args = args }
                 else
                     recordNow(remoteName, args)
@@ -457,54 +426,43 @@ MacroSection:AddToggle("RecordMacroToggle", {
             Recorder.isRecording = true
             Recorder.hasStarted = false
             Recorder.pendingAction = nil
-            Recorder.buffer = "-- Macro recorded by HT Hub\nlocal vector = { create = function(x,y,z) return Vector3.new(x,y,z) end }\n"
-            print("Recording armed. Waiting for game to start...")
+            Recorder.buffer = "-- Macro recorded by HT Hub\n"
+            print("Recording started ->", selectedMacro)
 
-            -- Wait for game to start before actually recording
-            task.spawn(function()
-                local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
-                if not gameStarted then
-                    warn("Could not find GameStarted value. Recording will not start.")
+            -- Start recording immediately
+            Recorder.hasStarted = true
+            Recorder.stt = 0
+            updateMacroStatus("Recording...")
+            print("Recording started ->", selectedMacro)
+
+            -- money watcher
+            pcall(function()
+                local player = game:GetService("Players").LocalPlayer
+                local cash = player:WaitForChild("Cash", 5)
+                if not cash then
+                    warn("Could not find Cash value")
                     return
-                        updateMacroStatus("Record Completed")
                 end
-
-                while Recorder.isRecording and not gameStarted.Value do
-                    task.wait(0.5)
-                end
-
-                if not Recorder.isRecording then return end -- Canceled before game started
-
-                print("Game started! Recording has begun ->", selectedMacro)
                 
-                -- Start counter
-                Recorder.hasStarted = true
-                Recorder.stt = 0
-                updateMacroStatus("Recording...")
-
-                -- money watcher
-                pcall(function()
-                    local res = game:GetService("Players").LocalPlayer:WaitForChild("_stats"):WaitForChild("resource")
-                    Recorder.lastMoney = tonumber(res.Value)
-                    if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
-                    Recorder.moneyConn = res.Changed:Connect(function(newVal)
-                        local current = tonumber(newVal)
-                        if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
-                            if current < Recorder.lastMoney then
-                                local now = tick()
-                                if now - Recorder.lastMoneyRecordTime > 0.1 then
-                                    Recorder.lastMoneyRecordTime = now
-                                    local delta = Recorder.lastMoney - current
-                                    local action = Recorder.pendingAction
-                                    Recorder.pendingAction = nil
-                                    if action then
-                                        recordNow(action.remote, action.args, delta)
-                                    end
+                Recorder.lastMoney = tonumber(cash.Value)
+                if Recorder.moneyConn then Recorder.moneyConn:Disconnect() Recorder.moneyConn = nil end
+                Recorder.moneyConn = cash.Changed:Connect(function(newVal)
+                    local current = tonumber(newVal)
+                    if Recorder.isRecording and Recorder.hasStarted and type(current) == "number" and type(Recorder.lastMoney) == "number" then
+                        if current < Recorder.lastMoney then
+                            local now = tick()
+                            if now - Recorder.lastMoneyRecordTime > 0.1 then
+                                Recorder.lastMoneyRecordTime = now
+                                local delta = Recorder.lastMoney - current
+                                local action = Recorder.pendingAction
+                                Recorder.pendingAction = nil
+                                if action then
+                                    recordNow(action.remote, action.args, delta)
                                 end
                             end
-                            Recorder.lastMoney = current
                         end
-                    end)
+                        Recorder.lastMoney = current
+                    end
                 end)
             end)
         else
@@ -527,66 +485,13 @@ MacroSection:AddToggle("RecordMacroToggle", {
                 else
                     warn("Save macro failed:", errMsg)
                 end
+            end
         end
     end
-end
 })
 
 -- Play macro
 local macroPlaying = false
-local resultsConn
-local lastResultsIncrease = 0
-
-local function startResultsWatcher()
-    if resultsConn then resultsConn:Disconnect() resultsConn = nil end
-    task.spawn(function()
-        local gui
-        pcall(function()
-            gui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 5)
-        end)
-        if not gui then return end
-        local results
-        pcall(function()
-            results = gui:WaitForChild("ResultsUI", 5)
-        end)
-        if not results then return end
-
-        local function bump()
-            local now = tick()
-            if now - lastResultsIncrease > 3 then -- debounce
-                gameRunCount = (gameRunCount or 0) + 1
-                lastResultsIncrease = now
-                print("ResultsUI detected. gameRunCount =", gameRunCount)
-                updateMacroStatus("ResultsUI -> gameRunCount = " .. tostring(gameRunCount))
-            end
-        end
-
-        -- Try common properties: Visible or Value
-        if results:IsA("GuiObject") then
-            resultsConn = results:GetPropertyChangedSignal("Visible"):Connect(function()
-                if results.Visible then bump() end
-            end)
-            if results.Visible then bump() end
-        elseif results:IsA("BoolValue") then
-            resultsConn = results.Changed:Connect(function(val)
-                if results.Value == true then bump() end
-            end)
-            if results.Value == true then bump() end
-        else
-            -- Fallback: generic Changed
-            resultsConn = results.Changed:Connect(function()
-                local visOk = pcall(function() return results.Visible end)
-                if visOk and results.Visible then bump() end
-                local valOk = pcall(function() return results.Value end)
-                if valOk and results.Value == true then bump() end
-            end)
-        end
-    end)
-end
-
-local function stopResultsWatcher()
-    if resultsConn then resultsConn:Disconnect() resultsConn = nil end
-end
 
 -- Hàm mới để phân tích nội dung macro thành các lệnh có thể thực thi
 local function parseMacro(content)
@@ -634,10 +539,10 @@ end
 -- Hàm mới để thực thi các lệnh đã phân tích
 local function executeMacro(commands)
     local player = game:GetService("Players").LocalPlayer
-    local resource = player:WaitForChild("_stats", 5) and player._stats:WaitForChild("resource", 5)
+    local cash = player:WaitForChild("Cash", 5)
 
-    if not resource then
-        warn("Không thể tìm thấy tiền của người chơi (resource). Dừng macro.")
+    if not cash then
+        warn("Không thể tìm thấy tiền của người chơi (Cash). Dừng macro.")
         updateMacroStatus("Lỗi: Không tìm thấy tiền người chơi.")
         return
     end
@@ -663,10 +568,10 @@ local function executeMacro(commands)
         -- Đợi đủ tiền cho các lệnh có yêu cầu tiền
         if command.money > 0 then
             -- Cập nhật print để hiển thị cả tiền hiện có
-            local currentMoney = resource.Value
+            local currentMoney = cash.Value
             print(string.format("Đang đợi đủ tiền cho STT %d: Cần %d, Hiện có %.0f", command.stt, command.money, currentMoney))
             
-            while _G.__HT_MACRO_PLAYING and resource.Value < command.money do
+            while _G.__HT_MACRO_PLAYING and cash.Value < command.money do
                 task.wait(0.2)
             end
         end
@@ -675,14 +580,7 @@ local function executeMacro(commands)
 
         print(string.format("Thực thi STT %d (Yêu cầu tiền: %d)", command.stt, command.money))
         
-        -- Nhận biết loại call để điều chỉnh ID nếu cần
-        local callMatchForAdjust = command.code:match("--call:%s*([%w_]+)")
-        local codeToRun = command.code
-        if callMatchForAdjust then
-            codeToRun = adjustIdsInCodeIfNeeded(codeToRun, callMatchForAdjust)
-        end
-
-        local loadOk, fnOrErr = pcall(function() return loadstring(codeToRun) end)
+        local loadOk, fnOrErr = pcall(function() return loadstring(command.code) end)
         if loadOk and type(fnOrErr) == "function" then
             local runOk, runErr = pcall(fnOrErr)
             if not runOk then
@@ -727,29 +625,13 @@ MacroSection:AddToggle("PlayMacroToggle", {
 
             _G.__HT_MACRO_PLAYING = true
             macroPlaying = true
-            startResultsWatcher()
             
             task.spawn(function()
                 while _G.__HT_MACRO_PLAYING do
-                    -- Đợi game bắt đầu trước khi chơi
-                    updateMacroStatus("Chờ game bắt đầu...")
-                    print("Macro đã sẵn sàng. Đang chờ game bắt đầu...")
-                    local gameStarted = workspace:WaitForChild("_DATA", 5) and workspace._DATA:WaitForChild("GameStarted", 5)
-                    if not gameStarted then
-                        warn("Không tìm thấy giá trị GameStarted. Macro sẽ không chạy.")
-                        updateMacroStatus("Lỗi: Không tìm thấy GameStarted")
-                        _G.__HT_MACRO_PLAYING = false
-                        macroPlaying = false
-                        return
-                    end
-
-                    while _G.__HT_MACRO_PLAYING and not gameStarted.Value do
-                        task.wait(0.2)
-                    end
-
-                    if not _G.__HT_MACRO_PLAYING then break end -- Bị hủy trước khi game bắt đầu
-
-                    print("Game đã bắt đầu! Đang chạy macro...")
+                    -- Chạy macro ngay lập tức
+                    updateMacroStatus("Đang chạy macro...")
+                    print("Đang chạy macro...")
+                    
                     executeMacro(commands) -- Gọi hàm thực thi mới
                     
                     if not _G.__HT_MACRO_PLAYING then break end
@@ -757,24 +639,20 @@ MacroSection:AddToggle("PlayMacroToggle", {
                     updateMacroStatus("Chờ game tiếp theo...")
                     print("Macro đã hoàn thành. Đang chờ game tiếp theo...")
 
-                    -- Đợi game kết thúc (wave_num về 0)
-                    local waveNum = workspace:WaitForChild("_wave_num", 5)
-                    if not waveNum then
-                        warn("Không tìm thấy _wave_num. Tự động lặp lại sẽ không hoạt động.")
-                        updateMacroStatus("Lỗi: Không tìm thấy _wave_num")
+                    -- Đợi Wave về 1 để lặp lại
+                    local wave = game:GetService("ReplicatedStorage"):WaitForChild("Wave", 5)
+                    if not wave then
+                        warn("Không tìm thấy Wave. Tự động lặp lại sẽ không hoạt động.")
+                        updateMacroStatus("Lỗi: Không tìm thấy Wave")
                         break -- Thoát khỏi vòng lặp
                     end
 
-                    while _G.__HT_MACRO_PLAYING and waveNum.Value ~= 0 do
+                    while _G.__HT_MACRO_PLAYING and wave.Value ~= 1 do
                         task.wait(1)
                     end
                     
                     if _G.__HT_MACRO_PLAYING then
-                    -- Tăng biến đếm ván khi thấy game kết thúc
-                    gameRunCount = (gameRunCount or 0) + 1
-                    print("Game đã kết thúc. Tăng gameRunCount lên:", gameRunCount)
-                    updateMacroStatus("Kết thúc ván. gameRunCount = " .. tostring(gameRunCount))
-                    print("Game đã kết thúc. Lặp lại macro.")
+                        print("Wave = 1. Lặp lại macro.")
                         task.wait(2) -- Chờ một chút trước khi lặp lại
                     end
                 end
@@ -788,227 +666,22 @@ MacroSection:AddToggle("PlayMacroToggle", {
             -- Tắt
             _G.__HT_MACRO_PLAYING = false
             macroPlaying = false
-            stopResultsWatcher()
             updateMacroStatus("Idle")
             print("Macro đã dừng")
         end
     end
 })
 
--- Hàm Auto Join theo 3 bước
-local function executeAutoJoin()
-    if not autoJoin then return end
-        local success, err = pcall(function()
-        -- Bước 1: Join lobby
-        local args1 = {"P1"}
-        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args1))
-
-        wait(1)
-
-        -- Bước 2: Lock level
-        local actNumber = string.match(selectedAct, "%d+")
-        local levelName
-        if selectedMap == "Entertainment_district" then
-            levelName = "Entertainment_district_" .. tostring(actNumber)
-        else
-            levelName = selectedMap .. "_level_" .. tostring(actNumber)
-        end
-
-        local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2)
-
-        local args2 = {
-            "P1",
-            levelName,
-            friendOnly,
-            difficultyPretty
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_lock_level"):InvokeServer(unpack(args2))
-
-        wait(1)
-
-        -- Bước 3: Start game
-        local args3 = {"P1"}
-        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_start_game"):InvokeServer(unpack(args3))
-        end)
-        
-        if not success then
-        warn("Lỗi Auto Join: " .. tostring(err))
-        else
-        print("Auto Join executed successfully")
-    end
-end
-
--- Dropdown Select Map
-StorySection:AddDropdown("MapDropdown", {
-    Title = "Select Map",
-    Description = "Chọn map để chơi",
-    Values = {"namek", "marineford", "karakura", "shibuya", "Entertainment_district"},
-    Default = ConfigSystem.CurrentConfig.SelectedMap or "namek",
-    Callback = function(Value)
-        selectedMap = Value
-        ConfigSystem.CurrentConfig.SelectedMap = Value
-        ConfigSystem.SaveConfig()
-    end
-})
-
--- Dropdown Act
-StorySection:AddDropdown("ActDropdown", {
-    Title = "Act",
-    Description = "Chọn act để chơi",
-    Values = {"Act 1", "Act 2", "Act 3", "Act 4", "Act 5", "Act 6"},
-    Default = ConfigSystem.CurrentConfig.SelectedAct or "Act 1",
-    Callback = function(Value)
-        selectedAct = Value
-        ConfigSystem.CurrentConfig.SelectedAct = Value
-        ConfigSystem.SaveConfig()
-    end
-})
-
--- Dropdown Difficulty
-StorySection:AddDropdown("DifficultyDropdown", {
-    Title = "Difficulty",
-    Description = "Chọn độ khó",
-    Values = {"normal", "hard"},
-    Default = ConfigSystem.CurrentConfig.SelectedDifficulty or "normal",
-    Callback = function(Value)
-        selectedDifficulty = Value
-        ConfigSystem.CurrentConfig.SelectedDifficulty = Value
-        ConfigSystem.SaveConfig()
-    end
-})
-
--- Toggle Friend Only
-StorySection:AddToggle("FriendOnlyToggle", {
-    Title = "Friend Only",
-    Description = "Chỉ chơi với bạn bè",
-    Default = ConfigSystem.CurrentConfig.FriendOnly or false,
-    Callback = function(Value)
-        friendOnly = Value
-        ConfigSystem.CurrentConfig.FriendOnly = Value
-        ConfigSystem.SaveConfig()
-        if friendOnly then
-            print("Friend Only Enabled - Đã bật chế độ chỉ chơi với bạn bè")
-        else
-            print("Friend Only Disabled - Đã tắt chế độ chỉ chơi với bạn bè")
-        end
-    end
-})
-
--- Toggle Auto Join
-StorySection:AddToggle("AutoJoinToggle", {
-    Title = "Auto Join",
-    Description = "Tự động tham gia game theo cài đặt",
-    Default = ConfigSystem.CurrentConfig.AutoJoin or false,
-    Callback = function(Value)
-        autoJoin = Value
-        ConfigSystem.CurrentConfig.AutoJoin = Value
-        ConfigSystem.SaveConfig()
-        if autoJoin then
-            print("Auto Join Enabled - Đã bật tự động tham gia game")
-            executeAutoJoin()
-        else
-            print("Auto Join Disabled - Đã tắt tự động tham gia game")
-        end
-    end
-})
-
--- Hàm Auto Matching theo 2 bước
-local function executeAutoMatching()
-    if not autoMatching then return end
-    local success, err = pcall(function()
-        -- Bước 1: Join lobby
-        local args1 = {"P1"}
-        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_join_lobby"):InvokeServer(unpack(args1))
-
-        wait(1)
-
-        -- Bước 2: Request matchmaking
-        local difficultyPretty = string.upper(string.sub(selectedDifficulty, 1, 1)) .. string.sub(selectedDifficulty, 2)
-        local args2 = {
-            selectedMap .. "_level_1",
-            {
-                Difficulty = difficultyPretty
-            }
-        }
-        game:GetService("ReplicatedStorage"):WaitForChild("endpoints"):WaitForChild("client_to_server"):WaitForChild("request_matchmaking"):InvokeServer(unpack(args2))
-    end)
-
-    if not success then
-        warn("Lỗi Auto Matching: " .. tostring(err))
-    else
-        print("Auto Matching executed successfully")
-    end
-end
-
--- Toggle Auto Join Matching
-StorySection:AddToggle("AutoMatchingToggle", {
-    Title = "Auto Join Matching",
-    Description = "Tự động tìm kiếm game phù hợp",
-    Default = ConfigSystem.CurrentConfig.AutoMatching or false,
-    Callback = function(Value)
-        autoMatching = Value
-        ConfigSystem.CurrentConfig.AutoMatching = Value
-        ConfigSystem.SaveConfig()
-        if autoMatching then
-            print("Auto Matching Enabled - Đã bật tự động tìm kiếm game")
-            executeAutoMatching()
-        else
-            print("Auto Matching Disabled - Đã tắt tự động tìm kiếm game")
-        end
-    end
-})
-
--- Tab Settings
--- Script Settings tab configuration
+-- Settings tab configuration
 local SettingsSection = SettingsTab:AddSection("Script Settings")
-
--- Anti AFK Toggle và logic
-local antiAfkConnection
-local function setAntiAFK(enabled)
-    if enabled then
-        if not antiAfkConnection then
-            local VirtualUser = game:GetService("VirtualUser")
-            antiAfkConnection = game:GetService("Players").LocalPlayer.Idled:Connect(function()
-                VirtualUser:Button2Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                task.wait(1)
-                VirtualUser:Button2Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-            end)
-        end
-    else
-        if antiAfkConnection then
-            antiAfkConnection:Disconnect()
-            antiAfkConnection = nil
-        end
-    end
-end
-
-SettingsSection:AddToggle("AntiAFKToggle", {
-    Title = "Anti AFK",
-    Description = "Chống out do AFK",
-    Default = ConfigSystem.CurrentConfig.AntiAFK or false,
-    Callback = function(Value)
-        antiAFKEnabled = Value
-        ConfigSystem.CurrentConfig.AntiAFK = Value
-        ConfigSystem.SaveConfig()
-        setAntiAFK(antiAFKEnabled)
-        if antiAFKEnabled then
-            print("Anti AFK Enabled")
-        else
-            print("Anti AFK Disabled")
-        end
-    end
-})
-
--- Khởi tạo Anti AFK theo config
-setAntiAFK(antiAFKEnabled)
 
 -- Integration with SaveManager
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
 
 -- Thay đổi cách lưu cấu hình để sử dụng tên người chơi
-InterfaceManager:SetFolder("HTHubAnimeCrusaders")
-SaveManager:SetFolder("HTHubAnimeCrusaders/" .. playerName)
+InterfaceManager:SetFolder("HTHubALS")
+SaveManager:SetFolder("HTHubALS/" .. playerName)
 
 -- Thêm thông tin vào tab Settings
 SettingsTab:AddParagraph({
@@ -1037,7 +710,7 @@ AutoSaveConfig()
 
 -- Thêm event listener để lưu ngay khi thay đổi giá trị
 local function setupSaveEvents()
-    for _, tab in pairs({MapsTab, SettingsTab}) do
+    for _, tab in pairs({JoinerTab, MacroTab, SettingsTab}) do
         if tab and tab._components then
             for _, element in pairs(tab._components) do
                 if element and element.OnChanged then
@@ -1082,7 +755,7 @@ task.spawn(function()
             ImageButton.BackgroundTransparency = 0.8
             ImageButton.Position = UDim2.new(0.9,0,0.1,0)
             ImageButton.Size = UDim2.new(0,50,0,50)
-            ImageButton.Image = "rbxassetid://13099788281" -- Logo HT Hub
+            ImageButton.Image = "rbxassetid://90319448802378" -- Logo HT Hub
             ImageButton.Draggable = true
             ImageButton.Transparency = 0.2
             
@@ -1101,5 +774,5 @@ task.spawn(function()
     end
 end)
 
-print("HT Hub Anime Crusaders Script đã tải thành công!")
+print("HT Hub Anime Last Stand Script đã tải thành công!")
 print("Sử dụng Left Ctrl để thu nhỏ/mở rộng UI")

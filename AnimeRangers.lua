@@ -167,6 +167,30 @@ local antiAFKConn = nil
 -- Biến lưu trạng thái Auto Hide UI
 local autoHideUIEnabled = ConfigSystem.CurrentConfig.AutoHideUIEnabled or false
 
+-- Stock fields cần theo dõi
+local ALS_StockFields = {"Jewels", "SpiritCapsule", "Rerolls", "Emeralds", "CandyBasket"}
+_G._ALS_LastStock = _G._ALS_LastStock or {}
+
+-- Hàm update stock khi còn ở lobby
+local function UpdateALSStockCache()
+    local Players = game:GetService("Players")
+    local lp = Players.LocalPlayer
+    if workspace:FindFirstChild("Lobby") then
+        for _, field in ipairs(ALS_StockFields) do
+            local val = lp:FindFirstChild(field)
+            if val and val.Value then
+                _G._ALS_LastStock[field] = val.Value
+            end
+        end
+    end
+end
+
+-- Auto update khi ở lobby, cập nhật mỗi 2s (hoặc hook Changed nếu thích)
+task.spawn(function()
+    while task.wait(2) do
+        pcall(UpdateALSStockCache)
+    end
+end)
 
 -- Hàm tự động ẩn UI sau 3 giây khi bật
 local function autoHideUI()
@@ -457,7 +481,24 @@ local function startEndGameUIWatcher()
                                         if amountLabel and amountLabel:IsA("TextLabel") then
                                             -- Format reward: + Name: Amount (remove x)
                                             local amount = amountLabel.Text:gsub("x", "") -- Remove x from amount
-                                            table.insert(rewards, "+ " .. rewardChild.Name .. ": " .. amount)
+                                            -- Nếu là reward thuộc danh sách, lấy stock
+                                            local stock = "?"
+                                            local fieldName = rewardChild.Name
+                                            if table.find(ALS_StockFields, fieldName) then
+                                                if workspace:FindFirstChild("Lobby") then
+                                                    local stat = player:FindFirstChild(fieldName)
+                                                    if stat and stat.Value then
+                                                        stock = tostring(stat.Value)
+                                                    end
+                                                else
+                                                    if _G._ALS_LastStock and _G._ALS_LastStock[fieldName] then
+                                                        stock = tostring(_G._ALS_LastStock[fieldName])
+                                                    end
+                                                end
+                                                table.insert(rewards, string.format("+ %s: %s [ %s ]", fieldName, amount, stock))
+                                            else
+                                                table.insert(rewards, "+ " .. fieldName .. ": " .. amount)
+                                            end
                                             print("Found reward:", rewardChild.Name, amount)
                                         end
                                     end

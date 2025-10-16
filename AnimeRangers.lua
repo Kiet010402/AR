@@ -411,7 +411,7 @@ local function startEndGameUIWatcher()
     endGameUIConnection = playerGui.ChildAdded:Connect(function(child)
         if child.Name == "EndGameUI" then
             -- Dừng record macro tự động nếu đang bật
-            if Recorder.isRecording then
+            if Recorder and Recorder.isRecording then
                 Recorder.isRecording = false
                 if Recorder.moneyConn then
                     Recorder.moneyConn:Disconnect()
